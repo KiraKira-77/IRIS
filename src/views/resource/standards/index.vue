@@ -848,7 +848,7 @@ const handleRollback = (targetVersion: Standard, reason: string) => {
     id: newId,
     title: targetVersion.title,
     category: targetVersion.category,
-    version: `${targetVersion.version}(回退)`,
+    version: targetVersion.version,
     publishDate: '-',
     status: 'draft',
     attachments: [],
