@@ -235,8 +235,8 @@ const filteredData = computed(() => {
 const handleSearch = () => {
   /* computed handles filtering */
 }
-const handleExpandChange = (row: any, expanded: boolean) => {
-  expandedKeys.value = expanded ? [row.id] : []
+const handleExpandChange = (row: any, expandedRows: any[]) => {
+  expandedKeys.value = expandedRows.map((r: any) => r.id)
 }
 
 // Checklist Dialog
