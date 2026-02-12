@@ -242,21 +242,11 @@
         size="large"
         style="margin-top: 20px"
       >
-        <el-form-item label="版本类型" required>
-          <el-radio-group v-model="upgradeForm.type">
-            <el-radio-button value="minor">
-              <div class="version-type-btn">
-                <span class="type-label">小版本</span>
-                <span class="type-preview">{{ upgradeMinorPreview }}</span>
-              </div>
-            </el-radio-button>
-            <el-radio-button value="major">
-              <div class="version-type-btn">
-                <span class="type-label">大版本</span>
-                <span class="type-preview">{{ upgradeMajorPreview }}</span>
-              </div>
-            </el-radio-button>
-          </el-radio-group>
+        <el-form-item label="新版本号" required>
+          <el-input
+            v-model="upgradeForm.newVersion"
+            placeholder="请输入新版本号，如 V2.0、2026版、Rev.3 等"
+          />
         </el-form-item>
         <el-form-item label="修订说明" required>
           <el-input
@@ -439,6 +429,24 @@
                         <el-tag type="info" size="small" effect="plain">初始版本</el-tag>
                       </div>
                     </div>
+
+                    <!-- 回退按钮：只在当前查看的不是这个版本且该版本是已归档的时候显示 -->
+                    <div
+                      v-if="
+                        v.status === 'archived' && v.id !== getCurrentActiveId(v.standardGroupId)
+                      "
+                      class="rollback-action"
+                    >
+                      <el-button
+                        type="warning"
+                        size="small"
+                        plain
+                        @click.stop="openRollbackDialog(v)"
+                      >
+                        <el-icon style="margin-right: 4px"><RefreshLeft /></el-icon>
+                        回退到此版本
+                      </el-button>
+                    </div>
                   </div>
                 </el-collapse-transition>
               </div>
@@ -482,6 +490,7 @@ import {
   Switch,
   Remove,
   CirclePlus,
+  RefreshLeft,
 } from '@element-plus/icons-vue'
 import { mockStandards } from '@/mock'
 import type { Standard } from '@/types'
@@ -509,7 +518,7 @@ const form = reactive({
 const upgradeDialogVisible = ref(false)
 const upgradeSourceRow = ref<Standard | null>(null)
 const upgradeForm = reactive({
-  type: 'minor' as 'minor' | 'major',
+  newVersion: '',
   changeLog: '',
 })
 
@@ -546,22 +555,13 @@ const getVersionChanges = (current: Standard, previous?: Standard) => {
   return changes
 }
 
-// 计算升版预览
-const upgradeMinorPreview = computed(() => {
-  if (!upgradeSourceRow.value) return ''
-  const v = upgradeSourceRow.value.version
-  const match = v.match(/V(\d+)\.(\d+)/)
-  if (!match) return 'V1.1'
-  return `V${match[1]}.${Number(match[2]) + 1}`
-})
-
-const upgradeMajorPreview = computed(() => {
-  if (!upgradeSourceRow.value) return ''
-  const v = upgradeSourceRow.value.version
-  const match = v.match(/V(\d+)\.(\d+)/)
-  if (!match) return 'V2.0'
-  return `V${Number(match[1]) + 1}.0`
-})
+// 获取某组当前生效的版本 ID
+const getCurrentActiveId = (groupId: string): string | null => {
+  const active = allStandards.value.find(
+    (s) => s.standardGroupId === groupId && s.status === 'active',
+  )
+  return active?.id ?? null
+}
 
 // 获取同组标准的版本数量（用于表格 badge）
 const getVersionCount = (row: Standard) => {
@@ -648,7 +648,7 @@ const openDetail = (row: Standard) => {
 
 const openUpgradeDialog = (row: Standard) => {
   upgradeSourceRow.value = row
-  upgradeForm.type = 'minor'
+  upgradeForm.newVersion = ''
   upgradeForm.changeLog = ''
   upgradeDialogVisible.value = true
   // 如果从抽屉打开，先关闭抽屉
@@ -763,6 +763,10 @@ const handlePublishFromDrawer = () => {
 }
 
 const handleUpgrade = () => {
+  if (!upgradeForm.newVersion) {
+    ElMessage.warning('请输入新版本号')
+    return
+  }
   if (!upgradeForm.changeLog) {
     ElMessage.warning('请填写修订说明')
     return
@@ -770,15 +774,20 @@ const handleUpgrade = () => {
   const source = upgradeSourceRow.value
   if (!source) return
 
-  const newVersion =
-    upgradeForm.type === 'minor' ? upgradeMinorPreview.value : upgradeMajorPreview.value
-  const newId = `${source.standardGroupId}-v${source.versionNumber + 1}`
+  // 获取该组最大 versionNumber
+  const maxVN = Math.max(
+    ...allStandards.value
+      .filter((s) => s.standardGroupId === source.standardGroupId)
+      .map((s) => s.versionNumber),
+  )
+  const newVN = maxVN + 1
+  const newId = `${source.standardGroupId}-v${newVN}`
 
   const newDraft: any = {
     id: newId,
     title: source.title,
     category: source.category,
-    version: newVersion,
+    version: upgradeForm.newVersion,
     publishDate: '-',
     status: 'draft',
     attachments: [],
@@ -787,20 +796,78 @@ const handleUpgrade = () => {
     createdAt: new Date().toISOString().slice(0, 10),
     updatedAt: new Date().toISOString().slice(0, 10),
     standardGroupId: source.standardGroupId,
-    versionNumber: source.versionNumber + 1,
+    versionNumber: newVN,
     previousVersionId: source.id,
     changeLog: upgradeForm.changeLog,
   }
 
   allStandards.value.unshift(newDraft)
   upgradeDialogVisible.value = false
-  ElMessage.success(`已创建 ${newVersion} 版本草稿`)
+  ElMessage.success(`已创建 ${upgradeForm.newVersion} 版本草稿`)
   handleSearch()
 
   // 打开编辑窗口让用户修改内容
   setTimeout(() => {
     openDialog(newDraft)
   }, 300)
+}
+
+// 回退弹窗
+const openRollbackDialog = (targetVersion: Standard) => {
+  ElMessageBox.prompt(
+    `将基于「${targetVersion.version}」的内容创建新版本草稿，请输入回退原因：`,
+    `回退到 ${targetVersion.version}`,
+    {
+      confirmButtonText: '确认回退',
+      cancelButtonText: '取消',
+      type: 'warning',
+      inputType: 'textarea',
+      inputPlaceholder: '请输入回退原因',
+      inputValidator: (val: string) => {
+        if (!val || !val.trim()) return '回退原因不能为空'
+        return true
+      },
+    },
+  ).then((result) => {
+    const reason = typeof result === 'string' ? result : (result as any).value
+    handleRollback(targetVersion, reason)
+  })
+}
+
+const handleRollback = (targetVersion: Standard, reason: string) => {
+  // 获取该组最大 versionNumber
+  const maxVN = Math.max(
+    ...allStandards.value
+      .filter((s) => s.standardGroupId === targetVersion.standardGroupId)
+      .map((s) => s.versionNumber),
+  )
+  const newVN = maxVN + 1
+  const newId = `${targetVersion.standardGroupId}-v${newVN}`
+
+  const rollbackDraft: any = {
+    id: newId,
+    title: targetVersion.title,
+    category: targetVersion.category,
+    version: `${targetVersion.version}(回退)`,
+    publishDate: '-',
+    status: 'draft',
+    attachments: [],
+    tags: [...targetVersion.tags],
+    description: targetVersion.description,
+    createdAt: new Date().toISOString().slice(0, 10),
+    updatedAt: new Date().toISOString().slice(0, 10),
+    standardGroupId: targetVersion.standardGroupId,
+    versionNumber: newVN,
+    previousVersionId: targetVersion.id,
+    changeLog: `[回退] 回退至 ${targetVersion.version}：${reason}`,
+  }
+
+  allStandards.value.unshift(rollbackDraft)
+  ElMessage.success(`已创建回退草稿，可编辑后发布`)
+  handleSearch()
+
+  // 更新详情抽屉到新版本
+  detailRow.value = rollbackDraft
 }
 
 const handleDelete = (row: Standard) => {
