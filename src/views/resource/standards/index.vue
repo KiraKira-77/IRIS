@@ -324,10 +324,11 @@
           <h4 class="section-title">
             <el-icon><Clock /></el-icon>
             版本历史
+            <span class="version-count-label">（共 {{ versionHistory.length }} 个版本）</span>
           </h4>
           <el-timeline>
             <el-timeline-item
-              v-for="v in versionHistory"
+              v-for="(v, idx) in versionHistory"
               :key="v.id"
               :timestamp="v.publishDate"
               :type="
@@ -336,20 +337,110 @@
               :hollow="v.id !== detailRow.id"
               placement="top"
             >
-              <div class="timeline-card" :class="{ 'is-current': v.id === detailRow.id }">
-                <div class="timeline-header">
-                  <el-tag
-                    :type="v.id === detailRow.id ? 'primary' : 'info'"
-                    size="small"
-                    effect="dark"
-                    >{{ v.version }}</el-tag
-                  >
-                  <el-tag :type="statusType(v.status)" size="small" effect="light">{{
-                    statusLabel(v.status)
-                  }}</el-tag>
-                  <span v-if="v.id === detailRow.id" class="current-badge">← 当前</span>
+              <div
+                class="timeline-card"
+                :class="{
+                  'is-current': v.id === detailRow.id,
+                  'is-expanded': expandedVersions[v.id],
+                }"
+              >
+                <div class="timeline-header" @click="toggleVersionExpand(v.id)">
+                  <div class="header-left">
+                    <el-tag
+                      :type="v.id === detailRow.id ? 'primary' : 'info'"
+                      size="small"
+                      effect="dark"
+                      >{{ v.version }}</el-tag
+                    >
+                    <el-tag :type="statusType(v.status)" size="small" effect="light">{{
+                      statusLabel(v.status)
+                    }}</el-tag>
+                    <span v-if="v.id === detailRow.id" class="current-badge">← 当前</span>
+                  </div>
+                  <el-icon class="expand-icon" :class="{ 'is-rotated': expandedVersions[v.id] }">
+                    <ArrowDown />
+                  </el-icon>
                 </div>
-                <p v-if="v.changeLog" class="timeline-changelog">{{ v.changeLog }}</p>
+                <p v-if="v.changeLog" class="timeline-changelog">
+                  <el-icon style="margin-right: 4px; vertical-align: -2px"><EditPen /></el-icon>
+                  {{ v.changeLog }}
+                </p>
+
+                <!-- 展开的完整内容 -->
+                <el-collapse-transition>
+                  <div v-show="expandedVersions[v.id]" class="version-detail">
+                    <el-descriptions :column="1" border size="small" class="version-desc">
+                      <el-descriptions-item label="分类">
+                        <el-tag
+                          :type="categoryType(v.category)"
+                          size="small"
+                          effect="light"
+                          round
+                          >{{ categoryLabel(v.category) }}</el-tag
+                        >
+                      </el-descriptions-item>
+                      <el-descriptions-item label="描述">
+                        {{ v.description || '暂无描述' }}
+                      </el-descriptions-item>
+                      <el-descriptions-item label="标签">
+                        <el-tag
+                          v-for="tag in v.tags"
+                          :key="tag"
+                          size="small"
+                          effect="plain"
+                          round
+                          style="margin-right: 4px"
+                          >{{ tag }}</el-tag
+                        >
+                      </el-descriptions-item>
+                      <el-descriptions-item label="创建时间">{{
+                        v.createdAt
+                      }}</el-descriptions-item>
+                      <el-descriptions-item label="更新时间">{{
+                        v.updatedAt
+                      }}</el-descriptions-item>
+                    </el-descriptions>
+
+                    <!-- 与上一版本的变更对比 -->
+                    <div v-if="idx < versionHistory.length - 1" class="version-diff">
+                      <div class="diff-title">
+                        <el-icon><Switch /></el-icon>
+                        与前版 {{ versionHistory[idx + 1]?.version }} 的变更
+                      </div>
+                      <div class="diff-items">
+                        <template
+                          v-for="change in getVersionChanges(v, versionHistory[idx + 1])"
+                          :key="change.field"
+                        >
+                          <div class="diff-row">
+                            <span class="diff-field">{{ change.label }}</span>
+                            <div class="diff-values">
+                              <span class="diff-old">
+                                <el-icon><Remove /></el-icon>
+                                {{ change.oldVal || '(空)' }}
+                              </span>
+                              <span class="diff-new">
+                                <el-icon><CirclePlus /></el-icon>
+                                {{ change.newVal || '(空)' }}
+                              </span>
+                            </div>
+                          </div>
+                        </template>
+                        <div
+                          v-if="getVersionChanges(v, versionHistory[idx + 1]).length === 0"
+                          class="diff-empty"
+                        >
+                          内容无变化（仅版本号升级）
+                        </div>
+                      </div>
+                    </div>
+                    <div v-else class="version-diff">
+                      <div class="diff-empty" style="padding: 8px 0">
+                        <el-tag type="info" size="small" effect="plain">初始版本</el-tag>
+                      </div>
+                    </div>
+                  </div>
+                </el-collapse-transition>
               </div>
             </el-timeline-item>
           </el-timeline>
@@ -380,7 +471,18 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Plus, Search, Refresh, Clock, TopRight } from '@element-plus/icons-vue'
+import {
+  Plus,
+  Search,
+  Refresh,
+  Clock,
+  TopRight,
+  ArrowDown,
+  EditPen,
+  Switch,
+  Remove,
+  CirclePlus,
+} from '@element-plus/icons-vue'
 import { mockStandards } from '@/mock'
 import type { Standard } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -414,6 +516,35 @@ const upgradeForm = reactive({
 // Drawer state
 const drawerVisible = ref(false)
 const detailRow = ref<Standard | null>(null)
+
+// 版本展开状态
+const expandedVersions = reactive<Record<string, boolean>>({})
+
+const toggleVersionExpand = (id: string) => {
+  expandedVersions[id] = !expandedVersions[id]
+}
+
+// 版本差异对比
+const getVersionChanges = (current: Standard, previous?: Standard) => {
+  if (!previous) return []
+  const changes: { field: string; label: string; oldVal: string; newVal: string }[] = []
+  const fieldMap: { field: keyof Standard; label: string; format?: (v: any) => string }[] = [
+    { field: 'description', label: '描述' },
+    { field: 'category', label: '分类', format: categoryLabel },
+    { field: 'tags', label: '标签', format: (v: string[]) => v.join(', ') },
+    { field: 'title', label: '标准名称' },
+  ]
+  for (const { field, label, format } of fieldMap) {
+    const oldRaw = previous[field]
+    const newRaw = current[field]
+    const oldStr = format ? format(oldRaw) : String(oldRaw ?? '')
+    const newStr = format ? format(newRaw) : String(newRaw ?? '')
+    if (oldStr !== newStr) {
+      changes.push({ field, label, oldVal: oldStr, newVal: newStr })
+    }
+  }
+  return changes
+}
 
 // 计算升版预览
 const upgradeMinorPreview = computed(() => {
@@ -794,25 +925,58 @@ const statusLabel = (val: string) =>
       margin-bottom: 16px;
       padding-bottom: 8px;
       border-bottom: 1px solid #e2e8f0;
+
+      .version-count-label {
+        font-size: 13px;
+        font-weight: 400;
+        color: #94a3b8;
+      }
     }
 
     .timeline-card {
-      padding: 8px 12px;
+      padding: 10px 14px;
       border-radius: 8px;
       background: #f8fafc;
       border: 1px solid #e2e8f0;
       transition: all 0.2s;
+      cursor: pointer;
+
+      &:hover {
+        border-color: #cbd5e1;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+      }
 
       &.is-current {
         background: #eff6ff;
         border-color: #bfdbfe;
       }
 
+      &.is-expanded {
+        background: #fff;
+        border-color: #93c5fd;
+      }
+
       .timeline-header {
         display: flex;
         align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
+        justify-content: space-between;
+
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-wrap: wrap;
+        }
+      }
+
+      .expand-icon {
+        transition: transform 0.3s;
+        color: #94a3b8;
+        font-size: 14px;
+
+        &.is-rotated {
+          transform: rotate(180deg);
+        }
       }
 
       .current-badge {
@@ -822,10 +986,97 @@ const statusLabel = (val: string) =>
       }
 
       .timeline-changelog {
-        margin: 6px 0 0;
+        margin: 8px 0 0;
         font-size: 13px;
         color: #64748b;
         line-height: 1.5;
+      }
+
+      // 展开区域
+      .version-detail {
+        margin-top: 12px;
+        padding-top: 12px;
+        border-top: 1px dashed #e2e8f0;
+
+        .version-desc {
+          :deep(.el-descriptions__label) {
+            width: 80px;
+            white-space: nowrap;
+          }
+        }
+      }
+
+      // 变更对比
+      .version-diff {
+        margin-top: 12px;
+
+        .diff-title {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 13px;
+          font-weight: 600;
+          color: #475569;
+          margin-bottom: 8px;
+        }
+
+        .diff-items {
+          background: #f1f5f9;
+          border-radius: 6px;
+          padding: 8px 12px;
+          font-size: 13px;
+        }
+
+        .diff-row {
+          padding: 6px 0;
+
+          & + .diff-row {
+            border-top: 1px solid #e2e8f0;
+          }
+
+          .diff-field {
+            font-weight: 600;
+            color: #334155;
+            display: block;
+            margin-bottom: 4px;
+          }
+
+          .diff-values {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+          }
+
+          .diff-old {
+            color: #dc2626;
+            background: #fef2f2;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+            line-height: 1.6;
+            word-break: break-all;
+          }
+
+          .diff-new {
+            color: #16a34a;
+            background: #f0fdf4;
+            padding: 2px 8px;
+            border-radius: 4px;
+            display: flex;
+            align-items: flex-start;
+            gap: 4px;
+            line-height: 1.6;
+            word-break: break-all;
+          }
+        }
+
+        .diff-empty {
+          color: #94a3b8;
+          font-size: 13px;
+          font-style: italic;
+        }
       }
     }
   }
