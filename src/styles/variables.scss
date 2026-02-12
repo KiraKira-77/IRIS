@@ -1,0 +1,66 @@
+// -----------------------------------------------------------------------------
+// IRIS Design Tokens
+// -----------------------------------------------------------------------------
+
+// Brand Colors (Professional & Trustworthy Blue)
+$iris-primary: #3b82f6; // Blue-500
+$iris-primary-light: #60a5fa; // Blue-400
+$iris-primary-dark: #2563eb; // Blue-600
+$iris-primary-dim: rgba(59, 130, 246, 0.1);
+
+// Semantic Colors
+$iris-success: #10b981; // Emerald-500
+$iris-warning: #f59e0b; // Amber-500
+$iris-danger: #ef4444; // Red-500
+$iris-info: #6366f1; // Indigo-500
+
+// Neutral Colors (Slate Scale for modern UI)
+$iris-text-heading: #0f172a; // Slate-900
+$iris-text-primary: #1e293b; // Slate-800
+$iris-text-secondary: #475569; // Slate-600
+$iris-text-muted: #94a3b8; // Slate-400
+$iris-text-placeholder: #cbd5e1; // Slate-300
+
+$iris-border: #e2e8f0; // Slate-200
+$iris-border-light: #f1f5f9; // Slate-100
+$iris-bg: #f8fafc; // Slate-50 - Main Page Background
+$iris-bg-card: #ffffff; // White
+$iris-bg-sidebar: #0f172a; // Slate-900
+
+// Layout Dimensions
+$iris-sidebar-width: 240px; // Slightly wider for better readability
+$iris-sidebar-collapsed-width: 64px;
+$iris-header-height: 64px; // Taller header for airiness
+
+// Radius
+$iris-border-radius: 12px; // Modern rounded corners
+$iris-border-radius-sm: 6px;
+
+// Shadows (Soft & Diffused)
+// Shadows (Premium & Diffused)
+$iris-shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+$iris-shadow:
+  0 4px 6px -1px rgba(0, 0, 0, 0.05),
+  0 2px 4px -1px rgba(0, 0, 0, 0.03);
+$iris-shadow-md:
+  0 10px 15px -3px rgba(0, 0, 0, 0.05),
+  0 4px 6px -2px rgba(0, 0, 0, 0.025);
+$iris-shadow-lg:
+  0 20px 25px -5px rgba(0, 0, 0, 0.05),
+  0 10px 10px -5px rgba(0, 0, 0, 0.02);
+$iris-shadow-card:
+  0 0 0 1px rgba(0, 0, 0, 0.03),
+  0 2px 8px rgba(0, 0, 0, 0.04);
+$iris-shadow-card-hover:
+  0 0 0 1px rgba(59, 130, 246, 0.1),
+  0 8px 16px -4px rgba(59, 130, 246, 0.1);
+
+// Gradients
+$iris-gradient-primary: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+$iris-gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
+$iris-gradient-warning: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+$iris-gradient-purple: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+$iris-gradient-surface: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+
+// Transitions
+$iris-transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);

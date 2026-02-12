@@ -1,0 +1,128 @@
+@use './variables.scss' as *;
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  outline: none;
+}
+
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  font-size: 14px;
+  color: $iris-text-primary;
+  background-color: $iris-bg;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+a {
+  color: $iris-primary;
+  text-decoration: none;
+  transition: $iris-transition;
+  &:hover {
+    color: $iris-primary-dark;
+  }
+}
+
+// Custom Scrollbar
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+  &:hover {
+    background: #94a3b8;
+  }
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+// NProgress
+#nprogress .bar {
+  background: $iris-primary !important;
+  height: 3px !important;
+  box-shadow: 0 0 10px rgba($iris-primary, 0.5);
+}
+
+// UI Utilities
+// Premium Card Style
+.iris-card {
+  background: $iris-bg-card;
+  border-radius: 16px; // More rounded
+  box-shadow: $iris-shadow-card;
+  border: 1px solid transparent; // Cleaner look
+  padding: 24px;
+  transition: $iris-transition;
+
+  &:hover {
+    box-shadow: $iris-shadow-card-hover;
+    transform: translateY(-2px);
+  }
+}
+
+// Global Search Bar Style
+.search-bar {
+  background: $iris-bg-card;
+  padding: 20px 24px 0; // Better spacing
+  border-radius: 16px;
+  margin-bottom: 24px;
+  box-shadow: $iris-shadow-sm;
+  border: 1px solid rgba(0, 0, 0, 0.03);
+}
+
+// Element Plus Table Overrides
+.el-table {
+  --el-table-header-bg-color: #f8fafc;
+  --el-table-row-hover-bg-color: #f1f5f9;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: $iris-shadow-card;
+
+  th.el-table__cell {
+    font-weight: 600;
+    color: $iris-text-heading;
+    height: 50px;
+  }
+}
+
+.iris-page {
+  padding: 24px;
+  height: 100%;
+  overflow-y: auto;
+  animation: fade-in-up 0.5s ease-out;
+}
+
+// Global Animations
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.iris-fade-enter-active,
+.iris-fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+.iris-fade-enter-from,
+.iris-fade-leave-to {
+  opacity: 0;
+}
