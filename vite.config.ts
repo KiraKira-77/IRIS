@@ -20,6 +20,10 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
       },
+      '/je': {
+        target: 'http://10.8.25.218:8002',
+        changeOrigin: true,
+      },
     },
   },
 })

@@ -62,12 +62,14 @@ import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
 import { Monitor, User, Lock } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores'
 
 const router = useRouter()
 const route = useRoute()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const rememberMe = ref(false)
+const userStore = useUserStore()
 
 const loginForm = reactive({
   username: '',
@@ -86,15 +88,15 @@ const handleLogin = async () => {
 
     loading.value = true
     try {
-      // 开发阶段：模拟登录
-      await new Promise((resolve) => setTimeout(resolve, 800))
-      localStorage.setItem('iris_token', 'dev-token-' + Date.now())
-      ElMessage.success('登录成功')
+      await userStore.login(loginForm.username, loginForm.password)
+      // 登录成功后获取用户信息
+      await userStore.fetchUserInfo()
 
+      ElMessage.success('登录成功')
       const redirect = (route.query.redirect as string) || '/'
       router.push(redirect)
-    } catch {
-      ElMessage.error('登录失败，请检查用户名和密码')
+    } catch (err: any) {
+      ElMessage.error(err?.message || '登录失败，请检查用户名和密码')
     } finally {
       loading.value = false
     }

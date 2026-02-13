@@ -81,8 +81,17 @@
       <el-table-column prop="updatedAt" label="更新时间" width="160" />
       <el-table-column label="操作" width="220" fixed="right">
         <template #default="{ row }">
-          <el-button link type="primary" size="small">详情</el-button>
-          <el-button link type="primary" size="small" v-if="row.status === 'draft'">编辑</el-button>
+          <el-button link type="primary" size="small" @click="router.push(`/plan/detail/${row.id}`)"
+            >详情</el-button
+          >
+          <el-button
+            link
+            type="primary"
+            size="small"
+            v-if="row.status === 'draft'"
+            @click="router.push(`/plan/create?id=${row.id}`)"
+            >编辑</el-button
+          >
           <el-button link type="primary" size="small" v-if="row.status === 'draft'"
             >提交审批</el-button
           >
@@ -98,8 +107,11 @@
 
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
+import { useRouter } from 'vue-router'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { mockPlans } from '@/mock'
+
+const router = useRouter()
 
 const searchForm = reactive({ keyword: '', year: '', status: '' })
 const tableData = ref(mockPlans)

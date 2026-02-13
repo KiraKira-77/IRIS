@@ -39,7 +39,10 @@
           <el-avatar
             :size="32"
             class="user-avatar"
-            src="https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png"
+            :src="
+              userStore.userAvatar ||
+              'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png'
+            "
           />
           <span class="username">{{ userStore.userName || 'Admin' }}</span>
           <el-icon class="el-icon--right"><CaretBottom /></el-icon>
@@ -59,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore, useUserStore } from '@/stores'
 import { Fold, Expand, Bell, Document, CaretBottom } from '@element-plus/icons-vue'
@@ -69,6 +72,17 @@ const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const userStore = useUserStore()
+
+// 如果有 token 但没有用户信息，自动获取
+onMounted(async () => {
+  if (userStore.isLoggedIn && !userStore.userInfo) {
+    try {
+      await userStore.fetchUserInfo()
+    } catch {
+      // 获取失败，可能 token 过期
+    }
+  }
+})
 
 const breadcrumbs = computed(() => {
   return route.matched
@@ -80,7 +94,9 @@ const breadcrumbs = computed(() => {
 })
 
 const handleCommand = (command: string) => {
-  if (command === 'logout') {
+  if (command === 'profile') {
+    router.push('/profile')
+  } else if (command === 'logout') {
     ElMessageBox.confirm('确定要退出登录吗？', '提示', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',

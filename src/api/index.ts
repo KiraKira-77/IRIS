@@ -1,4 +1,5 @@
 import request from './request'
+import axios from 'axios'
 import type {
   PageQuery,
   PageResult,
@@ -24,9 +25,27 @@ import type {
 
 // ========== 认证 ==========
 export const authApi = {
-  login: (data: LoginForm) => request.post<LoginResult>('/v1/auth/login', data),
-  logout: () => request.post('/v1/auth/logout'),
-  getUserInfo: () => request.get<UserInfo>('/v1/auth/userinfo'),
+  login: (data: { account: string; password: string }) => {
+    const params = new URLSearchParams()
+    params.append('account', data.account)
+    params.append('password', data.password)
+    params.append('device', 'pc')
+    return axios.post('/je/rbac/cloud/login/accountLogin', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+    })
+  },
+  logout: () => {
+    const token = localStorage.getItem('iris_token')
+    return axios.get('/je/rbac/cloud/login/logout', {
+      headers: { authorization: token || '' },
+    })
+  },
+  getUserInfo: () => {
+    const token = localStorage.getItem('iris_token')
+    return axios.get('/je/rbac/cloud/account/currentUser', {
+      headers: { authorization: token || '' },
+    })
+  },
 }
 
 // ========== 资源管理 ==========

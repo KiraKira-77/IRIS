@@ -17,7 +17,7 @@ const service: AxiosInstance = axios.create({
 service.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const token = localStorage.getItem('iris_token')
-    if (token) config.headers.Authorization = `Bearer ${token}`
+    if (token) config.headers['authorization'] = token
     return config
   },
   (error) => Promise.reject(error),

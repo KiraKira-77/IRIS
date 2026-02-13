@@ -79,6 +79,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/plan/overview/index.vue'),
         meta: { title: '计划一览', icon: 'DataBoard' },
       },
+      {
+        path: 'plan/detail/:id',
+        name: 'PlanDetail',
+        component: () => import('@/views/plan/detail/index.vue'),
+        meta: { title: '计划详情', icon: 'Document', hidden: true },
+      },
       // ========== 项目管理 ==========
       {
         path: 'project/list',
@@ -147,6 +153,13 @@ const routes: RouteRecordRaw[] = [
         name: 'Tools',
         component: () => import('@/views/smart/tools/index.vue'),
         meta: { title: '工具库', icon: 'Suitcase' },
+      },
+      // ========== 个人中心 ==========
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/profile/index.vue'),
+        meta: { title: '个人中心', icon: 'User', hidden: true },
       },
     ],
   },
