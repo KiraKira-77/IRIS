@@ -4,6 +4,24 @@
       <div class="header-left">
         <el-button link :icon="Back" @click="router.push('/plan/list')">返回列表</el-button>
         <h2 class="page-title">计划详情</h2>
+        <el-tag
+          v-if="plan?.parentId"
+          effect="light"
+          type="warning"
+          size="default"
+          style="margin-left: 8px"
+        >
+          子计划
+        </el-tag>
+        <el-tag
+          v-else-if="plan"
+          effect="dark"
+          type="warning"
+          size="default"
+          style="margin-left: 8px"
+        >
+          年度主计划
+        </el-tag>
       </div>
       <div class="header-right">
         <el-tag :type="statusType(plan?.status)" effect="dark" size="large">{{
@@ -29,6 +47,11 @@
           <el-descriptions-item label="所属年度">{{ plan.year }}</el-descriptions-item>
           <el-descriptions-item label="属期">{{ plan.period }}</el-descriptions-item>
           <el-descriptions-item label="频次">{{ cycleLabel }}</el-descriptions-item>
+          <el-descriptions-item v-if="parentPlanInfo" label="所属主计划" :span="3">
+            <el-link type="primary" @click="router.push(`/plan/detail/${parentPlanInfo.id}`)">
+              {{ parentPlanInfo.name }}
+            </el-link>
+          </el-descriptions-item>
           <el-descriptions-item label="计划说明" :span="3">
             {{ plan.description || '—' }}
           </el-descriptions-item>
@@ -82,6 +105,82 @@
           </el-table-column>
         </el-table>
       </el-card>
+
+      <!-- Sub Plans (only for parent plans) -->
+      <el-card v-if="!plan.parentId" shadow="never" class="detail-card" style="margin-top: 24px">
+        <template #header>
+          <div class="card-title">
+            <el-icon class="title-icon"><FolderOpened /></el-icon>
+            <span>子计划</span>
+            <el-tag effect="light" round size="small" class="count-tag"
+              >{{ childPlans.length }} 个</el-tag
+            >
+            <el-button
+              type="primary"
+              size="small"
+              :icon="Plus"
+              style="margin-left: auto"
+              @click="router.push(`/plan/create?parentId=${plan.id}`)"
+            >
+              新建子计划
+            </el-button>
+          </div>
+        </template>
+
+        <el-table
+          v-if="childPlans.length > 0"
+          :data="childPlans"
+          border
+          stripe
+          size="default"
+          style="width: 100%"
+        >
+          <el-table-column prop="code" label="编号" width="160">
+            <template #default="{ row }">
+              <el-tag effect="plain" class="font-mono">{{ row.code }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="name" label="子计划名称" min-width="250">
+            <template #default="{ row }">
+              <el-link
+                type="primary"
+                :underline="false"
+                @click="router.push(`/plan/detail/${row.id}`)"
+              >
+                {{ row.name }}
+              </el-link>
+            </template>
+          </el-table-column>
+          <el-table-column prop="period" label="属期" width="100">
+            <template #default="{ row }">
+              <el-tag size="small" effect="light">{{ row.period }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="检查项" width="80" align="center">
+            <template #default="{ row }">
+              <el-badge :value="row.items.length" type="primary" />
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <el-tag :type="statusType(row.status)" effect="dark" size="small">{{
+                statusLabel(row.status)
+              }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="updatedAt" label="更新时间" width="120" />
+        </el-table>
+
+        <el-empty v-else description="暂无子计划" :image-size="80">
+          <el-button
+            type="primary"
+            :icon="Plus"
+            @click="router.push(`/plan/create?parentId=${plan.id}`)"
+          >
+            新建子计划
+          </el-button>
+        </el-empty>
+      </el-card>
     </template>
 
     <el-empty v-else description="未找到该计划" :image-size="120" />
@@ -91,13 +190,23 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, Document, List } from '@element-plus/icons-vue'
+import { Back, Document, List, FolderOpened, Plus } from '@element-plus/icons-vue'
 import { mockPlans, mockChecklists, mockPersonnel } from '@/mock'
 
 const route = useRoute()
 const router = useRouter()
 
 const plan = computed(() => mockPlans.find((p) => p.id === route.params.id))
+
+const parentPlanInfo = computed(() => {
+  if (!plan.value?.parentId) return null
+  return mockPlans.find((p) => p.id === plan.value!.parentId)
+})
+
+const childPlans = computed(() => {
+  if (!plan.value || plan.value.parentId) return []
+  return mockPlans.filter((p) => p.parentId === plan.value!.id)
+})
 
 const cycleLabel = computed(() => {
   const map: Record<string, string> = {
@@ -178,7 +287,7 @@ const getPersonnelName = (id: string) => mockPersonnel.find((p) => p.id === id)?
     }
 
     .count-tag {
-      margin-left: auto;
+      margin-left: 8px;
     }
   }
 }

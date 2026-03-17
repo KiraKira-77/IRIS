@@ -169,6 +169,8 @@ export interface ControlPlan {
   status: PlanStatus
   description?: string
   items: PlanItem[]
+  parentId?: string // 父计划ID（子计划才有）
+  children?: ControlPlan[] // 子计划列表（前端展示用）
   createdBy: string
   approvedBy?: string
   createdAt: string
@@ -215,6 +217,7 @@ export interface Project {
   startDate: string
   endDate?: string
   team: TeamMember[]
+  checklistIds: string[] // 关联的检查清单ID列表
   tasks: CheckTask[]
   createdBy: string
   createdAt: string
@@ -240,13 +243,16 @@ export type TaskStatus =
 export interface CheckTask {
   id: string
   projectId: string
+  checklistId: string // 所属清单ID
   checklistItemId: string
   checkContent: string
   checkCriterion: string
-  assigneeId?: string
+  assigneeId?: string // 负责人（一人一条任务）
   assigneeName?: string
   reviewerId?: string
   reviewerName?: string
+  workOrderId?: string // 外部工单系统的工单ID
+  workOrderStatus?: string // 外部工单状态码
   status: TaskStatus
   attachments: Attachment[]
   reviewComment?: string
@@ -262,6 +268,57 @@ export type TaskAction =
   | 'review_approve'
   | 'review_reject'
   | 'review_rectify'
+
+// ===========================
+// 外部工单系统
+// ===========================
+export type WorkOrderStatus =
+  | '0' // 待分配
+  | '5' // 待领取
+  | '10' // 处理中
+  | '13' // 转办中
+  | '15' // 挂起中
+  | '20' // 已完成
+  | '25' // 已关闭
+  | '30' // 已归档（申请人确认）
+  | '40' // 已退回（申请人退回）
+export interface WorkOrder {
+  id?: string // 外部工单ID（创建后回填）
+  title: string // 工单标题
+  responsibleId: string // 负责人工号
+  responsibleName: string
+  collaboratorIds?: string[] // 协同人
+  serviceType: string // 服务类型
+  orderType: string // 工单类型: 普通工单 等
+  category: string // 多级类别
+  systemName?: string // 系统名称
+  moduleName?: string // 模块名称
+  labels?: string[] // 节点标签
+  relatedProject?: string // 关联项目
+  // 申请人
+  applicantName: string
+  applicantId: string // 工号
+  applicantEmail?: string
+  applicantDept?: string
+  // 实施人
+  implementerName: string
+  implementerId: string
+  implementerEmail?: string
+  implementerDept?: string
+  // 内容
+  priority: 'normal' | 'medium' | 'urgent' | 'immediate'
+  content: string
+  attachments?: string[]
+  // 时间
+  plannedStartDate: string
+  expectedEndDate: string
+  ccUserIds?: string[] // 抄送
+  // 状态
+  status: WorkOrderStatus
+  // 关联
+  taskId: string // IRIS CheckTask ID
+  projectId: string // IRIS Project ID
+}
 
 // ===========================
 // 整改管理

@@ -4,7 +4,16 @@
     <div class="create-header">
       <div class="header-left">
         <el-button link :icon="Back" @click="router.push('/plan/list')">返回列表</el-button>
-        <h2 class="page-title">新建内控计划</h2>
+        <h2 class="page-title">{{ pageTitle }}</h2>
+        <el-tag
+          v-if="parentPlan"
+          effect="light"
+          type="warning"
+          size="large"
+          style="margin-left: 12px"
+        >
+          所属主计划：{{ parentPlan.name }}
+        </el-tag>
       </div>
       <div class="header-right">
         <el-tag effect="plain" type="info" size="large" class="draft-tag">
@@ -208,8 +217,6 @@
                   multiple
                   placeholder="选择关联的检查清单（可多选）"
                   style="width: 100%"
-                  collapse-tags
-                  collapse-tags-tooltip
                 >
                   <el-option
                     v-for="cl in checklistOptions"
@@ -337,8 +344,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
@@ -356,10 +363,81 @@ import {
   ArrowRight,
   Promotion,
 } from '@element-plus/icons-vue'
-import { mockChecklists, mockPersonnel } from '@/mock'
+import { mockChecklists, mockPersonnel, mockPlans } from '@/mock'
 import type { PlanItem } from '@/types'
 
 const router = useRouter()
+const route = useRoute()
+
+// ==================
+// Edit Mode & Sub-plan Mode
+// ==================
+const isEdit = ref(false)
+const editId = ref('')
+const isSubPlan = ref(false)
+const parentPlanId = ref('')
+const parentPlan = computed(() =>
+  parentPlanId.value ? mockPlans.find((p) => p.id === parentPlanId.value) : null,
+)
+
+const pageTitle = computed(() => {
+  if (isEdit.value) return '编辑计划'
+  if (isSubPlan.value) return '新建子计划'
+  return '新建年度计划'
+})
+
+onMounted(() => {
+  // Edit mode
+  const id = route.query.id as string
+  if (id) {
+    const plan = mockPlans.find((p) => p.id === id)
+    if (plan) {
+      isEdit.value = true
+      editId.value = id
+      if (plan.parentId) {
+        isSubPlan.value = true
+        parentPlanId.value = plan.parentId
+      }
+      form.name = plan.name
+      form.year = String(plan.year)
+      form.cycle = plan.cycle
+      form.period = plan.period
+      form.description = plan.description || ''
+      planItems.value = plan.items.map((item) => ({
+        sequence: item.sequence,
+        targetScope: item.targetScope,
+        checklistIds: [...item.checklistIds],
+        plannedStartDate: item.plannedStartDate || '',
+        plannedEndDate: item.plannedEndDate || '',
+        assignee: item.assignee,
+        remark: item.remark,
+      }))
+    }
+    return
+  }
+
+  // Sub-plan creation mode
+  const pid = route.query.parentId as string
+  if (pid) {
+    const parent = mockPlans.find((p) => p.id === pid)
+    if (parent) {
+      isSubPlan.value = true
+      parentPlanId.value = pid
+      form.year = String(parent.year)
+      form.cycle = 'monthly'
+      // Inherit parent's checklist items as default
+      planItems.value = parent.items.map((item, i) => ({
+        sequence: i + 1,
+        targetScope: item.targetScope,
+        checklistIds: [...item.checklistIds],
+        plannedStartDate: '',
+        plannedEndDate: '',
+        assignee: item.assignee,
+        remark: item.remark,
+      }))
+    }
+  }
+})
 
 // ==================
 // Step management
@@ -509,13 +587,66 @@ const nextStep = async () => {
 // ==================
 // Submit
 // ==================
+const buildPlanData = () => ({
+  name: form.name,
+  year: Number(form.year),
+  cycle: form.cycle as any,
+  period: form.period,
+  description: form.description,
+  parentId: isSubPlan.value ? parentPlanId.value : undefined,
+  items: planItems.value.map((item, i) => ({
+    id: `pi-${Date.now()}-${i}`,
+    planId: editId.value || `pl-${Date.now()}`,
+    ...item,
+  })),
+  updatedAt: new Date().toISOString().split('T')[0],
+})
+
 const handleSaveDraft = () => {
-  ElMessage.success('计划已保存为草稿')
+  if (isEdit.value) {
+    const plan = mockPlans.find((p) => p.id === editId.value)
+    if (plan) {
+      Object.assign(plan, buildPlanData(), { status: 'draft' })
+    }
+    ElMessage.success('计划已更新')
+  } else {
+    const newId = `pl-${Date.now()}`
+    const data = buildPlanData()
+    data.items.forEach((item) => (item.planId = newId))
+    mockPlans.push({
+      id: newId,
+      code: `PL-${form.year}-${String(mockPlans.length + 1).padStart(3, '0')}`,
+      status: 'draft',
+      createdBy: 'admin',
+      createdAt: new Date().toISOString().split('T')[0],
+      ...data,
+    } as any)
+    ElMessage.success('计划已保存为草稿')
+  }
   router.push('/plan/list')
 }
 
 const handleSubmit = () => {
-  ElMessage.success('计划已提交审批')
+  if (isEdit.value) {
+    const plan = mockPlans.find((p) => p.id === editId.value)
+    if (plan) {
+      Object.assign(plan, buildPlanData(), { status: 'pending' })
+    }
+    ElMessage.success('计划已更新并提交审批')
+  } else {
+    const newId = `pl-${Date.now()}`
+    const data = buildPlanData()
+    data.items.forEach((item) => (item.planId = newId))
+    mockPlans.push({
+      id: newId,
+      code: `PL-${form.year}-${String(mockPlans.length + 1).padStart(3, '0')}`,
+      status: 'pending',
+      createdBy: 'admin',
+      createdAt: new Date().toISOString().split('T')[0],
+      ...data,
+    } as any)
+    ElMessage.success('计划已提交审批')
+  }
   router.push('/plan/list')
 }
 </script>
