@@ -3,7 +3,7 @@
     <!-- 欢迎横幅 -->
     <div class="welcome-banner">
       <div class="content">
-        <h2 class="title">早安，管理员</h2>
+        <h2 class="title">早安，{{ userName }}</h2>
         <p class="subtitle">今天是 2026年02月12日，星期四。系统运行正常，由您守护企业安全。</p>
         <div class="stats-row">
           <div class="stat-item">
@@ -113,7 +113,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import * as echarts from 'echarts'
 import {
   Monitor,
@@ -123,6 +123,10 @@ import {
   Top,
   Bottom,
 } from '@element-plus/icons-vue'
+import { useUserStore } from '@/stores/modules/user'
+
+const userStore = useUserStore()
+const userName = computed(() => userStore.userName || '管理员')
 
 const chartRange = ref('week')
 const trendChartRef = ref()
