@@ -200,7 +200,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Back } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { mockProjects } from '@/mock'
-import type { Project, CheckTask } from '@/types'
+import type { Project } from '@/types'
 
 const route = useRoute()
 const router = useRouter()

@@ -82,7 +82,7 @@
                 </template>
               </el-table-column>
               <el-table-column label="操作" width="120" fixed="right">
-                <template #default="{ row: item, $index }">
+                <template #default="{ $index }">
                   <el-button link type="primary" size="small">编辑</el-button>
                   <el-button link type="danger" size="small" @click="handleDeleteItem(row, $index)"
                     >删除</el-button

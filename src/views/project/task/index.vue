@@ -310,6 +310,8 @@ const task = ref<CheckTask>()
 const projectId = ref('')
 const conclusion = ref('')
 const reviewComment = ref('')
+const today = () => new Date().toISOString().slice(0, 10)
+const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ')
 
 // Dispatch dialog
 const showDispatchDialog = ref(false)
@@ -390,7 +392,7 @@ const handleDispatchToMany = () => {
           operator: 'admin',
           operatorName: '当前用户',
           remark: `从任务 ${task.value!.id} 分发`,
-          createdAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+          createdAt: nowText(),
         },
         {
           id: `log-${Date.now()}-w-${i}`,
@@ -398,11 +400,11 @@ const handleDispatchToMany = () => {
           operator: 'admin',
           operatorName: '系统',
           remark: `为 ${person.name} 生成工单 ${woId}`,
-          createdAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+          createdAt: nowText(),
         },
       ],
-      createdAt: new Date().toISOString().split('T')[0],
-      updatedAt: new Date().toISOString().split('T')[0],
+      createdAt: today(),
+      updatedAt: today(),
     }
 
     proj.tasks.push(newTask)
@@ -416,7 +418,7 @@ const handleDispatchToMany = () => {
     operator: 'admin',
     operatorName: '当前用户',
     remark: `分发给 ${dispatchPersonIds.value.length} 人，每人创建独立任务和工单`,
-    createdAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+    createdAt: nowText(),
   })
 
   ElMessage.success(`已为 ${dispatchPersonIds.value.length} 人创建独立任务并生成工单`)
@@ -436,7 +438,7 @@ const handleGenerateWorkOrder = () => {
     operator: 'admin',
     operatorName: '系统',
     remark: `生成工单 ${woId}`,
-    createdAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+    createdAt: nowText(),
   })
   ElMessage.success(`已生成工单 ${woId}`)
 }
@@ -458,7 +460,7 @@ const handleAction = async (action: TaskAction) => {
   try {
     await ElMessageBox.confirm(config.confirm, config.logAction, { confirmButtonText: '确认' })
     task.value.status = config.nextStatus as any
-    task.value.updatedAt = new Date().toISOString().split('T')[0]
+    task.value.updatedAt = today()
     task.value.logs.push({
       id: `log-${Date.now()}`,
       action: config.logAction,
@@ -468,7 +470,7 @@ const handleAction = async (action: TaskAction) => {
         action === 'review_approve' || action === 'review_reject'
           ? reviewComment.value
           : conclusion.value || undefined,
-      createdAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
+      createdAt: nowText(),
     })
     ElMessage.success(`${config.logAction}成功`)
     if (action === 'review_approve' || action === 'review_reject') reviewComment.value = ''

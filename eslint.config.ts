@@ -19,6 +19,12 @@ export default defineConfigWithVueTs(
 
   ...pluginVue.configs['flat/essential'],
   vueTsConfigs.recommended,
+  {
+    rules: {
+      'vue/multi-word-component-names': ['error', { ignores: ['index', '404'] }],
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
 
   ...pluginOxlint.buildFromOxlintConfigFile('.oxlintrc.json'),
 

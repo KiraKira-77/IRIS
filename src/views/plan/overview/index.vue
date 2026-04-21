@@ -189,7 +189,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { DataLine, Grid, Calendar, CircleCheck, Clock, EditPen } from '@element-plus/icons-vue'
+import { DataLine, Grid, Calendar, CircleCheck, Clock } from '@element-plus/icons-vue'
 import { mockPlans, mockPersonnel } from '@/mock'
 import type { ControlPlan } from '@/types'
 

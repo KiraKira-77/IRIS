@@ -248,6 +248,7 @@ const basicFormRef = ref<FormInstance>()
 
 const linkedPlan = ref<ControlPlan | null>(null)
 const pageTitle = computed(() => (linkedPlan.value ? '从计划创建项目' : '项目启动'))
+const today = () => new Date().toISOString().slice(0, 10)
 
 // ==================
 // Form Data
@@ -306,8 +307,9 @@ const onPlanChange = (planId: string) => {
 
 const onPersonnelChange = (idx: number, personnelId: string) => {
   const p = mockPersonnel.find((pp) => pp.id === personnelId)
-  if (p) {
-    teamMembers.value[idx].personnelName = p.name
+  const member = teamMembers.value[idx]
+  if (p && member) {
+    member.personnelName = p.name
   }
 }
 
@@ -329,7 +331,7 @@ onMounted(() => {
     form.value.source = 'plan'
     form.value.planId = planId
     onPlanChange(planId)
-    form.value.startDate = new Date().toISOString().split('T')[0]
+    form.value.startDate = today()
   }
 })
 
@@ -407,8 +409,8 @@ const handleSubmit = () => {
     checklistIds: [...form.value.checklistIds],
     tasks,
     createdBy: 'admin',
-    createdAt: new Date().toISOString().split('T')[0],
-    updatedAt: new Date().toISOString().split('T')[0],
+    createdAt: today(),
+    updatedAt: today(),
   })
 
   ElMessage.success('项目已创建')
