@@ -7,6 +7,9 @@ import type {
 } from 'axios'
 import { ElMessage } from 'element-plus'
 import type { ApiResponse } from '@/types'
+import { buildAuthorizationHeader, buildLoginRedirectPath, parseApiResult } from './auth-transport'
+
+const TOKEN_STORAGE_KEY = 'iris_token'
 
 const service: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
@@ -16,8 +19,8 @@ const service: AxiosInstance = axios.create({
 
 service.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('iris_token')
-    if (token) config.headers['authorization'] = token
+    const authHeader = buildAuthorizationHeader(localStorage.getItem(TOKEN_STORAGE_KEY))
+    if (authHeader) config.headers.Authorization = authHeader
     return config
   },
   (error) => Promise.reject(error),
@@ -25,21 +28,28 @@ service.interceptors.request.use(
 
 service.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
-    const res = response.data
-    if (res.code !== 0 && res.code !== 200) {
-      ElMessage.error(res.message || '请求失败')
-      if (res.code === 401) {
-        localStorage.removeItem('iris_token')
-        window.location.href = '/login'
+    const result = parseApiResult(response.data)
+    if (!result.ok) {
+      if (result.message) {
+        ElMessage.error(result.message)
       }
-      return Promise.reject(new Error(res.message || '请求失败'))
+      if (result.unauthorized) {
+        handleUnauthorized()
+      }
+      return Promise.reject(new Error(result.message || '请求失败'))
     }
-    return res.data as unknown as AxiosResponse
+    return result.data as unknown as AxiosResponse
   },
   (error) => {
-    const message = error.response?.data?.message || error.message || '网络错误'
+    const result = parseApiResult(error.response?.data)
+    if (error.response?.status === 401 || result.unauthorized) {
+      handleUnauthorized()
+    }
+
+    const message =
+      (!result.ok && result.message) || error.response?.data?.message || error.message || '网络错误'
     ElMessage.error(message)
-    return Promise.reject(error)
+    return Promise.reject(new Error(message))
   },
 )
 
@@ -70,3 +80,11 @@ const request = {
 }
 
 export default request
+
+function handleUnauthorized() {
+  localStorage.removeItem(TOKEN_STORAGE_KEY)
+  const loginRedirectPath = buildLoginRedirectPath(window.location)
+  if (`${window.location.pathname}${window.location.search}` !== loginRedirectPath) {
+    window.location.href = loginRedirectPath
+  }
+}

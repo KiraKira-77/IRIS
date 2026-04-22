@@ -83,20 +83,19 @@ const rules: FormRules = {
 
 const handleLogin = async () => {
   if (!formRef.value) return
+
   await formRef.value.validate(async (valid) => {
     if (!valid) return
 
     loading.value = true
     try {
       await userStore.login(loginForm.username, loginForm.password)
-      // 登录成功后获取用户信息
       await userStore.fetchUserInfo()
 
       ElMessage.success('登录成功')
       const redirect = (route.query.redirect as string) || '/'
       router.push(redirect)
-    } catch (err: any) {
-      ElMessage.error(err?.message || '登录失败，请检查用户名和密码')
+    } catch {
     } finally {
       loading.value = false
     }

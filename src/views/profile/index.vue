@@ -87,18 +87,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted } from 'vue'
 import { useUserStore } from '@/stores'
 import { User, OfficeBuilding, Postcard } from '@element-plus/icons-vue'
 
 const userStore = useUserStore()
 const defaultAvatar = 'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png'
-
-onMounted(async () => {
-  if (!userStore.userInfo && userStore.isLoggedIn) {
-    await userStore.fetchUserInfo()
-  }
-})
 </script>
 
 <style lang="scss" scoped>
@@ -120,7 +113,6 @@ onMounted(async () => {
   align-items: center;
   padding: 0 32px;
 
-  // Pattern overlay
   &::before {
     content: '';
     position: absolute;
@@ -185,7 +177,7 @@ onMounted(async () => {
       font-size: 24px;
       font-weight: 600;
       color: $iris-text-primary;
-      margin: 0 0 8px 0;
+      margin: 0 0 8px;
       display: flex;
       align-items: center;
       gap: 12px;
@@ -242,7 +234,7 @@ onMounted(async () => {
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr); // Changed to 3 columns
+  grid-template-columns: repeat(3, 1fr);
   gap: 24px;
   padding: 8px 0;
 

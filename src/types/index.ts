@@ -16,9 +16,10 @@ export interface PageResult<T> {
   pageSize: number
 }
 export interface ApiResponse<T = unknown> {
-  code: number
+  code: number | string
   message: string
   data: T
+  success?: boolean
 }
 export interface Attachment {
   id: string
@@ -75,6 +76,21 @@ export interface LoginResult {
   refreshToken?: string
   expiresIn: number
   user: UserInfo
+}
+export interface AuthLoginResult {
+  token: string
+  userId: number
+  tenantId: number
+  username: string
+  tenantName: string
+}
+export interface AuthCurrentUser {
+  userId: number
+  tenantId: number
+  username: string
+  displayName: string
+  tenantName: string
+  roles: string[]
 }
 
 // ===========================

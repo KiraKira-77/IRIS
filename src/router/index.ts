@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
+import pinia, { useUserStore } from '@/stores'
+import { resolveAuthRouteDecision } from './auth-session'
 
 NProgress.configure({ showSpinner: false })
 
@@ -180,19 +182,36 @@ const router = createRouter({
   routes,
 })
 
-// 路由守卫
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to) => {
   NProgress.start()
-  const token = localStorage.getItem('iris_token')
   document.title = `${to.meta.title || 'IRIS'} - IRIS 内控管理平台`
 
-  if (to.meta.public) {
-    next()
-  } else if (!token) {
-    next({ path: '/login', query: { redirect: to.fullPath } })
-  } else {
-    next()
+  const userStore = useUserStore(pinia)
+  const decision = resolveAuthRouteDecision({
+    isPublicRoute: Boolean(to.meta.public),
+    isLoginRoute: to.path === '/login',
+    hasToken: userStore.isLoggedIn,
+    hasUserInfo: Boolean(userStore.userInfo),
+    toFullPath: to.fullPath,
+    loginRedirect: typeof to.query.redirect === 'string' ? to.query.redirect : null,
+  })
+
+  if (decision.type === 'redirect') {
+    return decision.target
   }
+
+  if (decision.type === 'bootstrap-user') {
+    try {
+      await userStore.ensureUserInfoLoaded()
+    } catch {
+      return {
+        path: '/login',
+        query: { redirect: to.fullPath },
+      }
+    }
+  }
+
+  return true
 })
 
 router.afterEach(() => {

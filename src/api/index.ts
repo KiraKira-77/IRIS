@@ -1,6 +1,7 @@
 import request from './request'
-import axios from 'axios'
 import type {
+  AuthCurrentUser,
+  AuthLoginResult,
   PageQuery,
   PageResult,
   Standard,
@@ -20,32 +21,13 @@ import type {
   Tool,
 } from '@/types'
 
-// ========== 认证 ==========
 export const authApi = {
-  login: (data: { account: string; password: string }) => {
-    const params = new URLSearchParams()
-    params.append('account', data.account)
-    params.append('password', data.password)
-    params.append('device', 'pc')
-    return axios.post('/je/rbac/cloud/login/accountLogin', params, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-    })
-  },
-  logout: () => {
-    const token = localStorage.getItem('iris_token')
-    return axios.get('/je/rbac/cloud/login/logout', {
-      headers: { authorization: token || '' },
-    })
-  },
-  getUserInfo: () => {
-    const token = localStorage.getItem('iris_token')
-    return axios.get('/je/rbac/cloud/account/currentUser', {
-      headers: { authorization: token || '' },
-    })
-  },
+  login: (data: { account: string; password: string }) =>
+    request.post<AuthLoginResult>('/v1/auth/login', data),
+  logout: () => request.post<void>('/v1/auth/logout'),
+  getUserInfo: () => request.get<AuthCurrentUser>('/v1/auth/me'),
 }
 
-// ========== 资源管理 ==========
 export const standardApi = {
   list: (params: PageQuery) => request.get<PageResult<Standard>>('/v1/standards', params),
   detail: (id: string) => request.get<Standard>(`/v1/standards/${id}`),
@@ -79,7 +61,6 @@ export const personnelApi = {
   delete: (id: string) => request.delete(`/v1/personnel/${id}`),
 }
 
-// ========== 计划管控 ==========
 export const planApi = {
   list: (params: PageQuery) => request.get<PageResult<ControlPlan>>('/v1/plans', params),
   detail: (id: string) => request.get<ControlPlan>(`/v1/plans/${id}`),
@@ -95,7 +76,6 @@ export const planApi = {
   generate: (id: string) => request.post(`/v1/plans/${id}/generate`),
 }
 
-// ========== 项目管理 ==========
 export const projectApi = {
   list: (params: PageQuery) => request.get<PageResult<Project>>('/v1/projects', params),
   detail: (id: string) => request.get<Project>(`/v1/projects/${id}`),
@@ -118,7 +98,6 @@ export const taskApi = {
     request.post(`/v1/tasks/${id}/review`, data),
 }
 
-// ========== 整改管理 ==========
 export const rectificationApi = {
   list: (params: PageQuery) =>
     request.get<PageResult<RectificationOrder>>('/v1/rectifications', params),
@@ -131,7 +110,6 @@ export const rectificationApi = {
     request.post(`/v1/rectifications/${id}/review`, data),
 }
 
-// ========== 工作台 ==========
 export const dashboardApi = {
   stats: () => request.get<DashboardStats>('/v1/dashboard/stats'),
 }
@@ -145,7 +123,6 @@ export const logApi = {
   list: (params: PageQuery) => request.get<PageResult<LogEntry>>('/v1/logs', params),
 }
 
-// ========== 智能内控 ==========
 export const ruleApi = {
   list: (params: PageQuery) => request.get<PageResult<Rule>>('/v1/rules', params),
   detail: (id: string) => request.get<Rule>(`/v1/rules/${id}`),

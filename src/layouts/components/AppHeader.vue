@@ -51,9 +51,9 @@
           <el-dropdown-menu class="user-dropdown">
             <el-dropdown-item command="profile">个人中心</el-dropdown-item>
             <el-dropdown-item command="settings">系统设置</el-dropdown-item>
-            <el-dropdown-item divided command="logout" class="logout-item"
-              >退出登录</el-dropdown-item
-            >
+            <el-dropdown-item divided command="logout" class="logout-item">
+              退出登录
+            </el-dropdown-item>
           </el-dropdown-menu>
         </template>
       </el-dropdown>
@@ -62,7 +62,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore, useUserStore } from '@/stores'
 import { Fold, Expand, Bell, Document, CaretBottom } from '@element-plus/icons-vue'
@@ -72,17 +72,6 @@ const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const userStore = useUserStore()
-
-// 如果有 token 但没有用户信息，自动获取
-onMounted(async () => {
-  if (userStore.isLoggedIn && !userStore.userInfo) {
-    try {
-      await userStore.fetchUserInfo()
-    } catch {
-      // 获取失败，可能 token 过期
-    }
-  }
-})
 
 const breadcrumbs = computed(() => {
   return route.matched
@@ -193,9 +182,11 @@ const handleCommand = (command: string) => {
 
 :deep(.el-breadcrumb__inner) {
   font-weight: 500 !important;
+
   &.is-link {
     font-weight: 400 !important;
     color: $iris-text-muted;
+
     &:hover {
       color: $iris-primary;
     }
