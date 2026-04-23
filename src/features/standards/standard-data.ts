@@ -19,6 +19,26 @@ export interface StandardListPage {
   total: number
 }
 
+export interface StandardSearchFormValue {
+  keyword: string
+  category: string
+  status: string
+}
+
+export interface StandardPaginationState {
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface StandardSearchInteraction {
+  form: StandardSearchFormValue
+  pagination: StandardPaginationState
+  shouldReload: boolean
+}
+
+export type StandardSearchAction = 'submit' | 'reset' | 'paginate' | 'resize'
+
 export interface StandardEditorFormValue {
   standardCode: string
   title: string
@@ -75,6 +95,59 @@ export function buildStandardListPage(
   return {
     list: result.slice(start, start + query.pageSize),
     total: result.length,
+  }
+}
+
+export function buildStandardSearchInteraction(
+  action: StandardSearchAction,
+  form: StandardSearchFormValue,
+  pagination: StandardPaginationState,
+  overrides: { page?: number; pageSize?: number } = {},
+): StandardSearchInteraction {
+  if (action === 'reset') {
+    return {
+      form: { keyword: '', category: '', status: '' },
+      pagination: {
+        page: 1,
+        pageSize: pagination.pageSize,
+        total: pagination.total,
+      },
+      shouldReload: true,
+    }
+  }
+
+  if (action === 'submit') {
+    return {
+      form: { ...form },
+      pagination: {
+        page: 1,
+        pageSize: pagination.pageSize,
+        total: pagination.total,
+      },
+      shouldReload: true,
+    }
+  }
+
+  if (action === 'resize') {
+    return {
+      form: { ...form },
+      pagination: {
+        page: 1,
+        pageSize: overrides.pageSize ?? pagination.pageSize,
+        total: pagination.total,
+      },
+      shouldReload: false,
+    }
+  }
+
+  return {
+    form: { ...form },
+    pagination: {
+      page: overrides.page ?? pagination.page,
+      pageSize: overrides.pageSize ?? pagination.pageSize,
+      total: pagination.total,
+    },
+    shouldReload: false,
   }
 }
 

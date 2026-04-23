@@ -26,6 +26,7 @@
             placeholder="请输入关键字"
             clearable
             style="width: 220px"
+            @keyup.enter="handleSearchSubmit"
           />
         </el-form-item>
         <el-form-item label="分类">
@@ -54,7 +55,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
+          <el-button type="primary" :icon="Search" @click="handleSearchSubmit">查询</el-button>
           <el-button :icon="Refresh" @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
@@ -155,8 +156,8 @@
         :page-sizes="[10, 20, 50]"
         layout="total, sizes, prev, pager, next, jumper"
         :total="pagination.total"
-        @size-change="handleSearch"
-        @current-change="handleSearch"
+        @size-change="handlePageSizeChange"
+        @current-change="handlePageChange"
       />
     </div>
 
@@ -528,7 +529,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import {
   ArrowDown,
   CirclePlus,
@@ -547,6 +548,7 @@ import { resourceScopeApi, standardApi } from '@/api'
 import {
   buildStandardDraftPayload,
   buildStandardListPage,
+  buildStandardSearchInteraction,
   buildStandardMutationPayload,
   buildStandardUpsertPayload,
   normalizeStandardFromApi,
@@ -672,10 +674,6 @@ onMounted(() => {
   void Promise.all([loadScopeOptions(), loadStandards()])
 })
 
-watch(visibleStandards, () => {
-  handleSearch()
-})
-
 const loadScopeOptions = async () => {
   try {
     const scopes = await resourceScopeApi.list()
@@ -696,13 +694,13 @@ const loadStandards = async () => {
   try {
     allStandards.value = (await standardApi.list()).map(normalizeStandardFromApi)
     syncSelectedRows()
-    handleSearch()
+    applySearchResult()
   } finally {
     loading.value = false
   }
 }
 
-const handleSearch = () => {
+const applySearchResult = () => {
   const preview = buildStandardListPage(visibleStandards.value, {
     keyword: searchForm.keyword,
     category: searchForm.category,
@@ -728,12 +726,46 @@ const handleSearch = () => {
   tableData.value = page.list
 }
 
-const handleReset = () => {
-  searchForm.keyword = ''
-  searchForm.category = ''
-  searchForm.status = ''
-  pagination.page = 1
-  handleSearch()
+const handleSearchSubmit = async () => {
+  const interaction = buildStandardSearchInteraction('submit', searchForm, pagination)
+
+  Object.assign(searchForm, interaction.form)
+  Object.assign(pagination, interaction.pagination)
+
+  if (interaction.shouldReload) {
+    await loadStandards()
+    return
+  }
+
+  applySearchResult()
+}
+
+const handlePageChange = (page: number) => {
+  const interaction = buildStandardSearchInteraction('paginate', searchForm, pagination, { page })
+
+  Object.assign(pagination, interaction.pagination)
+  applySearchResult()
+}
+
+const handlePageSizeChange = (pageSize: number) => {
+  const interaction = buildStandardSearchInteraction('resize', searchForm, pagination, { pageSize })
+
+  Object.assign(pagination, interaction.pagination)
+  applySearchResult()
+}
+
+const handleReset = async () => {
+  const interaction = buildStandardSearchInteraction('reset', searchForm, pagination)
+
+  Object.assign(searchForm, interaction.form)
+  Object.assign(pagination, interaction.pagination)
+
+  if (interaction.shouldReload) {
+    await loadStandards()
+    return
+  }
+
+  applySearchResult()
 }
 
 const openDialog = (row?: Standard) => {

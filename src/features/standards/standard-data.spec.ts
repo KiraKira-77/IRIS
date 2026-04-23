@@ -1,4 +1,5 @@
 import type { Standard, StandardStatus, StandardVisibilityLevel } from '../../types/index.ts'
+import * as standardData from './standard-data.ts'
 import {
   buildStandardDraftPayload,
   buildStandardListPage,
@@ -33,6 +34,56 @@ function createStandard(overrides: Partial<Standard> = {}): Standard {
 }
 
 describe('standard-data', () => {
+  it('submits search by resetting to first page and forcing reload even without filters', () => {
+    const buildSearchInteraction = (standardData as Record<string, unknown>)
+      .buildStandardSearchInteraction as
+      | ((
+          action: string,
+          form: { keyword: string; category: string; status: string },
+          pagination: { page: number; pageSize: number; total: number },
+          overrides?: { page?: number; pageSize?: number },
+        ) => unknown)
+      | undefined
+
+    expect(buildSearchInteraction).toBeTypeOf('function')
+    expect(
+      buildSearchInteraction?.(
+        'submit',
+        { keyword: '', category: '', status: '' },
+        { page: 3, pageSize: 20, total: 56 },
+      ),
+    ).toEqual({
+      form: { keyword: '', category: '', status: '' },
+      pagination: { page: 1, pageSize: 20, total: 56 },
+      shouldReload: true,
+    })
+  })
+
+  it('resets search conditions and forces a full refresh', () => {
+    const buildSearchInteraction = (standardData as Record<string, unknown>)
+      .buildStandardSearchInteraction as
+      | ((
+          action: string,
+          form: { keyword: string; category: string; status: string },
+          pagination: { page: number; pageSize: number; total: number },
+          overrides?: { page?: number; pageSize?: number },
+        ) => unknown)
+      | undefined
+
+    expect(buildSearchInteraction).toBeTypeOf('function')
+    expect(
+      buildSearchInteraction?.(
+        'reset',
+        { keyword: '制度', category: 'internal', status: 'draft' },
+        { page: 4, pageSize: 10, total: 28 },
+      ),
+    ).toEqual({
+      form: { keyword: '', category: '', status: '' },
+      pagination: { page: 1, pageSize: 10, total: 28 },
+      shouldReload: true,
+    })
+  })
+
   it('returns latest version per group when status filter is empty', () => {
     const standards = [
       createStandard({ id: '1001', standardGroupId: 'group-1', versionNumber: 1, version: 'V1.0' }),
