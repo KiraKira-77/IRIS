@@ -2,12 +2,9 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AuthCurrentUser, UserAccessContext, UserInfo } from '@/types'
 import { authApi, resourceScopeApi, roleApi } from '@/api'
-import {
-  buildAccessContextFromScopeMembers,
-  buildLocalAccessContext,
-  mapCurrentUserToUserInfo,
-} from '@/features/permissions/user-access'
+import { buildLocalAccessContext, mapCurrentUserToUserInfo } from '@/features/permissions/user-access'
 import { buildMenuCodesFromRoles } from '@/features/permissions/menu-access'
+import { resolveCurrentUserAccessContext } from './user-access-context'
 
 const TOKEN_STORAGE_KEY = 'iris_token'
 
@@ -118,14 +115,9 @@ async function resolveAccessContext(currentUser: AuthCurrentUser): Promise<UserA
   }
 
   try {
-    const scopes = await resourceScopeApi.list()
-    const membersByScope = await Promise.all(
-      scopes.map((scope) => resourceScopeApi.listMembers(scope.id)),
-    )
-
-    return buildAccessContextFromScopeMembers(
-      currentUser.roles,
-      membersByScope.flat().filter((member) => member.userId === String(currentUser.userId)),
+    return resolveCurrentUserAccessContext(
+      currentUser,
+      await resourceScopeApi.listCurrentUserMemberships(),
     )
   } catch {
     return localAccessContext

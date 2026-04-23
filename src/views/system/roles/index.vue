@@ -19,7 +19,11 @@
           <el-tag effect="plain" type="info">{{ row.roleCode }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="scopeType" label="范围" width="130" />
+      <el-table-column prop="scopeType" label="角色级别" width="130">
+        <template #default="{ row }">
+          {{ getRoleScopeTypeLabel(row.scopeType) }}
+        </template>
+      </el-table-column>
       <el-table-column prop="status" label="状态" width="110">
         <template #default="{ row }">
           <el-tag :type="row.status === 1 ? 'success' : 'info'" effect="dark" round>
@@ -86,10 +90,10 @@
         </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="角色范围" required>
+            <el-form-item label="角色级别" required>
               <el-select v-model="form.scopeType" style="width: 100%">
-                <el-option label="PLATFORM" value="PLATFORM" />
-                <el-option label="TENANT" value="TENANT" />
+                <el-option label="全局级" :value="ROLE_SCOPE_TYPE.global" />
+                <el-option label="业务级" :value="ROLE_SCOPE_TYPE.business" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -142,6 +146,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { roleApi } from '@/api'
+import { getRoleScopeTypeLabel, normalizeRoleScopeType, ROLE_SCOPE_TYPE } from '@/features/permissions/role-scope'
 import { useUserStore } from '@/stores'
 import { APP_MENU_GROUPS } from '@/features/permissions/menu-access'
 import type { RoleRecord } from '@/types'
@@ -153,10 +158,17 @@ const roles = ref<RoleRecord[]>([])
 const dialogVisible = ref(false)
 const editingRole = ref<RoleRecord | null>(null)
 
-const form = reactive({
+const form = reactive<{
+  roleName: string
+  roleCode: string
+  scopeType: string
+  status: number
+  remark: string
+  menuCodes: string[]
+}>({
   roleName: '',
   roleCode: '',
-  scopeType: 'TENANT',
+  scopeType: ROLE_SCOPE_TYPE.business,
   status: 1,
   remark: '',
   menuCodes: [] as string[],
@@ -186,7 +198,7 @@ const openDialog = (role?: RoleRecord) => {
   editingRole.value = role || null
   form.roleName = role?.roleName || ''
   form.roleCode = role?.roleCode || ''
-  form.scopeType = role?.scopeType || 'TENANT'
+  form.scopeType = normalizeRoleScopeType(role?.scopeType || ROLE_SCOPE_TYPE.business)
   form.status = role?.status ?? 1
   form.remark = role?.remark || ''
   form.menuCodes = [...(role?.menuCodes || [])]
@@ -213,7 +225,7 @@ const saveRole = async () => {
       tenantId: editingRole.value?.tenantId || 1001,
       roleCode,
       roleName: form.roleName.trim(),
-      scopeType: form.scopeType,
+      scopeType: normalizeRoleScopeType(form.scopeType),
       status: form.status,
       remark: form.remark.trim(),
       menuCodes: [...form.menuCodes].sort(),

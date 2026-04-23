@@ -18,6 +18,8 @@ export const resourceScopeApi = {
   delete: (id: string | number) => request.delete<void>(`/v1/system/resource-scopes/${id}`),
   listMembers: (id: string | number) =>
     request.get<ResourceScopeMember[]>(`/v1/system/resource-scopes/${id}/members`),
+  listCurrentUserMemberships: () =>
+    request.get<ResourceScopeMember[]>('/v1/system/resource-scopes/my-memberships'),
   replaceMembers: (id: string | number, data: ResourceScopeMemberReplacePayload) =>
     request.put<void>(`/v1/system/resource-scopes/${id}/members`, data),
 }
