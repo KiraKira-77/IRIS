@@ -57,6 +57,7 @@ export interface TreeNode {
 // ===========================
 export interface UserInfo {
   id: string
+  tenantId: number
   username: string
   name: string
   avatar?: string
@@ -64,7 +65,114 @@ export interface UserInfo {
   email?: string
   phone?: string
   roles: string[]
+  menuCodes: string[]
   permissions: string[]
+  accessContext: UserAccessContext
+}
+export interface RoleRecord {
+  id: string
+  tenantId: string
+  roleCode: string
+  roleName: string
+  scopeType: string
+  status: number
+  remark?: string
+  menuCodes: string[]
+}
+export interface RoleUpsertPayload {
+  tenantId: string | number
+  roleCode: string
+  roleName: string
+  scopeType: string
+  status: number
+  remark?: string
+  menuCodes: string[]
+}
+export type ScopeAction = 'view' | 'create' | 'edit' | 'delete' | 'manage'
+export interface ScopeGrant {
+  scopeId: string
+  actions: ScopeAction[]
+}
+export interface ScopePermission {
+  scopeId: string
+  actions: ScopeAction[]
+}
+export interface UserAccessContext {
+  isSuperAdmin: boolean
+  scopePermissions: ScopePermission[]
+}
+export interface SystemUser {
+  id: string
+  tenantId: string
+  orgId?: string | null
+  account: string
+  username: string
+  email?: string
+  mobile?: string
+  status: number
+  remark?: string
+  roleIds: string[]
+  roleCodes: string[]
+}
+export interface ResourceScope {
+  id: string
+  tenantId: string
+  scopeCode: string
+  scopeName: string
+  scopeType: string
+  status: number
+  remark?: string
+}
+export interface ResourceScopeMember {
+  id: string
+  scopeId: string
+  userId: string
+  account: string
+  username: string
+  canView: number
+  canCreate: number
+  canEdit: number
+  canDelete: number
+  canManage: number
+  remark?: string
+}
+export interface ResourceScopeOption {
+  id: string
+  code: string
+  label: string
+  type: string
+  status: number
+}
+export interface ResourceScopeUpsertPayload {
+  tenantId: string | number
+  scopeCode: string
+  scopeName: string
+  scopeType: string
+  status: number
+  remark?: string
+}
+export interface ResourceScopeMemberUpsertPayload {
+  userId: string
+  canView: boolean
+  canCreate: boolean
+  canEdit: boolean
+  canDelete: boolean
+  canManage: boolean
+  remark?: string
+}
+export interface ResourceScopeMemberReplacePayload {
+  members: ResourceScopeMemberUpsertPayload[]
+}
+export interface SystemUserUpsertPayload {
+  tenantId: string | number
+  orgId?: string | number | null
+  account: string
+  username: string
+  email?: string
+  mobile?: string
+  status: number
+  remark?: string
+  roleIds: string[]
 }
 export interface LoginForm {
   username: string
@@ -98,6 +206,7 @@ export interface AuthCurrentUser {
 // ===========================
 export type StandardCategory = 'law' | 'system' | 'industry' | 'internal'
 export type StandardStatus = 'draft' | 'active' | 'archived'
+export type StandardVisibilityLevel = 'PUBLIC' | 'SCOPED'
 export interface Standard {
   id: string
   title: string
@@ -115,6 +224,26 @@ export interface Standard {
   versionNumber: number // 数值版本号 (1, 2, 3...)
   changeLog?: string // 本次修订说明
   previousVersionId?: string // 前一版本 ID
+  visibilityLevel: StandardVisibilityLevel
+  ownerScopeId: string
+  grants: ScopeGrant[]
+}
+export interface StandardUpsertPayload {
+  tenantId: number
+  title: string
+  category: string
+  version: string
+  status: StandardStatus
+  publishDate: string | null
+  description: string
+  tags: string[]
+  standardGroupId?: string
+  versionNumber?: number
+  previousVersionId?: string
+  visibilityLevel: StandardVisibilityLevel
+  ownerScopeId: string
+  grantScopeIds: string[]
+  changeLog?: string
 }
 export interface ControlChecklist {
   id: string

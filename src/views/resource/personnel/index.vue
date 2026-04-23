@@ -3,300 +3,434 @@
     <div class="page-header">
       <div class="left">
         <h2 class="page-title">人员管理</h2>
-        <span class="page-subtitle">内控团队成员与角色权限配置</span>
+        <span class="page-subtitle">维护系统用户并分配角色，资源域成员请在资源域配置中维护</span>
       </div>
       <div class="right">
-        <el-button type="primary" :icon="Plus" size="large" @click="openDialog()"
-          >添加成员</el-button
-        >
+        <el-button type="primary" :icon="Plus" size="large" @click="openDialog()">
+          新增人员
+        </el-button>
       </div>
     </div>
 
-    <!-- 搜索 -->
     <div class="search-bar">
-      <el-form :inline="true" :model="searchForm">
-        <el-form-item label="姓名">
+      <el-form :inline="true" :model="searchForm" @submit.prevent="handleSearch">
+        <el-form-item label="关键字">
           <el-input
             v-model="searchForm.keyword"
-            placeholder="搜索姓名"
+            placeholder="搜索姓名 / 账号 / 邮箱"
             clearable
-            style="width: 160px"
+            @keyup.enter="handleSearch"
+            style="width: 240px"
           />
         </el-form-item>
-        <el-form-item label="部门">
-          <el-select
-            v-model="searchForm.department"
-            placeholder="全部部门"
-            clearable
-            style="width: 160px"
-          >
-            <el-option v-for="dept in departments" :key="dept" :label="dept" :value="dept" />
+        <el-form-item label="角色">
+          <el-select v-model="searchForm.roleId" clearable placeholder="全部角色" style="width: 200px">
+            <el-option
+              v-for="role in roles"
+              :key="role.id"
+              :label="role.roleName"
+              :value="role.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="searchForm.status" placeholder="全部" clearable style="width: 110px">
-            <el-option label="在职" value="active" />
-            <el-option label="离职" value="inactive" />
+          <el-select v-model="searchForm.status" clearable placeholder="全部状态" style="width: 140px">
+            <el-option label="启用" :value="1" />
+            <el-option label="停用" :value="0" />
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search">查询</el-button>
+          <el-button type="primary" :icon="Search" @click="handleSearch">查询</el-button>
+          <el-button @click="handleReset">重置</el-button>
         </el-form-item>
       </el-form>
     </div>
 
-    <!-- 表格 -->
-    <el-table :data="filteredData" style="width: 100%" size="large">
-      <el-table-column label="成员" width="200" fixed>
+    <el-table :data="filteredUsers" v-loading="loading" style="width: 100%" stripe size="large">
+      <el-table-column label="人员" min-width="240" fixed>
         <template #default="{ row }">
           <div class="user-cell">
-            <el-avatar :size="36" :style="{ background: avatarColor(row.name) }">{{
-              row.name.charAt(0)
-            }}</el-avatar>
+            <el-avatar :size="36" :style="{ background: avatarColor(row.username) }">
+              {{ row.username.charAt(0) }}
+            </el-avatar>
             <div class="info">
-              <span class="name">{{ row.name }}</span>
-              <span class="dept">{{ row.department }}</span>
+              <span class="name">{{ row.username }}</span>
+              <span class="meta">{{ row.account }}</span>
             </div>
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="position" label="职位" width="160" />
-      <el-table-column prop="phone" label="联系电话" width="140" />
-      <el-table-column prop="email" label="邮箱" width="200" show-overflow-tooltip />
-      <el-table-column label="角色" min-width="200">
+      <el-table-column prop="email" label="邮箱" min-width="220" show-overflow-tooltip />
+      <el-table-column prop="mobile" label="手机号" width="160" />
+      <el-table-column label="角色" min-width="260">
         <template #default="{ row }">
           <el-tag
-            v-for="role in row.roles"
-            :key="role"
+            v-for="role in resolveUserRoles(row)"
+            :key="role.key"
             effect="plain"
             size="small"
             round
             style="margin-right: 6px"
           >
-            {{ roleLabel(role) }}
+            {{ role.label }}
           </el-tag>
+          <span v-if="resolveUserRoles(row).length === 0" class="empty-text">未分配</span>
         </template>
       </el-table-column>
-      <el-table-column label="技能" min-width="200">
+      <el-table-column prop="status" label="状态" width="110">
         <template #default="{ row }">
-          <el-tag
-            v-for="skill in row.skills"
-            :key="skill"
-            type="info"
-            size="small"
-            effect="light"
-            round
-            style="margin-right: 6px"
-          >
-            {{ skill }}
+          <el-tag :type="row.status === 1 ? 'success' : 'info'" effect="dark" round>
+            {{ row.status === 1 ? '启用' : '停用' }}
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag
-            :type="row.status === 'active' ? 'success' : 'danger'"
-            size="small"
-            effect="dark"
-            round
-          >
-            {{ row.status === 'active' ? '在职' : '离职' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="140" fixed="right">
+      <el-table-column prop="remark" label="备注" min-width="220" show-overflow-tooltip />
+      <el-table-column label="操作" width="300" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
-          <el-button link type="danger" size="small" @click="handleDelete(row)">移除</el-button>
+          <el-button link type="danger" size="small" @click="resetPassword(row)">重置密码</el-button>
+          <el-button
+            link
+            :type="row.status === 1 ? 'warning' : 'success'"
+            size="small"
+            @click="toggleStatus(row)"
+          >
+            {{ row.status === 1 ? '停用' : '启用' }}
+          </el-button>
+          <el-button
+            v-if="!isProtectedUser(row)"
+            link
+            type="danger"
+            size="small"
+            @click="removeUser(row)"
+          >
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <!-- 新建/编辑弹窗 -->
     <el-dialog
       v-model="dialogVisible"
-      :title="editingRow ? '编辑成员' : '添加成员'"
-      width="600px"
+      :title="editingUser ? '编辑人员' : '新增人员'"
+      width="680px"
       destroy-on-close
     >
       <el-form :model="form" label-position="top" size="large">
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="姓名" required>
-              <el-input v-model="form.name" placeholder="输入姓名" />
+            <el-form-item label="账号" required>
+              <el-input
+                v-model="form.account"
+                :disabled="Boolean(editingUser)"
+                placeholder="例如：zhangsan"
+              />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="部门" required>
-              <el-select v-model="form.department" placeholder="选择部门" style="width: 100%">
-                <el-option v-for="dept in departments" :key="dept" :label="dept" :value="dept" />
-              </el-select>
+            <el-form-item label="姓名" required>
+              <el-input v-model="form.username" placeholder="请输入姓名" />
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="职位">
-              <el-input v-model="form.position" placeholder="输入职位" />
+            <el-form-item label="邮箱">
+              <el-input v-model="form.email" placeholder="请输入邮箱" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="联系电话">
-              <el-input v-model="form.phone" placeholder="输入电话" />
+            <el-form-item label="手机号">
+              <el-input v-model="form.mobile" placeholder="请输入手机号" />
             </el-form-item>
           </el-col>
         </el-row>
-        <el-form-item label="邮箱">
-          <el-input v-model="form.email" placeholder="输入邮箱" />
-        </el-form-item>
-        <el-form-item label="角色" required>
-          <el-checkbox-group v-model="form.roles">
-            <el-checkbox label="auditor">主审人员</el-checkbox>
-            <el-checkbox label="reviewer">复核人</el-checkbox>
-            <el-checkbox label="leader">项目组长</el-checkbox>
-            <el-checkbox label="member">组员</el-checkbox>
-            <el-checkbox label="expert">业务专家</el-checkbox>
-          </el-checkbox-group>
-        </el-form-item>
-        <el-form-item label="技能标签">
-          <el-select
-            v-model="form.skills"
-            multiple
-            filterable
-            allow-create
-            default-first-option
-            placeholder="输入技能后回车"
-            style="width: 100%"
-          >
-            <el-option label="资金管理" value="资金管理" />
-            <el-option label="IT审计" value="IT审计" />
-            <el-option label="工程审计" value="工程审计" />
-            <el-option label="网络安全" value="网络安全" />
-            <el-option label="合同管理" value="合同管理" />
-            <el-option label="风险评估" value="风险评估" />
-            <el-option label="数据分析" value="数据分析" />
-            <el-option label="流程优化" value="流程优化" />
-          </el-select>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="状态" required>
+              <el-radio-group v-model="form.status">
+                <el-radio :value="1">启用</el-radio>
+                <el-radio :value="0">停用</el-radio>
+              </el-radio-group>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="角色" required>
+              <el-select
+                v-model="form.roleIds"
+                multiple
+                collapse-tags
+                collapse-tags-tooltip
+                placeholder="请选择角色"
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="role in activeRoles"
+                  :key="role.id"
+                  :label="role.roleName"
+                  :value="role.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item label="备注">
+          <el-input v-model="form.remark" type="textarea" :rows="3" placeholder="备注信息" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave">保存</el-button>
+        <el-button type="primary" :loading="saving" @click="saveUser">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Plus, Search } from '@element-plus/icons-vue'
-import { mockPersonnel } from '@/mock'
-import type { Personnel } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { roleApi, systemUserApi } from '@/api'
+import { useUserStore } from '@/stores'
+import type { RoleRecord, SystemUser, SystemUserUpsertPayload } from '@/types'
 
-const searchForm = reactive({ keyword: '', department: '', status: '' })
-const tableData = ref([...mockPersonnel])
-const departments = ['财务部', '审计部', 'IT部', '法务部', '采购部', '人力资源部', '风控部']
-
-const filteredData = computed(() => {
-  return tableData.value.filter((item) => {
-    if (searchForm.keyword && !item.name.includes(searchForm.keyword)) return false
-    if (searchForm.department && item.department !== searchForm.department) return false
-    if (searchForm.status && item.status !== searchForm.status) return false
-    return true
-  })
-})
-
-// Dialog
+const userStore = useUserStore()
+const loading = ref(false)
+const saving = ref(false)
 const dialogVisible = ref(false)
-const editingRow = ref<Personnel | null>(null)
-const form = reactive({
-  name: '',
-  department: '',
-  position: '',
-  phone: '',
-  email: '',
-  roles: [] as string[],
-  skills: [] as string[],
+const editingUser = ref<SystemUser | null>(null)
+const users = ref<SystemUser[]>([])
+const roles = ref<RoleRecord[]>([])
+
+const searchForm = reactive({
+  keyword: '',
+  roleId: undefined as string | undefined,
+  status: undefined as number | undefined,
 })
 
-const openDialog = (row?: Personnel) => {
-  if (row) {
-    editingRow.value = row
-    form.name = row.name
-    form.department = row.department
-    form.position = row.position
-    form.phone = row.phone || ''
-    form.email = row.email || ''
-    form.roles = [...row.roles]
-    form.skills = [...row.skills]
-  } else {
-    editingRow.value = null
-    form.name = ''
-    form.department = ''
-    form.position = ''
-    form.phone = ''
-    form.email = ''
-    form.roles = []
-    form.skills = []
+const form = reactive({
+  account: '',
+  username: '',
+  email: '',
+  mobile: '',
+  status: 1,
+  remark: '',
+  roleIds: [] as string[],
+})
+
+const currentTenantId = computed(() => userStore.userInfo?.tenantId || 1001)
+const activeRoles = computed(() => roles.value.filter((role) => role.status === 1))
+const roleMap = computed(() => new Map(roles.value.map((role) => [role.id, role])))
+
+const filteredUsers = computed(() =>
+  users.value.filter((user) => {
+    if (searchForm.keyword) {
+      const keyword = searchForm.keyword.trim().toLowerCase()
+      const matched = [user.username, user.account, user.email || ''].some((value) =>
+        value.toLowerCase().includes(keyword),
+      )
+      if (!matched) {
+        return false
+      }
+    }
+
+    if (typeof searchForm.roleId === 'string' && !user.roleIds.includes(searchForm.roleId)) {
+      return false
+    }
+
+    if (typeof searchForm.status === 'number' && user.status !== searchForm.status) {
+      return false
+    }
+
+    return true
+  }),
+)
+
+onMounted(() => {
+  void loadData()
+})
+
+async function handleSearch() {
+  await loadData()
+}
+
+function handleReset() {
+  searchForm.keyword = ''
+  searchForm.roleId = undefined
+  searchForm.status = undefined
+  void handleSearch()
+}
+
+async function loadData() {
+  loading.value = true
+
+  try {
+    const [userList, roleList] = await Promise.all([systemUserApi.list(), roleApi.list()])
+    users.value = [...userList].sort(compareEntityIds)
+    roles.value = [...roleList].sort(compareEntityIds)
+  } finally {
+    loading.value = false
   }
+}
+
+function openDialog(user?: SystemUser) {
+  editingUser.value = user || null
+  form.account = user?.account || ''
+  form.username = user?.username || ''
+  form.email = user?.email || ''
+  form.mobile = user?.mobile || ''
+  form.status = user?.status ?? 1
+  form.remark = user?.remark || ''
+  form.roleIds = [...(user?.roleIds || [])]
   dialogVisible.value = true
 }
 
-const handleSave = () => {
-  if (!form.name || !form.department) {
-    ElMessage.warning('请填写必填信息')
+async function saveUser() {
+  if (!form.account.trim() || !form.username.trim()) {
+    ElMessage.warning('请填写账号和姓名')
     return
   }
-  if (editingRow.value) {
-    Object.assign(editingRow.value, {
-      name: form.name,
-      department: form.department,
-      position: form.position,
-      phone: form.phone,
-      email: form.email,
-      roles: [...form.roles],
-      skills: [...form.skills],
-    })
-    ElMessage.success('修改已保存')
-  } else {
-    tableData.value.unshift({
-      id: `p-${Date.now()}`,
-      name: form.name,
-      department: form.department,
-      position: form.position,
-      phone: form.phone,
-      email: form.email,
-      roles: [...form.roles] as any,
-      skills: [...form.skills],
-      status: 'active',
-    })
-    ElMessage.success('成员已添加')
+
+  if (form.roleIds.length === 0) {
+    ElMessage.warning('请至少分配一个角色')
+    return
   }
-  dialogVisible.value = false
+
+  saving.value = true
+
+  try {
+    const payload: SystemUserUpsertPayload = {
+      tenantId: editingUser.value?.tenantId || currentTenantId.value,
+      orgId: editingUser.value?.orgId ?? null,
+      account: form.account.trim(),
+      username: form.username.trim(),
+      email: form.email.trim(),
+      mobile: form.mobile.trim(),
+      status: form.status,
+      remark: form.remark.trim(),
+      roleIds: [...form.roleIds],
+    }
+
+    if (editingUser.value) {
+      await systemUserApi.update(editingUser.value.id, payload)
+      ElMessage.success('人员已更新')
+    } else {
+      await systemUserApi.create(payload)
+      ElMessage.success('人员已创建')
+    }
+
+    dialogVisible.value = false
+    await loadData()
+  } finally {
+    saving.value = false
+  }
 }
 
-const handleDelete = (row: Personnel) => {
-  ElMessageBox.confirm(`确认移除「${row.name}」吗？`, '警告', { type: 'warning' }).then(() => {
-    tableData.value = tableData.value.filter((item) => item.id !== row.id)
-    ElMessage.success('已移除')
-  })
+async function toggleStatus(user: SystemUser) {
+  loading.value = true
+
+  try {
+    await systemUserApi.update(user.id, {
+      tenantId: user.tenantId,
+      orgId: user.orgId ?? null,
+      account: user.account,
+      username: user.username,
+      email: user.email || '',
+      mobile: user.mobile || '',
+      status: user.status === 1 ? 0 : 1,
+      remark: user.remark || '',
+      roleIds: [...user.roleIds],
+    })
+    await loadData()
+    ElMessage.success(user.status === 1 ? '人员已停用' : '人员已启用')
+  } finally {
+    loading.value = false
+  }
 }
 
-const roleLabel = (val: string) =>
-  (
-    ({
-      auditor: '主审人员',
-      reviewer: '复核人',
-      leader: '项目组长',
-      member: '组员',
-      expert: '业务专家',
-    }) as any
-  )[val] || val
+async function resetPassword(user: SystemUser) {
+  await ElMessageBox.confirm(
+    `确认将账号「${user.account}」的密码重置为默认密码 jolywood 吗？`,
+    '重置密码',
+    {
+      type: 'warning',
+      confirmButtonText: '确认重置',
+      cancelButtonText: '取消',
+    },
+  )
 
-const avatarColor = (name: string) => {
-  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#ec4899']
-  return colors[name.charCodeAt(0) % colors.length]
+  loading.value = true
+
+  try {
+    await systemUserApi.resetPassword(user.id)
+    ElMessage.success(`密码已重置为默认密码 jolywood`)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function removeUser(user: SystemUser) {
+  if (isProtectedUser(user)) {
+    ElMessage.warning('初始管理员账号不允许删除')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `删除后将清空账号“${user.account}”及其角色分配，且不可恢复。是否继续？`,
+      '删除人员',
+      {
+        type: 'warning',
+        confirmButtonText: '删除',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      },
+    )
+  } catch {
+    return
+  }
+
+  loading.value = true
+
+  try {
+    await systemUserApi.delete(user.id)
+
+    if (editingUser.value?.id === user.id) {
+      editingUser.value = null
+      dialogVisible.value = false
+    }
+
+    await loadData()
+    ElMessage.success('人员已删除')
+  } finally {
+    loading.value = false
+  }
+}
+
+function isProtectedUser(user: SystemUser) {
+  return user.account.trim().toLowerCase() === 'admin'
+}
+
+function resolveUserRoles(user: SystemUser) {
+  const fromIds = user.roleIds
+    .map((roleId) => roleMap.value.get(roleId))
+    .filter((role): role is RoleRecord => Boolean(role))
+    .map((role) => ({ key: `id-${role.id}`, label: role.roleName }))
+
+  if (fromIds.length > 0) {
+    return fromIds
+  }
+
+  return (user.roleCodes || []).map((roleCode) => ({ key: `code-${roleCode}`, label: roleCode }))
+}
+
+function avatarColor(seed: string) {
+  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6']
+  return colors[seed.charCodeAt(0) % colors.length]
+}
+
+function compareEntityIds(left: { id: string }, right: { id: string }) {
+  return left.id.localeCompare(right.id, 'zh-CN', { numeric: true })
 }
 </script>
 
@@ -308,6 +442,7 @@ const avatarColor = (name: string) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+
   .page-title {
     font-size: 24px;
     font-weight: 700;
@@ -315,6 +450,7 @@ const avatarColor = (name: string) => {
     margin-bottom: 4px;
     letter-spacing: -0.5px;
   }
+
   .page-subtitle {
     font-size: 14px;
     color: $iris-text-secondary;
@@ -325,18 +461,24 @@ const avatarColor = (name: string) => {
   display: flex;
   align-items: center;
   gap: 12px;
+
   .info {
     display: flex;
     flex-direction: column;
-    .name {
-      font-weight: 600;
-      font-size: 14px;
-      color: $iris-text-primary;
-    }
-    .dept {
-      font-size: 12px;
-      color: $iris-text-muted;
-    }
   }
+
+  .name {
+    font-weight: 600;
+    color: $iris-text-primary;
+  }
+
+  .meta {
+    font-size: 12px;
+    color: $iris-text-muted;
+  }
+}
+
+.empty-text {
+  color: $iris-text-muted;
 }
 </style>

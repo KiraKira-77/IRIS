@@ -19,77 +19,35 @@
       unique-opened
       router
     >
-      <el-menu-item index="/workbench/dashboard">
-        <el-icon><Odometer /></el-icon>
-        <template #title>工作台</template>
-      </el-menu-item>
+      <template v-for="group in visibleMenuGroups" :key="group.code">
+        <el-menu-item v-if="group.children.length === 1" :index="group.children[0]!.path">
+          <el-icon><component :is="groupIconMap[group.code]" /></el-icon>
+          <template #title>{{ group.children[0]!.label }}</template>
+        </el-menu-item>
 
-      <el-sub-menu index="/resource">
-        <template #title>
-          <el-icon><Folder /></el-icon>
-          <span>资源管理</span>
-        </template>
-        <el-menu-item index="/resource/standards">标准管理</el-menu-item>
-        <el-menu-item index="/resource/checklists">内控清单</el-menu-item>
-        <el-menu-item index="/resource/archives">档案管理</el-menu-item>
-        <el-menu-item index="/resource/personnel">人员管理</el-menu-item>
-      </el-sub-menu>
-
-      <el-sub-menu index="/plan">
-        <template #title>
-          <el-icon><Calendar /></el-icon>
-          <span>计划管控</span>
-        </template>
-        <el-menu-item index="/plan/create">计划编制</el-menu-item>
-        <el-menu-item index="/plan/list">计划管理</el-menu-item>
-        <el-menu-item index="/plan/overview">计划一览</el-menu-item>
-      </el-sub-menu>
-
-      <el-sub-menu index="/project">
-        <template #title>
-          <el-icon><OfficeBuilding /></el-icon>
-          <span>项目管理</span>
-        </template>
-        <el-menu-item index="/project/list">项目列表</el-menu-item>
-        <el-menu-item index="/project/create">项目启动</el-menu-item>
-      </el-sub-menu>
-
-      <el-sub-menu index="/rectification">
-        <template #title>
-          <el-icon><SetUp /></el-icon>
-          <span>整改管理</span>
-        </template>
-        <el-menu-item index="/rectification/list">整改单列表</el-menu-item>
-        <el-menu-item index="/rectification/create">创建整改单</el-menu-item>
-      </el-sub-menu>
-
-      <el-sub-menu index="/smart">
-        <template #title>
-          <el-icon><DataAnalysis /></el-icon>
-          <span>智能内控</span>
-        </template>
-        <el-menu-item index="/smart/analysis">统计分析</el-menu-item>
-        <el-menu-item index="/smart/rules">规则库</el-menu-item>
-        <el-menu-item index="/smart/models">模型库</el-menu-item>
-        <el-menu-item index="/smart/tools">工具库</el-menu-item>
-      </el-sub-menu>
-
-      <el-sub-menu index="/system">
-        <template #title>
-          <el-icon><Setting /></el-icon>
-          <span>系统设置</span>
-        </template>
-        <el-menu-item index="/workbench/logs">日志中心</el-menu-item>
-        <el-menu-item index="/workbench/alerts">告警中心</el-menu-item>
-      </el-sub-menu>
+        <el-sub-menu v-else :index="`/${group.code}`">
+          <template #title>
+            <el-icon><component :is="groupIconMap[group.code]" /></el-icon>
+            <span>{{ group.label }}</span>
+          </template>
+          <el-menu-item
+            v-for="item in group.children"
+            :key="item.code"
+            :index="item.path"
+          >
+            {{ item.label }}
+          </el-menu-item>
+        </el-sub-menu>
+      </template>
     </el-menu>
   </el-aside>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, type Component } from 'vue'
 import { useRoute } from 'vue-router'
-import { useAppStore } from '@/stores'
+import { useAppStore, useUserStore } from '@/stores'
+import { APP_MENU_GROUPS, filterMenuGroupsByCodes } from '@/features/permissions/menu-access'
 import {
   Monitor,
   Odometer,
@@ -103,9 +61,22 @@ import {
 
 const route = useRoute()
 const appStore = useAppStore()
+const userStore = useUserStore()
 
 const isCollapsed = computed(() => appStore.sidebarCollapsed)
 const activeMenu = computed(() => route.path)
+const visibleMenuGroups = computed(() =>
+  filterMenuGroupsByCodes(APP_MENU_GROUPS, userStore.userInfo?.menuCodes || []),
+)
+const groupIconMap: Record<string, Component> = {
+  workbench: Odometer,
+  resource: Folder,
+  plan: Calendar,
+  project: OfficeBuilding,
+  rectification: SetUp,
+  smart: DataAnalysis,
+  system: Setting,
+}
 </script>
 
 <style lang="scss" scoped>

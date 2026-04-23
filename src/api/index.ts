@@ -5,6 +5,7 @@ import type {
   PageQuery,
   PageResult,
   Standard,
+  StandardUpsertPayload,
   ControlChecklist,
   Archive,
   Personnel,
@@ -13,6 +14,8 @@ import type {
   Project,
   CheckTask,
   RectificationOrder,
+  RoleRecord,
+  RoleUpsertPayload,
   DashboardStats,
   AlertEvent,
   LogEntry,
@@ -29,10 +32,10 @@ export const authApi = {
 }
 
 export const standardApi = {
-  list: (params: PageQuery) => request.get<PageResult<Standard>>('/v1/standards', params),
+  list: () => request.get<Standard[]>('/v1/standards'),
   detail: (id: string) => request.get<Standard>(`/v1/standards/${id}`),
-  create: (data: Partial<Standard>) => request.post<Standard>('/v1/standards', data),
-  update: (id: string, data: Partial<Standard>) =>
+  create: (data: StandardUpsertPayload) => request.post<Standard>('/v1/standards', data),
+  update: (id: string, data: StandardUpsertPayload) =>
     request.put<Standard>(`/v1/standards/${id}`, data),
   delete: (id: string) => request.delete(`/v1/standards/${id}`),
 }
@@ -114,6 +117,15 @@ export const dashboardApi = {
   stats: () => request.get<DashboardStats>('/v1/dashboard/stats'),
 }
 
+export const roleApi = {
+  list: () => request.get<RoleRecord[]>('/v1/system/roles'),
+  detail: (id: string | number) => request.get<RoleRecord>(`/v1/system/roles/${id}`),
+  create: (data: RoleUpsertPayload) => request.post<RoleRecord>('/v1/system/roles', data),
+  update: (id: string | number, data: RoleUpsertPayload) =>
+    request.put<RoleRecord>(`/v1/system/roles/${id}`, data),
+  delete: (id: string | number) => request.delete<void>(`/v1/system/roles/${id}`),
+}
+
 export const alertApi = {
   list: (params: PageQuery) => request.get<PageResult<AlertEvent>>('/v1/alerts', params),
   acknowledge: (id: string) => request.put(`/v1/alerts/${id}/ack`),
@@ -145,3 +157,5 @@ export const analysisApi = {
     request.get('/v1/analysis/project', params),
   annualAnalysis: (year?: number) => request.get('/v1/analysis/annual', { year }),
 }
+
+export { resourceScopeApi, systemUserApi } from './resource-scope'

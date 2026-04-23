@@ -6,7 +6,12 @@
         <span class="page-subtitle">内控标准文档的统一维护与发布</span>
       </div>
       <div class="right">
-        <el-button type="primary" :icon="Plus" size="large" @click="openDialog()"
+        <el-button
+          type="primary"
+          :icon="Plus"
+          size="large"
+          :disabled="!canCreateStandard"
+          @click="openDialog()"
           >新建标准</el-button
         >
       </div>
@@ -109,6 +114,18 @@
           >
         </template>
       </el-table-column>
+      <el-table-column label="可见范围" width="140">
+        <template #default="{ row }">
+          <el-tag :type="row.visibilityLevel === 'PUBLIC' ? 'success' : 'warning'" effect="light" round>
+            {{ row.visibilityLevel === 'PUBLIC' ? '全员可见' : '域内可见' }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="维护域" width="150">
+        <template #default="{ row }">
+          <el-tag type="info" effect="plain" round>{{ scopeLabel(row.ownerScopeId) }}</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column prop="publishDate" label="发布日期" width="130" sortable />
       <el-table-column prop="status" label="状态" width="110">
         <template #default="{ row }">
@@ -120,21 +137,28 @@
       <el-table-column label="操作" width="240" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
-          <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
           <el-button
+            v-if="getRowAccessState(row).canEdit"
+            link
+            type="primary"
+            size="small"
+            @click="openDialog(row)"
+            >编辑</el-button
+          >
+          <el-button
+            v-if="getRowAccessState(row).canEdit && row.status === 'active'"
             link
             type="success"
             size="small"
             @click="openUpgradeDialog(row)"
-            v-if="row.status === 'active'"
             >升版</el-button
           >
           <el-button
+            v-if="getRowAccessState(row).canDelete && row.status !== 'active'"
             link
             type="danger"
             size="small"
             @click="handleDelete(row)"
-            v-if="row.status !== 'active'"
             >删除</el-button
           >
         </template>
@@ -189,6 +213,45 @@
             :rows="3"
             placeholder="请输入标准描述"
           />
+        </el-form-item>
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="可见范围" required>
+              <el-select v-model="form.visibilityLevel" style="width: 100%">
+                <el-option label="全员可见" value="PUBLIC" />
+                <el-option label="域内可见" value="SCOPED" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="维护域" required>
+              <el-select v-model="form.ownerScopeId" style="width: 100%">
+                <el-option
+                  v-for="scope in editableScopeOptions"
+                  :key="scope.id"
+                  :label="formatResourceScopeOptionLabel(scope)"
+                  :value="scope.id"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item v-if="form.visibilityLevel === 'SCOPED'" label="共享可见范围">
+          <el-select
+            v-model="form.grantScopeIds"
+            multiple
+            clearable
+            collapse-tags
+            collapse-tags-tooltip
+            style="width: 100%"
+          >
+            <el-option
+              v-for="scope in grantScopeOptions"
+              :key="scope.id"
+              :label="formatResourceScopeOptionLabel(scope)"
+              :value="scope.id"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="标签">
           <el-select
@@ -288,6 +351,42 @@
             <el-tag :type="statusType(detailRow.status)" effect="dark" size="small">{{
               statusLabel(detailRow.status)
             }}</el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="可见范围">
+            <el-tag
+              :type="detailRow.visibilityLevel === 'PUBLIC' ? 'success' : 'warning'"
+              effect="light"
+              round
+            >
+              {{ detailRow.visibilityLevel === 'PUBLIC' ? '全员可见' : '域内可见' }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="维护域">
+            {{ scopeLabel(detailRow.ownerScopeId) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="共享可见范围">
+            <template v-if="detailRow.grants.length > 0">
+              <el-tag
+                v-for="grant in detailRow.grants"
+                :key="grant.scopeId"
+                size="small"
+                effect="plain"
+                round
+                style="margin-right: 4px"
+              >
+                {{ scopeLabel(grant.scopeId) }}
+              </el-tag>
+            </template>
+            <span v-else>无</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="我的权限">
+            <el-tag
+              :type="detailAccessState?.canEdit ? 'success' : 'info'"
+              effect="light"
+              round
+            >
+              {{ detailAccessState?.canEdit ? '可编辑' : '只读' }}
+            </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="发布日期">{{ detailRow.publishDate }}</el-descriptions-item>
           <el-descriptions-item label="描述">{{
@@ -455,10 +554,12 @@
         </div>
 
         <div class="drawer-actions">
-          <el-button type="primary" @click="handleEditFromDrawer">编辑</el-button>
+          <el-button v-if="detailAccessState?.canEdit" type="primary" @click="handleEditFromDrawer"
+            >编辑</el-button
+          >
           <el-button
             type="success"
-            v-if="detailRow.status === 'active'"
+            v-if="detailAccessState?.canEdit && detailRow.status === 'active'"
             @click="openUpgradeDialog(detailRow)"
           >
             <el-icon style="margin-right: 4px"><TopRight /></el-icon>
@@ -466,7 +567,7 @@
           </el-button>
           <el-button
             type="success"
-            v-if="detailRow.status === 'draft'"
+            v-if="detailAccessState?.canEdit && detailRow.status === 'draft'"
             @click="handlePublishFromDrawer"
             >发布</el-button
           >
@@ -478,32 +579,72 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
-  Plus,
-  Search,
-  Refresh,
-  Clock,
-  TopRight,
   ArrowDown,
-  EditPen,
-  Switch,
-  Remove,
   CirclePlus,
+  Clock,
+  EditPen,
+  Plus,
+  Refresh,
   RefreshLeft,
+  Remove,
+  Search,
+  Switch,
+  TopRight,
 } from '@element-plus/icons-vue'
-import { mockStandards } from '@/mock'
-import type { Standard } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { resourceScopeApi, standardApi } from '@/api'
+import {
+  buildStandardDraftPayload,
+  buildStandardListPage,
+  buildStandardMutationPayload,
+  buildStandardUpsertPayload,
+  normalizeStandardFromApi,
+} from '@/features/standards/standard-data'
+import { buildStandardAccessState } from '@/features/permissions/standard-access'
+import { DEFAULT_RESOURCE_SCOPE_OPTIONS } from '@/features/permissions/user-access'
+import {
+  filterGrantScopeOptions,
+  filterOwnerScopeOptions,
+  formatResourceScopeOptionLabel,
+  mapResourceScopesToOptions,
+  mergeResourceScopeOptions,
+} from '@/features/permissions/resource-scope-adapter'
+import { useUserStore } from '@/stores'
+import type { ResourceScopeOption, Standard, UserAccessContext } from '@/types'
 
 const loading = ref(false)
 const searchForm = reactive({ keyword: '', category: '', status: '' })
-// Initialize with mock data but keep it reactive for local CRUD
-const allStandards = ref<Standard[]>(JSON.parse(JSON.stringify(mockStandards)))
+const allStandards = ref<Standard[]>([])
 const tableData = ref<Standard[]>([])
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const userStore = useUserStore()
+const scopeOptions = ref<ResourceScopeOption[]>([...DEFAULT_RESOURCE_SCOPE_OPTIONS])
+const currentTenantId = computed(() => userStore.userInfo?.tenantId || 1001)
 
-// Dialog state
+const emptyAccessContext: UserAccessContext = {
+  isSuperAdmin: false,
+  scopePermissions: [],
+}
+
+const currentAccessContext = computed(() => userStore.accessContext || emptyAccessContext)
+const visibleStandards = computed(() => allStandards.value)
+const editableScopeOptions = computed(() => {
+  const ownerScopes = filterOwnerScopeOptions(scopeOptions.value)
+
+  if (currentAccessContext.value.isSuperAdmin) {
+    return ownerScopes
+  }
+
+  return ownerScopes.filter(
+    (scope) => hasScopeAction(scope.id, 'create') || hasScopeAction(scope.id, 'manage'),
+  )
+})
+const canCreateStandard = computed(
+  () => currentAccessContext.value.isSuperAdmin || editableScopeOptions.value.length > 0,
+)
+
 const dialogVisible = ref(false)
 const editingRow = ref<Standard | null>(null)
 const form = reactive({
@@ -511,10 +652,13 @@ const form = reactive({
   category: '',
   version: 'V1.0',
   description: '',
+  visibilityLevel: 'PUBLIC' as Standard['visibilityLevel'],
+  ownerScopeId: '',
+  grantScopeIds: [] as string[],
   tags: [] as string[],
 })
+const grantScopeOptions = computed(() => filterGrantScopeOptions(scopeOptions.value, form.ownerScopeId))
 
-// Upgrade dialog state
 const upgradeDialogVisible = ref(false)
 const upgradeSourceRow = ref<Standard | null>(null)
 const upgradeForm = reactive({
@@ -522,96 +666,118 @@ const upgradeForm = reactive({
   changeLog: '',
 })
 
-// Drawer state
 const drawerVisible = ref(false)
 const detailRow = ref<Standard | null>(null)
+const detailAccessState = computed(() =>
+  detailRow.value ? buildStandardAccessState(detailRow.value, currentAccessContext.value) : null,
+)
 
-// 版本展开状态
 const expandedVersions = reactive<Record<string, boolean>>({})
 
 const toggleVersionExpand = (id: string) => {
   expandedVersions[id] = !expandedVersions[id]
 }
 
-// 版本差异对比
 const getVersionChanges = (current: Standard, previous?: Standard) => {
   if (!previous) return []
   const changes: { field: string; label: string; oldVal: string; newVal: string }[] = []
-  const fieldMap: { field: keyof Standard; label: string; format?: (v: any) => string }[] = [
-    { field: 'description', label: '描述' },
-    { field: 'category', label: '分类', format: categoryLabel },
-    { field: 'tags', label: '标签', format: (v: string[]) => v.join(', ') },
-    { field: 'title', label: '标准名称' },
+  const fieldMap: { field: keyof Standard; label: string; format?: (value: any) => string }[] = [
+    { field: 'description', label: '\u63cf\u8ff0' },
+    { field: 'category', label: '\u5206\u7c7b', format: categoryLabel },
+    { field: 'tags', label: '\u6807\u7b7e', format: (value: string[]) => value.join(', ') },
+    { field: 'title', label: '\u6807\u51c6\u540d\u79f0' },
   ]
+
   for (const { field, label, format } of fieldMap) {
-    const oldRaw = previous[field]
-    const newRaw = current[field]
-    const oldStr = format ? format(oldRaw) : String(oldRaw ?? '')
-    const newStr = format ? format(newRaw) : String(newRaw ?? '')
-    if (oldStr !== newStr) {
-      changes.push({ field, label, oldVal: oldStr, newVal: newStr })
+    const oldValue = previous[field]
+    const newValue = current[field]
+    const oldText = format ? format(oldValue) : String(oldValue ?? '')
+    const newText = format ? format(newValue) : String(newValue ?? '')
+
+    if (oldText !== newText) {
+      changes.push({ field, label, oldVal: oldText, newVal: newText })
     }
   }
+
   return changes
 }
 
-// 获取某组当前生效的版本 ID
 const getCurrentActiveId = (groupId: string): string | null => {
   const active = allStandards.value.find(
-    (s) => s.standardGroupId === groupId && s.status === 'active',
+    (item) => item.standardGroupId === groupId && item.status === 'active',
   )
   return active?.id ?? null
 }
 
-// 获取同组标准的版本数量（用于表格 badge）
-const getVersionCount = (row: Standard) => {
-  return allStandards.value.filter((s) => s.standardGroupId === row.standardGroupId).length
-}
+const getVersionCount = (row: Standard) =>
+  allStandards.value.filter((item) => item.standardGroupId === row.standardGroupId).length
 
-// 获取版本历史（按 versionNumber 排序）
 const versionHistory = computed(() => {
   if (!detailRow.value) return []
-  return allStandards.value
-    .filter((s) => s.standardGroupId === detailRow.value!.standardGroupId)
-    .sort((a, b) => b.versionNumber - a.versionNumber)
+
+  return [...allStandards.value]
+    .filter((item) => item.standardGroupId === detailRow.value?.standardGroupId)
+    .sort((left, right) => right.versionNumber - left.versionNumber)
 })
 
 onMounted(() => {
+  void Promise.all([loadScopeOptions(), loadStandards()])
+})
+
+watch(visibleStandards, () => {
   handleSearch()
 })
 
-const handleSearch = () => {
+const loadScopeOptions = async () => {
+  try {
+    const scopes = await resourceScopeApi.list()
+    const mappedOptions = mapResourceScopesToOptions(scopes)
+
+    scopeOptions.value =
+      mappedOptions.length > 0
+        ? mergeResourceScopeOptions(mappedOptions, DEFAULT_RESOURCE_SCOPE_OPTIONS)
+        : [...DEFAULT_RESOURCE_SCOPE_OPTIONS]
+  } catch {
+    scopeOptions.value = [...DEFAULT_RESOURCE_SCOPE_OPTIONS]
+  }
+}
+
+const loadStandards = async () => {
   loading.value = true
-  setTimeout(() => {
-    // 先过滤，再每组只取最新版本（versionNumber 最大的）
-    const filtered = allStandards.value.filter((item) => {
-      if (searchForm.keyword && !item.title.includes(searchForm.keyword)) return false
-      if (searchForm.category && item.category !== searchForm.category) return false
-      if (searchForm.status && item.status !== searchForm.status) return false
-      return true
-    })
 
-    // 按 standardGroupId 分组，每组取 versionNumber 最大的
-    const latestMap = new Map<string, Standard>()
-    for (const item of filtered) {
-      const existing = latestMap.get(item.standardGroupId)
-      if (!existing || item.versionNumber > existing.versionNumber) {
-        latestMap.set(item.standardGroupId, item)
-      }
-    }
-    // 如果有状态过滤 (如 archived)，则显示所有匹配项而不只是最新版
-    let result: Standard[]
-    if (searchForm.status) {
-      result = filtered
-    } else {
-      result = Array.from(latestMap.values())
-    }
-
-    pagination.total = result.length
-    const start = (pagination.page - 1) * pagination.pageSize
-    tableData.value = result.slice(start, start + pagination.pageSize)
+  try {
+    allStandards.value = (await standardApi.list()).map(normalizeStandardFromApi)
+    syncSelectedRows()
+    handleSearch()
+  } finally {
     loading.value = false
-  }, 200)
+  }
+}
+
+const handleSearch = () => {
+  const preview = buildStandardListPage(visibleStandards.value, {
+    keyword: searchForm.keyword,
+    category: searchForm.category,
+    status: searchForm.status,
+    page: 1,
+    pageSize: pagination.pageSize,
+  })
+  const maxPage = Math.max(1, Math.ceil(preview.total / pagination.pageSize))
+
+  if (pagination.page > maxPage) {
+    pagination.page = maxPage
+  }
+
+  const page = buildStandardListPage(visibleStandards.value, {
+    keyword: searchForm.keyword,
+    category: searchForm.category,
+    status: searchForm.status,
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+  })
+
+  pagination.total = page.total
+  tableData.value = page.list
 }
 
 const handleReset = () => {
@@ -623,12 +789,24 @@ const handleReset = () => {
 }
 
 const openDialog = (row?: Standard) => {
+  if (row && !getRowAccessState(row).canEdit) {
+    ElMessage.warning('\u5f53\u524d\u6807\u51c6\u5bf9\u4f60\u662f\u53ea\u8bfb\u7684')
+    return
+  }
+  if (!row && !canCreateStandard.value) {
+    ElMessage.warning('\u5f53\u524d\u8d26\u53f7\u6ca1\u6709\u53ef\u521b\u5efa\u6807\u51c6\u7684\u7ef4\u62a4\u57df')
+    return
+  }
+
   if (row) {
     editingRow.value = row
     form.title = row.title
     form.category = row.category
     form.version = row.version
     form.description = row.description || ''
+    form.visibilityLevel = row.visibilityLevel
+    form.ownerScopeId = row.ownerScopeId
+    form.grantScopeIds = row.grants.map((grant) => grant.scopeId)
     form.tags = [...row.tags]
   } else {
     editingRow.value = null
@@ -636,8 +814,12 @@ const openDialog = (row?: Standard) => {
     form.category = ''
     form.version = 'V1.0'
     form.description = ''
+    form.visibilityLevel = 'PUBLIC'
+    form.ownerScopeId = editableScopeOptions.value[0]?.id || ''
+    form.grantScopeIds = []
     form.tags = []
   }
+
   dialogVisible.value = true
 }
 
@@ -647,260 +829,342 @@ const openDetail = (row: Standard) => {
 }
 
 const openUpgradeDialog = (row: Standard) => {
+  if (!getRowAccessState(row).canEdit) {
+    ElMessage.warning('\u5f53\u524d\u6807\u51c6\u4e0d\u5141\u8bb8\u5347\u7248')
+    return
+  }
+
   upgradeSourceRow.value = row
   upgradeForm.newVersion = ''
   upgradeForm.changeLog = ''
   upgradeDialogVisible.value = true
-  // 如果从抽屉打开，先关闭抽屉
   drawerVisible.value = false
 }
 
-const handleSave = () => {
-  if (!form.title) {
-    ElMessage.warning('请输入标准名称')
+const handleSave = async () => {
+  if (!validateForm()) {
     return
   }
 
-  const currentRow = editingRow.value as any
-  if (currentRow) {
-    // Update existing
-    const id = currentRow.id
-    const index = allStandards.value.findIndex((item) => item.id === id)
-    if (index !== -1) {
-      const updatedItem: any = {
-        ...allStandards.value[index],
-        title: form.title,
-        category: (form.category || 'internal') as any,
-        version: form.version,
-        description: form.description,
-        tags: [...form.tags],
-        updatedAt: new Date().toISOString().slice(0, 10),
-      }
-      allStandards.value[index] = updatedItem
-      ElMessage.success('修改已保存')
-    }
-  } else {
-    // Create new
-    const groupId = `std-${String(Date.now()).slice(-6)}`
-    const newStandard: any = {
-      id: groupId,
-      title: form.title,
-      category: (form.category || 'internal') as any,
-      version: form.version || 'V1.0',
-      publishDate: '-',
-      status: 'draft',
-      attachments: [],
-      tags: [...form.tags],
-      description: form.description,
-      createdAt: new Date().toISOString().slice(0, 10),
-      updatedAt: new Date().toISOString().slice(0, 10),
-      standardGroupId: groupId,
-      versionNumber: 1,
-      changeLog: '初始创建',
-    }
-    allStandards.value.unshift(newStandard)
-    ElMessage.success('已保存为草稿')
-  }
+  loading.value = true
 
-  dialogVisible.value = false
-  handleSearch()
+  try {
+    const currentRow = editingRow.value
+
+    if (currentRow) {
+      await standardApi.update(
+        currentRow.id,
+        buildStandardUpsertPayload(form, {
+          tenantId: currentTenantId.value,
+          status: currentRow.status,
+          publishDate: normalizePublishDate(currentRow.publishDate),
+          standardGroupId: currentRow.standardGroupId,
+          versionNumber: currentRow.versionNumber,
+          previousVersionId: currentRow.previousVersionId,
+          changeLog: currentRow.changeLog,
+        }),
+      )
+      ElMessage.success('\u4fee\u6539\u5df2\u4fdd\u5b58')
+    } else {
+      await standardApi.create(
+        buildStandardUpsertPayload(form, {
+          tenantId: currentTenantId.value,
+          status: 'draft',
+          publishDate: null,
+          changeLog: '\u521d\u59cb\u521b\u5efa',
+        }),
+      )
+      ElMessage.success('\u5df2\u4fdd\u5b58\u4e3a\u8349\u7a3f')
+    }
+
+    dialogVisible.value = false
+    await loadStandards()
+  } finally {
+    loading.value = false
+  }
 }
 
-const handlePublish = () => {
-  if (!form.title) {
-    ElMessage.warning('请输入标准名称')
+const handlePublish = async () => {
+  if (!validateForm()) {
     return
   }
 
-  const groupId = `std-${String(Date.now()).slice(-6)}`
-  const newStandard: any = {
-    id: groupId,
-    title: form.title,
-    category: (form.category || 'internal') as any,
-    version: form.version || 'V1.0',
-    publishDate: new Date().toISOString().slice(0, 10),
-    status: 'active',
-    attachments: [],
-    tags: [...form.tags],
-    description: form.description,
-    createdAt: new Date().toISOString().slice(0, 10),
-    updatedAt: new Date().toISOString().slice(0, 10),
-    standardGroupId: groupId,
-    versionNumber: 1,
-    changeLog: '初始发布',
+  loading.value = true
+
+  try {
+    await standardApi.create(
+      buildStandardUpsertPayload(form, {
+        tenantId: currentTenantId.value,
+        status: 'active',
+        publishDate: today(),
+        changeLog: '\u521d\u59cb\u53d1\u5e03',
+      }),
+    )
+
+    dialogVisible.value = false
+    await loadStandards()
+    ElMessage.success('\u6807\u51c6\u5df2\u53d1\u5e03')
+  } finally {
+    loading.value = false
   }
-  allStandards.value.unshift(newStandard)
-  ElMessage.success('标准已发布')
-  dialogVisible.value = false
-  handleSearch()
 }
 
-const handlePublishFromDrawer = () => {
-  const current = detailRow.value as any
+const handlePublishFromDrawer = async () => {
+  const current = detailRow.value
   if (!current) return
-
-  const index = allStandards.value.findIndex((item) => item.id === current.id)
-  if (index !== -1) {
-    const item = allStandards.value[index]
-    if (item) {
-      // 发布新版时，归档同组旧版
-      allStandards.value.forEach((s) => {
-        if (
-          s.standardGroupId === item.standardGroupId &&
-          s.id !== item.id &&
-          s.status === 'active'
-        ) {
-          s.status = 'archived'
-        }
-      })
-      item.status = 'active'
-      item.publishDate = new Date().toISOString().slice(0, 10)
-      detailRow.value = { ...item } as any
-      ElMessage.success('标准已发布，旧版已自动归档')
-    }
+  if (!detailAccessState.value?.canEdit) {
+    ElMessage.warning('\u5f53\u524d\u6807\u51c6\u4e0d\u5141\u8bb8\u53d1\u5e03')
+    return
   }
-  handleSearch()
+
+  loading.value = true
+
+  try {
+    const activeVersion = allStandards.value.find(
+      (item) =>
+        item.standardGroupId === current.standardGroupId &&
+        item.id !== current.id &&
+        item.status === 'active',
+    )
+
+    if (activeVersion) {
+      await standardApi.update(
+        activeVersion.id,
+        buildStandardMutationPayload(activeVersion, {
+          tenantId: currentTenantId.value,
+          status: 'archived',
+        }),
+      )
+    }
+
+    await standardApi.update(
+      current.id,
+      buildStandardMutationPayload(current, {
+        tenantId: currentTenantId.value,
+        status: 'active',
+        publishDate: today(),
+      }),
+    )
+
+    await loadStandards()
+    updateDetailRow(current.id)
+    ElMessage.success(activeVersion ? '\u6807\u51c6\u5df2\u53d1\u5e03\uff0c\u65e7\u7248\u5df2\u81ea\u52a8\u5f52\u6863' : '\u6807\u51c6\u5df2\u53d1\u5e03')
+  } finally {
+    loading.value = false
+  }
 }
 
-const handleUpgrade = () => {
-  if (!upgradeForm.newVersion) {
-    ElMessage.warning('请输入新版本号')
+const handleUpgrade = async () => {
+  if (!upgradeForm.newVersion.trim()) {
+    ElMessage.warning('\u8bf7\u8f93\u5165\u65b0\u7248\u672c\u53f7')
     return
   }
-  if (!upgradeForm.changeLog) {
-    ElMessage.warning('请填写修订说明')
+  if (!upgradeForm.changeLog.trim()) {
+    ElMessage.warning('\u8bf7\u586b\u5199\u4fee\u8ba2\u8bf4\u660e')
     return
   }
+
   const source = upgradeSourceRow.value
   if (!source) return
 
-  // 获取该组最大 versionNumber
-  const maxVN = Math.max(
-    ...allStandards.value
-      .filter((s) => s.standardGroupId === source.standardGroupId)
-      .map((s) => s.versionNumber),
-  )
-  const newVN = maxVN + 1
-  const newId = `${source.standardGroupId}-v${newVN}`
+  loading.value = true
 
-  const newDraft: any = {
-    id: newId,
-    title: source.title,
-    category: source.category,
-    version: upgradeForm.newVersion,
-    publishDate: '-',
-    status: 'draft',
-    attachments: [],
-    tags: [...source.tags],
-    description: source.description,
-    createdAt: new Date().toISOString().slice(0, 10),
-    updatedAt: new Date().toISOString().slice(0, 10),
-    standardGroupId: source.standardGroupId,
-    versionNumber: newVN,
-    previousVersionId: source.id,
-    changeLog: upgradeForm.changeLog,
+  try {
+    const payload = buildStandardDraftPayload(
+      source,
+      {
+        tenantId: currentTenantId.value,
+        version: upgradeForm.newVersion.trim(),
+        changeLog: upgradeForm.changeLog.trim(),
+      },
+      allStandards.value,
+    )
+
+    await standardApi.create(payload)
+    upgradeDialogVisible.value = false
+    await loadStandards()
+
+    const createdDraft = allStandards.value.find(
+      (item) =>
+        item.standardGroupId === payload.standardGroupId &&
+        item.versionNumber === payload.versionNumber,
+    )
+
+    ElMessage.success(`\u5df2\u521b\u5efa ${upgradeForm.newVersion} \u7248\u672c\u8349\u7a3f`)
+
+    if (createdDraft) {
+      openDialog(createdDraft)
+    }
+  } finally {
+    loading.value = false
   }
-
-  allStandards.value.unshift(newDraft)
-  upgradeDialogVisible.value = false
-  ElMessage.success(`已创建 ${upgradeForm.newVersion} 版本草稿`)
-  handleSearch()
-
-  // 打开编辑窗口让用户修改内容
-  setTimeout(() => {
-    openDialog(newDraft)
-  }, 300)
 }
 
-// 回退弹窗
 const openRollbackDialog = (targetVersion: Standard) => {
   ElMessageBox.prompt(
-    `将基于「${targetVersion.version}」的内容创建新版本草稿，请输入回退原因：`,
-    `回退到 ${targetVersion.version}`,
+    `\u5c06\u57fa\u4e8e\u300c${targetVersion.version}\u300d\u7684\u5185\u5bb9\u521b\u5efa\u65b0\u7248\u672c\u8349\u7a3f\uff0c\u8bf7\u8f93\u5165\u56de\u9000\u539f\u56e0\uff1a`,
+    `\u56de\u9000\u5230 ${targetVersion.version}`,
     {
-      confirmButtonText: '确认回退',
-      cancelButtonText: '取消',
+      confirmButtonText: '\u786e\u8ba4\u56de\u9000',
+      cancelButtonText: '\u53d6\u6d88',
       type: 'warning',
       inputType: 'textarea',
-      inputPlaceholder: '请输入回退原因',
-      inputValidator: (val: string) => {
-        if (!val || !val.trim()) return '回退原因不能为空'
+      inputPlaceholder: '\u8bf7\u8f93\u5165\u56de\u9000\u539f\u56e0',
+      inputValidator: (value: string) => {
+        if (!value || !value.trim()) return '\u56de\u9000\u539f\u56e0\u4e0d\u80fd\u4e3a\u7a7a'
         return true
       },
     },
   ).then((result) => {
-    const reason = typeof result === 'string' ? result : (result as any).value
-    handleRollback(targetVersion, reason)
+    const reason = typeof result === 'string' ? result : (result as { value: string }).value
+    void handleRollback(targetVersion, reason)
   })
 }
 
-const handleRollback = (targetVersion: Standard, reason: string) => {
-  // 获取该组最大 versionNumber
-  const maxVN = Math.max(
-    ...allStandards.value
-      .filter((s) => s.standardGroupId === targetVersion.standardGroupId)
-      .map((s) => s.versionNumber),
-  )
-  const newVN = maxVN + 1
-  const newId = `${targetVersion.standardGroupId}-v${newVN}`
+const handleRollback = async (targetVersion: Standard, reason: string) => {
+  loading.value = true
 
-  const rollbackDraft: any = {
-    id: newId,
-    title: targetVersion.title,
-    category: targetVersion.category,
-    version: targetVersion.version,
-    publishDate: '-',
-    status: 'draft',
-    attachments: [],
-    tags: [...targetVersion.tags],
-    description: targetVersion.description,
-    createdAt: new Date().toISOString().slice(0, 10),
-    updatedAt: new Date().toISOString().slice(0, 10),
-    standardGroupId: targetVersion.standardGroupId,
-    versionNumber: newVN,
-    previousVersionId: targetVersion.id,
-    changeLog: `[回退] 回退至 ${targetVersion.version}：${reason}`,
+  try {
+    const payload = buildStandardDraftPayload(
+      targetVersion,
+      {
+        tenantId: currentTenantId.value,
+        version: targetVersion.version,
+        changeLog: `[\u56de\u9000] \u56de\u9000\u81f3 ${targetVersion.version}\uff1a${reason}`,
+      },
+      allStandards.value,
+    )
+
+    await standardApi.create(payload)
+    await loadStandards()
+
+    const rollbackDraft = allStandards.value.find(
+      (item) =>
+        item.standardGroupId === payload.standardGroupId &&
+        item.versionNumber === payload.versionNumber,
+    )
+
+    if (rollbackDraft) {
+      detailRow.value = rollbackDraft
+    }
+
+    ElMessage.success('\u5df2\u521b\u5efa\u56de\u9000\u8349\u7a3f\uff0c\u53ef\u7f16\u8f91\u540e\u53d1\u5e03')
+  } finally {
+    loading.value = false
   }
-
-  allStandards.value.unshift(rollbackDraft)
-  ElMessage.success(`已创建回退草稿，可编辑后发布`)
-  handleSearch()
-
-  // 更新详情抽屉到新版本
-  detailRow.value = rollbackDraft
 }
 
 const handleDelete = (row: Standard) => {
-  ElMessageBox.confirm(`确认删除标准「${row.title}」(${row.version}) 吗？`, '警告', {
+  if (!getRowAccessState(row).canDelete) {
+    ElMessage.warning('\u5f53\u524d\u6807\u51c6\u4e0d\u5141\u8bb8\u5220\u9664')
+    return
+  }
+
+  ElMessageBox.confirm(`\u786e\u8ba4\u5220\u9664\u6807\u51c6\u300c${row.title}\u300d(${row.version}) \u5417\uff1f`, '\u8b66\u544a', {
     type: 'warning',
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-  }).then(() => {
-    allStandards.value = allStandards.value.filter((item) => item.id !== row.id)
-    ElMessage.success('删除成功')
-    handleSearch()
+    confirmButtonText: '\u786e\u5b9a',
+    cancelButtonText: '\u53d6\u6d88',
+  }).then(async () => {
+    loading.value = true
+
+    try {
+      await standardApi.delete(row.id)
+      await loadStandards()
+
+      if (detailRow.value?.id === row.id) {
+        detailRow.value = null
+        drawerVisible.value = false
+      }
+
+      ElMessage.success('\u5220\u9664\u6210\u529f')
+    } finally {
+      loading.value = false
+    }
   })
 }
 
 const handleEditFromDrawer = () => {
-  if (detailRow.value) {
+  if (detailRow.value && detailAccessState.value?.canEdit) {
     openDialog(detailRow.value)
     drawerVisible.value = false
   }
 }
 
-// Helpers
-const categoryType = (val: string) =>
-  (({ law: 'danger', industry: 'warning', internal: 'primary', system: 'info' }) as any)[val] ||
+const getRowAccessState = (row: Standard) =>
+  buildStandardAccessState(row, currentAccessContext.value)
+
+const scopeLabel = (scopeId: string) =>
+  scopeOptions.value.find((scope) => scope.id === scopeId)?.label || scopeId
+
+const hasScopeAction = (scopeId: string, action: 'create' | 'manage') => {
+  const scopePermission = currentAccessContext.value.scopePermissions.find(
+    (permission) => permission.scopeId === scopeId,
+  )
+
+  return (
+    currentAccessContext.value.isSuperAdmin ||
+    Boolean(
+      scopePermission?.actions.includes(action) || scopePermission?.actions.includes('manage'),
+    )
+  )
+}
+
+const validateForm = () => {
+  if (!form.title.trim()) {
+    ElMessage.warning('\u8bf7\u8f93\u5165\u6807\u51c6\u540d\u79f0')
+    return false
+  }
+  if (!form.ownerScopeId.trim()) {
+    ElMessage.warning('\u8bf7\u9009\u62e9\u7ef4\u62a4\u57df')
+    return false
+  }
+
+  return true
+}
+
+const categoryType = (value: string) =>
+  (({ law: 'danger', industry: 'warning', internal: 'primary', system: 'info' }) as any)[value] ||
   'info'
-const categoryLabel = (val: string) =>
-  (({ law: '法律法规', industry: '行业规范', internal: '内部制度', system: '系统制度' }) as any)[
-    val
-  ] || val
-const statusType = (val: string) =>
-  (({ active: 'success', draft: 'info', archived: 'warning' }) as any)[val] || 'info'
-const statusLabel = (val: string) =>
-  (({ active: '生效中', draft: '草稿', archived: '已归档' }) as any)[val] || val
+const categoryLabel = (value: string) =>
+  (({ law: '\u6cd5\u5f8b\u6cd5\u89c4', industry: '\u884c\u4e1a\u89c4\u8303', internal: '\u5185\u90e8\u5236\u5ea6', system: '\u7cfb\u7edf\u5236\u5ea6' }) as any)[
+    value
+  ] || value
+const statusType = (value: string) =>
+  (({ active: 'success', draft: 'info', archived: 'warning' }) as any)[value] || 'info'
+const statusLabel = (value: string) =>
+  (({ active: '\u751f\u6548\u4e2d', draft: '\u8349\u7a3f', archived: '\u5df2\u5f52\u6863' }) as any)[value] || value
+
+function syncSelectedRows() {
+  if (detailRow.value) {
+    updateDetailRow(detailRow.value.id)
+  }
+
+  if (editingRow.value) {
+    editingRow.value =
+      allStandards.value.find((item) => item.id === editingRow.value?.id) || editingRow.value
+  }
+
+  if (upgradeSourceRow.value) {
+    upgradeSourceRow.value =
+      allStandards.value.find((item) => item.id === upgradeSourceRow.value?.id) ||
+      upgradeSourceRow.value
+  }
+}
+
+function updateDetailRow(id: string) {
+  detailRow.value = allStandards.value.find((item) => item.id === id) || null
+  if (!detailRow.value) {
+    drawerVisible.value = false
+  }
+}
+
+function today() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function normalizePublishDate(value: string) {
+  return value === '-' ? null : value
+}
 </script>
 
 <style lang="scss" scoped>

@@ -1,7 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AuthCurrentUser, UserInfo } from '@/types'
-import { authApi } from '@/api'
+import type { AuthCurrentUser, UserAccessContext, UserInfo } from '@/types'
+import { authApi, resourceScopeApi, roleApi } from '@/api'
+import {
+  buildAccessContextFromScopeMembers,
+  buildLocalAccessContext,
+  mapCurrentUserToUserInfo,
+} from '@/features/permissions/user-access'
+import { buildMenuCodesFromRoles } from '@/features/permissions/menu-access'
 
 const TOKEN_STORAGE_KEY = 'iris_token'
 
@@ -26,6 +32,7 @@ export const useUserStore = defineStore('user', () => {
     return ''
   })
   const permissions = computed(() => userInfo.value?.permissions || [])
+  const accessContext = computed(() => userInfo.value?.accessContext)
 
   function setToken(newToken: string) {
     token.value = newToken
@@ -50,7 +57,11 @@ export const useUserStore = defineStore('user', () => {
 
     try {
       const currentUser = await authApi.getUserInfo()
-      userInfo.value = mapCurrentUser(currentUser)
+      const [accessContext, menuCodes] = await Promise.all([
+        resolveAccessContext(currentUser),
+        resolveMenuCodes(currentUser),
+      ])
+      userInfo.value = mapCurrentUser(currentUser, accessContext, menuCodes)
     } catch (error) {
       clearToken()
       throw error instanceof Error ? error : new Error('获取用户信息失败')
@@ -88,6 +99,7 @@ export const useUserStore = defineStore('user', () => {
     userName,
     userAvatar,
     permissions,
+    accessContext,
     login,
     logout,
     fetchUserInfo,
@@ -98,18 +110,45 @@ export const useUserStore = defineStore('user', () => {
   }
 })
 
-function mapCurrentUser(currentUser: AuthCurrentUser): UserInfo {
-  const permissions = currentUser.roles.includes('PLATFORM_ADMIN') ? ['*'] : []
+async function resolveAccessContext(currentUser: AuthCurrentUser): Promise<UserAccessContext> {
+  const localAccessContext = buildLocalAccessContext(currentUser.roles)
 
-  return {
-    id: String(currentUser.userId),
-    username: currentUser.username,
-    name: currentUser.displayName || currentUser.username,
-    avatar: '',
-    department: currentUser.tenantName || '',
-    email: '',
-    phone: '',
-    roles: currentUser.roles,
-    permissions,
+  if (localAccessContext.isSuperAdmin) {
+    return localAccessContext
   }
+
+  try {
+    const scopes = await resourceScopeApi.list()
+    const membersByScope = await Promise.all(
+      scopes.map((scope) => resourceScopeApi.listMembers(scope.id)),
+    )
+
+    return buildAccessContextFromScopeMembers(
+      currentUser.roles,
+      membersByScope.flat().filter((member) => member.userId === String(currentUser.userId)),
+    )
+  } catch {
+    return localAccessContext
+  }
+}
+
+async function resolveMenuCodes(currentUser: AuthCurrentUser): Promise<string[]> {
+  try {
+    const roles = await roleApi.list()
+    const roleMenus = Object.fromEntries(
+      roles.map((role) => [role.roleCode, role.menuCodes || []]),
+    )
+
+    return buildMenuCodesFromRoles(currentUser.roles, roleMenus)
+  } catch {
+    return buildMenuCodesFromRoles(currentUser.roles)
+  }
+}
+
+function mapCurrentUser(
+  currentUser: AuthCurrentUser,
+  accessContext = buildLocalAccessContext(currentUser.roles),
+  menuCodes = buildMenuCodesFromRoles(currentUser.roles),
+): UserInfo {
+  return mapCurrentUserToUserInfo(currentUser, accessContext, menuCodes)
 }

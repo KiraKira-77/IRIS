@@ -12,18 +12,25 @@ import type {
   AlertEvent,
   LogEntry,
 } from '@/types'
+import { buildLocalAccessContext, STANDARD_SCOPE_IDS } from '@/features/permissions/user-access'
+import { buildDefaultMenuCodes } from '@/features/permissions/menu-access'
+
+type MockStandardSeed = Omit<Standard, 'visibilityLevel' | 'ownerScopeId' | 'grants'>
 
 // ===========================
 // 用户 & 权限 Mock
 // ===========================
 export const mockUser: UserInfo = {
   id: 'u-001',
+  tenantId: 1001,
   username: 'admin',
   name: '超级管理员',
   avatar: 'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png',
   department: '内控合规部',
   roles: ['admin'],
+  menuCodes: buildDefaultMenuCodes(['PLATFORM_ADMIN']),
   permissions: ['*'],
+  accessContext: buildLocalAccessContext(['PLATFORM_ADMIN']),
 }
 
 // ===========================
@@ -55,7 +62,7 @@ const categories: Array<'law' | 'industry' | 'internal' | 'system'> = [
 ]
 
 // 生成基础标准（每条 versionNumber=1, standardGroupId=自身id）
-const baseStandards: Standard[] = standardTitles.map((title, i) => ({
+const baseStandards: MockStandardSeed[] = standardTitles.map((title, i) => ({
   id: `std-${String(i + 1).padStart(3, '0')}`,
   title,
   category: categories[i % 4] as Standard['category'],
@@ -72,7 +79,7 @@ const baseStandards: Standard[] = standardTitles.map((title, i) => ({
 }))
 
 // 为前3个标准添加版本历史（旧版 archived，当前版 active）
-const versionHistoryExtras: Standard[] = [
+const versionHistoryExtras: MockStandardSeed[] = [
   // std-001 的旧版本 V1.0 (archived)
   {
     id: 'std-001-v1',
@@ -184,7 +191,50 @@ Object.assign(baseStandards[2]!, {
   publishDate: '2025-03-15',
 })
 
-export const mockStandards: Standard[] = [...baseStandards, ...versionHistoryExtras]
+export const mockStandards: Standard[] = [...baseStandards, ...versionHistoryExtras].map(
+  (standard, index) => ({
+    ...standard,
+    visibilityLevel: resolveStandardVisibility(index),
+    ownerScopeId: resolveStandardOwnerScope(index),
+    grants: resolveStandardGrants(index),
+  }),
+)
+
+function resolveStandardVisibility(index: number): Standard['visibilityLevel'] {
+  return index % 5 === 0 ? 'SCOPED' : 'PUBLIC'
+}
+
+function resolveStandardOwnerScope(index: number): Standard['ownerScopeId'] {
+  if (index % 3 === 0) return STANDARD_SCOPE_IDS.finance
+  if (index % 3 === 1) return STANDARD_SCOPE_IDS.it
+  return STANDARD_SCOPE_IDS.compliance
+}
+
+function resolveStandardGrants(index: number): Standard['grants'] {
+  if (index % 4 === 0) {
+    return [
+      {
+        scopeId: STANDARD_SCOPE_IDS.it,
+        actions: ['view'],
+      },
+    ]
+  }
+
+  if (index % 6 === 0) {
+    return [
+      {
+        scopeId: STANDARD_SCOPE_IDS.finance,
+        actions: ['view'],
+      },
+      {
+        scopeId: STANDARD_SCOPE_IDS.compliance,
+        actions: ['view'],
+      },
+    ]
+  }
+
+  return []
+}
 
 // 检查清单 - 丰富mock数据
 const checklistNames = [

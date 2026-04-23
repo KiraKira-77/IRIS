@@ -3,6 +3,7 @@ import NProgress from 'nprogress'
 import 'nprogress/nprogress.css'
 import pinia, { useUserStore } from '@/stores'
 import { resolveAuthRouteDecision } from './auth-session'
+import { canAccessPath, resolveFirstAccessiblePath } from '@/features/permissions/menu-access'
 
 NProgress.configure({ showSpinner: false })
 
@@ -43,6 +44,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Standards',
         component: () => import('@/views/resource/standards/index.vue'),
         meta: { title: '标准管理', icon: 'Reading' },
+      },
+      {
+        path: 'resource/scopes',
+        name: 'ResourceScopes',
+        component: () => import('@/views/resource/scopes/index.vue'),
+        meta: { title: '资源域配置', icon: 'Grid' },
       },
       {
         path: 'resource/checklists',
@@ -156,6 +163,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/smart/tools/index.vue'),
         meta: { title: '工具库', icon: 'Suitcase' },
       },
+      {
+        path: 'system/roles',
+        name: 'SystemRoles',
+        component: () => import('@/views/system/roles/index.vue'),
+        meta: { title: '角色菜单', icon: 'UserFilled' },
+      },
       // ========== 个人中心 ==========
       {
         path: 'profile',
@@ -209,6 +222,10 @@ router.beforeEach(async (to) => {
         query: { redirect: to.fullPath },
       }
     }
+  }
+
+  if (!to.meta.public && !canAccessPath(to.path, userStore.userInfo)) {
+    return resolveFirstAccessiblePath(userStore.userInfo?.menuCodes || [])
   }
 
   return true
