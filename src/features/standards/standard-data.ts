@@ -20,6 +20,7 @@ export interface StandardListPage {
 }
 
 export interface StandardEditorFormValue {
+  standardCode: string
   title: string
   category: string
   version: string
@@ -27,7 +28,6 @@ export interface StandardEditorFormValue {
   visibilityLevel: StandardVisibilityLevel
   ownerScopeId: string
   grantScopeIds: string[]
-  tags: string[]
 }
 
 export interface StandardUpsertOptions {
@@ -84,13 +84,13 @@ export function buildStandardUpsertPayload(
 ): StandardUpsertPayload {
   return {
     tenantId: options.tenantId,
+    standardCode: form.standardCode.trim(),
     title: form.title.trim(),
     category: (form.category || 'internal') as StandardCategory,
     version: form.version.trim() || 'V1.0',
     status: options.status,
     publishDate: options.publishDate,
     description: form.description.trim(),
-    tags: normalizeStringList(form.tags),
     standardGroupId: options.standardGroupId,
     versionNumber: options.versionNumber,
     previousVersionId: options.previousVersionId,
@@ -111,13 +111,13 @@ export function buildStandardDraftPayload(
 ): StandardUpsertPayload {
   return {
     tenantId: options.tenantId,
+    standardCode: source.standardCode,
     title: source.title,
     category: source.category,
     version: options.version,
     status: 'draft',
     publishDate: null,
     description: source.description || '',
-    tags: [...source.tags],
     standardGroupId: source.standardGroupId,
     versionNumber: getNextVersionNumber(standards, source.standardGroupId),
     previousVersionId: source.id,
@@ -142,13 +142,13 @@ export function buildStandardMutationPayload(
 ): StandardUpsertPayload {
   return {
     tenantId: options.tenantId,
+    standardCode: standard.standardCode,
     title: standard.title,
     category: standard.category,
     version: standard.version,
     status: options.status || standard.status,
     publishDate: normalizePublishDate(options.publishDate ?? standard.publishDate),
     description: standard.description || '',
-    tags: [...standard.tags],
     standardGroupId: standard.standardGroupId,
     versionNumber: standard.versionNumber,
     previousVersionId: standard.previousVersionId,

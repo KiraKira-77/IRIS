@@ -62,11 +62,6 @@
 
     <!-- 数据表格 -->
     <el-table :data="tableData" v-loading="loading" style="width: 100%" stripe size="large">
-      <el-table-column prop="id" label="标准编号" width="140">
-        <template #default="{ row }">
-          <el-tag effect="plain" type="info" class="font-mono">{{ row.id.toUpperCase() }}</el-tag>
-        </template>
-      </el-table-column>
       <el-table-column prop="title" label="标准名称" min-width="280" show-overflow-tooltip>
         <template #default="{ row }">
           <el-link
@@ -99,19 +94,6 @@
               >共{{ getVersionCount(row) }}版</el-tag
             >
           </div>
-        </template>
-      </el-table-column>
-      <el-table-column prop="tags" label="标签" width="180">
-        <template #default="{ row }">
-          <el-tag
-            v-for="tag in row.tags"
-            :key="tag"
-            size="small"
-            effect="plain"
-            round
-            style="margin-right: 4px"
-            >{{ tag }}</el-tag
-          >
         </template>
       </el-table-column>
       <el-table-column label="可见范围" width="140">
@@ -186,6 +168,9 @@
       destroy-on-close
     >
       <el-form :model="form" label-width="90px" label-position="top" size="large">
+        <el-form-item label="标准编号" required>
+          <el-input v-model="form.standardCode" placeholder="请输入标准编号" />
+        </el-form-item>
         <el-form-item label="标准名称" required>
           <el-input v-model="form.title" placeholder="请输入标准名称" />
         </el-form-item>
@@ -253,23 +238,6 @@
             />
           </el-select>
         </el-form-item>
-        <el-form-item label="标签">
-          <el-select
-            v-model="form.tags"
-            multiple
-            filterable
-            allow-create
-            default-first-option
-            placeholder="输入标签后回车"
-            style="width: 100%"
-          >
-            <el-option label="内控" value="内控" />
-            <el-option label="合规" value="合规" />
-            <el-option label="IT审计" value="IT审计" />
-            <el-option label="信息安全" value="信息安全" />
-            <el-option label="财务" value="财务" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="附件">
           <el-upload action="#" :auto-upload="false" :limit="5" accept=".pdf,.doc,.docx,.xls,.xlsx">
             <el-button type="primary" plain>上传附件</el-button>
@@ -292,6 +260,9 @@
     <el-dialog v-model="upgradeDialogVisible" title="升版标准" width="520px" destroy-on-close>
       <div v-if="upgradeSourceRow" class="upgrade-info">
         <el-descriptions :column="1" border size="small">
+          <el-descriptions-item label="标准编号">{{
+            upgradeSourceRow.standardCode
+          }}</el-descriptions-item>
           <el-descriptions-item label="标准名称">{{ upgradeSourceRow.title }}</el-descriptions-item>
           <el-descriptions-item label="当前版本">
             <el-tag type="info" size="small">{{ upgradeSourceRow.version }}</el-tag>
@@ -334,7 +305,7 @@
       <div v-if="detailRow" class="detail-content">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="标准编号">{{
-            detailRow.id.toUpperCase()
+            detailRow.standardCode
           }}</el-descriptions-item>
           <el-descriptions-item label="标准名称"
             ><strong>{{ detailRow.title }}</strong></el-descriptions-item
@@ -394,17 +365,6 @@
           }}</el-descriptions-item>
           <el-descriptions-item label="修订说明" v-if="detailRow.changeLog">
             {{ detailRow.changeLog }}
-          </el-descriptions-item>
-          <el-descriptions-item label="标签">
-            <el-tag
-              v-for="tag in detailRow.tags"
-              :key="tag"
-              size="small"
-              effect="plain"
-              round
-              style="margin-right: 4px"
-              >{{ tag }}</el-tag
-            >
           </el-descriptions-item>
         </el-descriptions>
 
@@ -470,17 +430,6 @@
                       </el-descriptions-item>
                       <el-descriptions-item label="描述">
                         {{ v.description || '暂无描述' }}
-                      </el-descriptions-item>
-                      <el-descriptions-item label="标签">
-                        <el-tag
-                          v-for="tag in v.tags"
-                          :key="tag"
-                          size="small"
-                          effect="plain"
-                          round
-                          style="margin-right: 4px"
-                          >{{ tag }}</el-tag
-                        >
                       </el-descriptions-item>
                       <el-descriptions-item label="创建时间">{{
                         v.createdAt
@@ -648,6 +597,7 @@ const canCreateStandard = computed(
 const dialogVisible = ref(false)
 const editingRow = ref<Standard | null>(null)
 const form = reactive({
+  standardCode: '',
   title: '',
   category: '',
   version: 'V1.0',
@@ -655,7 +605,6 @@ const form = reactive({
   visibilityLevel: 'PUBLIC' as Standard['visibilityLevel'],
   ownerScopeId: '',
   grantScopeIds: [] as string[],
-  tags: [] as string[],
 })
 const grantScopeOptions = computed(() => filterGrantScopeOptions(scopeOptions.value, form.ownerScopeId))
 
@@ -684,7 +633,6 @@ const getVersionChanges = (current: Standard, previous?: Standard) => {
   const fieldMap: { field: keyof Standard; label: string; format?: (value: any) => string }[] = [
     { field: 'description', label: '\u63cf\u8ff0' },
     { field: 'category', label: '\u5206\u7c7b', format: categoryLabel },
-    { field: 'tags', label: '\u6807\u7b7e', format: (value: string[]) => value.join(', ') },
     { field: 'title', label: '\u6807\u51c6\u540d\u79f0' },
   ]
 
@@ -800,6 +748,7 @@ const openDialog = (row?: Standard) => {
 
   if (row) {
     editingRow.value = row
+    form.standardCode = row.standardCode
     form.title = row.title
     form.category = row.category
     form.version = row.version
@@ -807,9 +756,9 @@ const openDialog = (row?: Standard) => {
     form.visibilityLevel = row.visibilityLevel
     form.ownerScopeId = row.ownerScopeId
     form.grantScopeIds = row.grants.map((grant) => grant.scopeId)
-    form.tags = [...row.tags]
   } else {
     editingRow.value = null
+    form.standardCode = ''
     form.title = ''
     form.category = ''
     form.version = 'V1.0'
@@ -817,7 +766,6 @@ const openDialog = (row?: Standard) => {
     form.visibilityLevel = 'PUBLIC'
     form.ownerScopeId = editableScopeOptions.value[0]?.id || ''
     form.grantScopeIds = []
-    form.tags = []
   }
 
   dialogVisible.value = true
@@ -1110,6 +1058,10 @@ const hasScopeAction = (scopeId: string, action: 'create' | 'manage') => {
 }
 
 const validateForm = () => {
+  if (!form.standardCode.trim()) {
+    ElMessage.warning('\u8bf7\u8f93\u5165\u6807\u51c6\u7f16\u53f7')
+    return false
+  }
   if (!form.title.trim()) {
     ElMessage.warning('\u8bf7\u8f93\u5165\u6807\u51c6\u540d\u79f0')
     return false

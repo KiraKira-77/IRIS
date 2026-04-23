@@ -209,13 +209,13 @@ export type StandardStatus = 'draft' | 'active' | 'archived'
 export type StandardVisibilityLevel = 'PUBLIC' | 'SCOPED'
 export interface Standard {
   id: string
+  standardCode: string
   title: string
   category: StandardCategory
   version: string
   publishDate: string
   status: StandardStatus
   attachments: Attachment[]
-  tags: string[]
   description?: string
   createdAt: string
   updatedAt: string
@@ -230,13 +230,13 @@ export interface Standard {
 }
 export interface StandardUpsertPayload {
   tenantId: number
+  standardCode: string
   title: string
   category: string
   version: string
   status: StandardStatus
   publishDate: string | null
   description: string
-  tags: string[]
   standardGroupId?: string
   versionNumber?: number
   previousVersionId?: string
