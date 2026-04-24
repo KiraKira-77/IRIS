@@ -10,7 +10,6 @@
           type="primary"
           :icon="Plus"
           size="large"
-          :disabled="!canCreateStandard"
           @click="openDialog()"
           >新建标准</el-button
         >
@@ -575,6 +574,7 @@ import {
   formatStandardUploadDate,
   normalizeStandardFromApi,
 } from '@/features/standards/standard-data'
+import { refreshStandardDialogContext } from '@/features/standards/standard-dialog-context'
 import { buildStandardAccessState } from '@/features/permissions/standard-access'
 import { DEFAULT_RESOURCE_SCOPE_OPTIONS } from '@/features/permissions/user-access'
 import {
@@ -791,7 +791,21 @@ const handleReset = async () => {
   applySearchResult()
 }
 
-const openDialog = (row?: Standard) => {
+const refreshScopeDialogContext = async () => {
+  try {
+    await refreshStandardDialogContext(userStore.fetchUserInfo, loadScopeOptions)
+    return true
+  } catch {
+    ElMessage.error('\u52a0\u8f7d\u6700\u65b0\u7ef4\u62a4\u57df\u5931\u8d25\uff0c\u8bf7\u5237\u65b0\u9875\u9762\u540e\u91cd\u8bd5')
+    return false
+  }
+}
+
+const openDialog = async (row?: Standard) => {
+  if (!(await refreshScopeDialogContext())) {
+    return
+  }
+
   if (row && !getRowAccessState(row).canEdit) {
     ElMessage.warning('\u5f53\u524d\u6807\u51c6\u5bf9\u4f60\u662f\u53ea\u8bfb\u7684')
     return
@@ -833,7 +847,11 @@ const openDetail = (row: Standard) => {
   drawerVisible.value = true
 }
 
-const openUpgradeDialog = (row: Standard) => {
+const openUpgradeDialog = async (row: Standard) => {
+  if (!(await refreshScopeDialogContext())) {
+    return
+  }
+
   if (!getRowAccessState(row).canEdit) {
     ElMessage.warning('\u5f53\u524d\u6807\u51c6\u4e0d\u5141\u8bb8\u5347\u7248')
     return
@@ -956,27 +974,23 @@ const handleUpgrade = async () => {
   loading.value = true
 
   try {
-    const payload = buildStandardDraftPayload(
-      source,
-      {
-        tenantId: currentTenantId.value,
-        version: upgradeForm.newVersion.trim(),
-        changeLog: upgradeForm.changeLog.trim(),
-      },
-      allStandards.value,
-    )
+    const version = upgradeForm.newVersion.trim()
 
-    await standardApi.create(payload)
+    await standardApi.upgrade(source.id, {
+      version,
+      changeLog: upgradeForm.changeLog.trim(),
+    })
     upgradeDialogVisible.value = false
     await loadStandards()
 
     const createdDraft = allStandards.value.find(
       (item) =>
-        item.standardGroupId === payload.standardGroupId &&
-        item.versionNumber === payload.versionNumber,
+        item.standardGroupId === source.standardGroupId &&
+        item.previousVersionId === source.id &&
+        item.version === version,
     )
 
-    ElMessage.success(`\u5df2\u521b\u5efa ${upgradeForm.newVersion} \u7248\u672c\u8349\u7a3f`)
+    ElMessage.success(`\u5df2\u521b\u5efa ${version} \u7248\u672c\u8349\u7a3f`)
 
     if (createdDraft) {
       openDialog(createdDraft)

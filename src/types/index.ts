@@ -245,6 +245,10 @@ export interface StandardUpsertPayload {
   grantScopeIds: string[]
   changeLog?: string
 }
+export interface StandardUpgradePayload {
+  version: string
+  changeLog: string
+}
 export interface ControlChecklist {
   id: string
   code: string
