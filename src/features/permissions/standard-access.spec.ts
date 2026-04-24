@@ -105,7 +105,7 @@ describe('standard-access', () => {
     })
   })
 
-  it('gives super admin full access', () => {
+  it('gives super admin full access within standard lifecycle rules', () => {
     expect(
       buildStandardAccessState(createStandard({ visibilityLevel: 'SCOPED' }), {
         isSuperAdmin: true,
@@ -115,7 +115,7 @@ describe('standard-access', () => {
       canView: true,
       canCreate: true,
       canEdit: true,
-      canDelete: true,
+      canDelete: false,
       canManage: true,
     })
   })
@@ -128,6 +128,29 @@ describe('standard-access', () => {
     ).toBe(true)
     expect(
       buildStandardAccessState(standard, createContext('scope.finance', ['view'])).canCreate,
+    ).toBe(false)
+  })
+
+  it('only allows deleting draft standards', () => {
+    expect(
+      buildStandardAccessState(
+        createStandard({ status: 'draft' }),
+        createContext('scope.finance', ['delete']),
+      ).canDelete,
+    ).toBe(true)
+
+    expect(
+      buildStandardAccessState(
+        createStandard({ status: 'active' }),
+        createContext('scope.finance', ['delete']),
+      ).canDelete,
+    ).toBe(false)
+
+    expect(
+      buildStandardAccessState(
+        createStandard({ status: 'archived' }),
+        createContext('scope.finance', ['delete']),
+      ).canDelete,
     ).toBe(false)
   })
 })

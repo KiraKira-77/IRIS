@@ -1,4 +1,5 @@
 import type {
+  Attachment,
   Standard,
   StandardCategory,
   StandardStatus,
@@ -45,7 +46,6 @@ export interface StandardEditorFormValue {
   category: string
   version: string
   description: string
-  status: StandardStatus
   visibilityLevel: StandardVisibilityLevel
   ownerScopeId: string
   grantScopeIds: string[]
@@ -245,7 +245,7 @@ export function normalizeStandardFromApi(standard: StandardApiRecord): Standard 
   return {
     ...standard,
     publishDate: standard.publishDate || '-',
-    attachments: [],
+    attachments: normalizeAttachments(standard.attachments),
   }
 }
 
@@ -310,4 +310,30 @@ function normalizeDateText(value: string | null | undefined): string | null {
   }
 
   return value.length >= 10 ? value.slice(0, 10) : value
+}
+
+function normalizeAttachments(value: unknown[] | undefined): Attachment[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .map((item) => {
+      if (!item || typeof item !== 'object') {
+        return null
+      }
+
+      const record = item as Record<string, unknown>
+
+      return {
+        id: String(record.id || ''),
+        name: String(record.name || ''),
+        url: String(record.url || ''),
+        size: Number(record.size || 0),
+        type: String(record.type || ''),
+        uploadedBy: String(record.uploadedBy || ''),
+        uploadedAt: String(record.uploadedAt || ''),
+      } satisfies Attachment
+    })
+    .filter((item): item is Attachment => Boolean(item?.id && item.name))
 }

@@ -27,12 +27,14 @@ export function buildStandardAccessState(
   standard: Standard,
   context: StandardAccessContext,
 ): StandardAccessState {
+  const canDeleteByLifecycle = standard.status === 'draft'
+
   if (context.isSuperAdmin) {
     return {
       canView: true,
       canCreate: true,
       canEdit: true,
-      canDelete: true,
+      canDelete: canDeleteByLifecycle,
       canManage: true,
     }
   }
@@ -43,8 +45,7 @@ export function buildStandardAccessState(
     (canManage || hasOwnerAction(context, standard.ownerScopeId, 'edit')) &&
     standard.status !== 'archived'
   const canDelete =
-    (canManage || hasOwnerAction(context, standard.ownerScopeId, 'delete')) &&
-    standard.status !== 'active'
+    (canManage || hasOwnerAction(context, standard.ownerScopeId, 'delete')) && canDeleteByLifecycle
 
   return {
     canView: canViewStandard(standard, context),

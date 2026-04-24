@@ -140,7 +140,7 @@
             >升版</el-button
           >
           <el-button
-            v-if="getRowAccessState(row).canDelete && row.status !== 'active'"
+            v-if="getRowAccessState(row).canDelete"
             link
             type="danger"
             size="small"
@@ -205,15 +205,6 @@
         </el-form-item>
         <el-row :gutter="20">
           <el-col :span="12">
-            <el-form-item label="状态" required>
-              <el-select v-model="form.status" style="width: 100%">
-                <el-option label="草稿" value="draft" />
-                <el-option label="生效中" value="active" />
-                <el-option label="已归档" value="archived" />
-              </el-select>
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
             <el-form-item label="可见范围" required>
               <el-select v-model="form.visibilityLevel" style="width: 100%">
                 <el-option label="全员可见" value="PUBLIC" />
@@ -221,8 +212,6 @@
               </el-select>
             </el-form-item>
           </el-col>
-        </el-row>
-        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="维护域" required>
               <el-select v-model="form.ownerScopeId" style="width: 100%">
@@ -254,12 +243,57 @@
           </el-select>
         </el-form-item>
         <el-form-item label="附件">
-          <el-upload action="#" :auto-upload="false" :limit="5" accept=".pdf,.doc,.docx,.xls,.xlsx">
-            <el-button type="primary" plain>上传附件</el-button>
-            <template #tip>
-              <div class="el-upload__tip">支持 PDF、Word、Excel 格式，单个文件不超过 20MB</div>
-            </template>
-          </el-upload>
+          <div class="attachment-editor">
+            <div v-if="editingAttachments.length > 0" class="attachment-section">
+              <div class="attachment-section-title">已上传附件</div>
+              <div class="attachment-list">
+                <div
+                  v-for="attachment in editingAttachments"
+                  :key="attachment.id"
+                  class="attachment-item"
+                >
+                  <div class="attachment-info">
+                    <div class="attachment-name">{{ attachment.name }}</div>
+                    <div class="attachment-meta">
+                      <span>{{ formatAttachmentSize(attachment.size) }}</span>
+                      <span>{{ attachment.uploadedBy || '未知' }}</span>
+                      <span>{{ attachment.uploadedAt || '-' }}</span>
+                    </div>
+                  </div>
+                  <div class="attachment-actions">
+                    <el-button link type="primary" @click="handleDownloadAttachment(attachment)">
+                      下载
+                    </el-button>
+                    <el-button
+                      v-if="editingRow"
+                      link
+                      type="danger"
+                      @click="handleDeleteExistingAttachment(attachment)"
+                    >
+                      删除
+                    </el-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <el-upload
+              v-model:file-list="pendingAttachmentFiles"
+              action="#"
+              :auto-upload="false"
+              :limit="5"
+              accept=".pdf,.doc,.docx,.xls,.xlsx"
+              :on-change="handleAttachmentFileChange"
+              :on-remove="handleAttachmentFileRemove"
+              :on-exceed="handleAttachmentFileExceed"
+            >
+              <el-button type="primary" plain>上传附件</el-button>
+              <template #tip>
+                <div class="el-upload__tip">
+                  支持 PDF、Word、Excel 格式，单个文件不超过 20MB，保存时自动上传
+                </div>
+              </template>
+            </el-upload>
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -270,8 +304,8 @@
         <el-button
           type="success"
           @click="handleQuickPublish"
-          v-if="!editingRow && form.status !== 'active'"
-          >立即发布</el-button
+          v-if="!editingRow || editingRow.status === 'draft'"
+          >{{ editingRow ? '保存并发布' : '立即发布' }}</el-button
         >
       </template>
     </el-dialog>
@@ -389,6 +423,30 @@
           <el-descriptions-item label="修订说明" v-if="detailRow.changeLog">
             {{ detailRow.changeLog }}
           </el-descriptions-item>
+          <el-descriptions-item label="附件">
+            <div v-if="detailRow.attachments.length > 0" class="attachment-list attachment-list--detail">
+              <div
+                v-for="attachment in detailRow.attachments"
+                :key="attachment.id"
+                class="attachment-item"
+              >
+                <div class="attachment-info">
+                  <div class="attachment-name">{{ attachment.name }}</div>
+                  <div class="attachment-meta">
+                    <span>{{ formatAttachmentSize(attachment.size) }}</span>
+                    <span>{{ attachment.uploadedBy || '未知' }}</span>
+                    <span>{{ attachment.uploadedAt || '-' }}</span>
+                  </div>
+                </div>
+                <div class="attachment-actions">
+                  <el-button link type="primary" @click="handleDownloadAttachment(attachment)">
+                    下载
+                  </el-button>
+                </div>
+              </div>
+            </div>
+            <span v-else>无</span>
+          </el-descriptions-item>
         </el-descriptions>
 
         <!-- 版本历史时间线 -->
@@ -442,29 +500,55 @@
                 <!-- 展开的完整内容 -->
                 <el-collapse-transition>
                   <div v-show="expandedVersions[v.id]" class="version-detail">
-                    <el-descriptions :column="1" border size="small" class="version-desc">
-                      <el-descriptions-item label="分类">
-                        <el-tag
-                          :type="categoryType(v.category)"
-                          size="small"
-                          effect="light"
-                          round
-                          >{{ categoryLabel(v.category) }}</el-tag
+                    <div
+                      v-for="section in getVersionHistoryDetailSections(v)"
+                      :key="`${v.id}-${section.title}`"
+                      class="version-detail-block"
+                    >
+                      <div class="version-detail-title">{{ section.title }}</div>
+                      <el-descriptions :column="1" border size="small" class="version-desc">
+                        <el-descriptions-item
+                          v-for="item in section.items"
+                          :key="`${section.title}-${item.label}`"
+                          :label="item.label"
                         >
-                      </el-descriptions-item>
-                      <el-descriptions-item label="描述">
-                        {{ v.description || '暂无描述' }}
-                      </el-descriptions-item>
-                      <el-descriptions-item label="操作人">
-                        {{ v.operatorName || '未知' }}
-                      </el-descriptions-item>
-                      <el-descriptions-item label="创建时间">{{
-                        v.createdAt
-                      }}</el-descriptions-item>
-                      <el-descriptions-item label="更新时间">{{
-                        v.updatedAt
-                      }}</el-descriptions-item>
-                    </el-descriptions>
+                          {{ item.value }}
+                        </el-descriptions-item>
+                      </el-descriptions>
+                    </div>
+
+                    <div class="version-detail-block">
+                      <div class="version-detail-title">附件</div>
+                      <div
+                        v-if="v.attachments.length > 0"
+                        class="attachment-list attachment-list--detail"
+                      >
+                        <div
+                          v-for="attachment in v.attachments"
+                          :key="attachment.id"
+                          class="attachment-item"
+                        >
+                          <div class="attachment-info">
+                            <div class="attachment-name">{{ attachment.name }}</div>
+                            <div class="attachment-meta">
+                              <span>{{ formatAttachmentSize(attachment.size) }}</span>
+                              <span>{{ attachment.uploadedBy || '未知' }}</span>
+                              <span>{{ attachment.uploadedAt || '-' }}</span>
+                            </div>
+                          </div>
+                          <div class="attachment-actions">
+                            <el-button
+                              link
+                              type="primary"
+                              @click="handleDownloadAttachment(attachment)"
+                            >
+                              下载
+                            </el-button>
+                          </div>
+                        </div>
+                      </div>
+                      <div v-else class="version-empty-text">无</div>
+                    </div>
 
                     <!-- 与上一版本的变更对比 -->
                     <div v-if="idx < versionHistory.length - 1" class="version-diff">
@@ -547,7 +631,6 @@
             @click="handlePublishFromDrawer"
             >发布</el-button
           >
-          <el-button type="warning" v-if="detailRow.status === 'active'">归档</el-button>
         </div>
       </div>
     </el-drawer>
@@ -570,6 +653,7 @@ import {
   TopRight,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadProps, UploadRawFile, UploadUserFile } from 'element-plus'
 import { resourceScopeApi, standardApi } from '@/api'
 import {
   buildStandardDraftPayload,
@@ -581,6 +665,7 @@ import {
   formatStandardUploadDate,
   normalizeStandardFromApi,
 } from '@/features/standards/standard-data'
+import { buildVersionHistoryDetailSections } from '@/features/standards/standard-version-history'
 import { refreshStandardDialogContext } from '@/features/standards/standard-dialog-context'
 import { buildStandardAccessState } from '@/features/permissions/standard-access'
 import { DEFAULT_RESOURCE_SCOPE_OPTIONS } from '@/features/permissions/user-access'
@@ -592,7 +677,10 @@ import {
   resolveResourceScopeOptions,
 } from '@/features/permissions/resource-scope-adapter'
 import { useUserStore } from '@/stores'
-import type { ResourceScopeOption, Standard, UserAccessContext } from '@/types'
+import type { Attachment, ResourceScopeOption, Standard, UserAccessContext } from '@/types'
+
+const ATTACHMENT_MAX_SIZE = 20 * 1024 * 1024
+const ATTACHMENT_ALLOWED_EXTENSIONS = new Set(['pdf', 'doc', 'docx', 'xls', 'xlsx'])
 
 const loading = ref(false)
 const searchForm = reactive({ keyword: '', category: '', status: '' })
@@ -627,18 +715,19 @@ const canCreateStandard = computed(
 
 const dialogVisible = ref(false)
 const editingRow = ref<Standard | null>(null)
+const pendingAttachmentFiles = ref<UploadUserFile[]>([])
 const form = reactive({
   standardCode: '',
   title: '',
   category: '',
   version: 'V1.0',
   description: '',
-  status: 'draft' as Standard['status'],
   visibilityLevel: 'PUBLIC' as Standard['visibilityLevel'],
   ownerScopeId: '',
   grantScopeIds: [] as string[],
 })
 const grantScopeOptions = computed(() => filterGrantScopeOptions(scopeOptions.value, form.ownerScopeId))
+const editingAttachments = computed(() => editingRow.value?.attachments || [])
 
 const upgradeDialogVisible = ref(false)
 const upgradeSourceRow = ref<Standard | null>(null)
@@ -658,6 +747,9 @@ const expandedVersions = reactive<Record<string, boolean>>({})
 const toggleVersionExpand = (id: string) => {
   expandedVersions[id] = !expandedVersions[id]
 }
+
+const getVersionHistoryDetailSections = (standard: Standard) =>
+  buildVersionHistoryDetailSections(standard, { categoryLabel, statusLabel, scopeLabel })
 
 const getVersionChanges = (current: Standard, previous?: Standard) => {
   if (!previous) return []
@@ -826,7 +918,6 @@ const openDialog = async (row?: Standard) => {
     form.category = row.category
     form.version = row.version
     form.description = row.description || ''
-    form.status = row.status
     form.visibilityLevel = row.visibilityLevel
     form.ownerScopeId = row.ownerScopeId
     form.grantScopeIds = row.grants.map((grant) => grant.scopeId)
@@ -837,12 +928,12 @@ const openDialog = async (row?: Standard) => {
     form.category = ''
     form.version = 'V1.0'
     form.description = ''
-    form.status = 'draft'
     form.visibilityLevel = 'PUBLIC'
     form.ownerScopeId = editableScopeOptions.value[0]?.id || ''
     form.grantScopeIds = []
   }
 
+  pendingAttachmentFiles.value = []
   dialogVisible.value = true
 }
 
@@ -868,7 +959,7 @@ const openUpgradeDialog = async (row: Standard) => {
   drawerVisible.value = false
 }
 
-const handleSave = async () => {
+const handleSave = async (targetStatus?: Standard['status']) => {
   if (!validateForm()) {
     return
   }
@@ -877,44 +968,54 @@ const handleSave = async () => {
 
   try {
     const currentRow = editingRow.value
-    const submitState = buildStandardSubmitState(form.status, currentRow, today())
+    const nextStatus = targetStatus ?? currentRow?.status ?? 'draft'
+    const submitState = buildStandardSubmitState(nextStatus, currentRow, today())
+    let savedStandard: Standard
 
     if (currentRow) {
-      await standardApi.update(
-        currentRow.id,
-        buildStandardUpsertPayload(form, {
-          tenantId: currentTenantId.value,
-          status: submitState.status,
-          publishDate: submitState.publishDate,
-          standardGroupId: currentRow.standardGroupId,
-          versionNumber: currentRow.versionNumber,
-          previousVersionId: currentRow.previousVersionId,
-          changeLog: currentRow.changeLog,
-        }),
+      savedStandard = normalizeStandardFromApi(
+        await standardApi.update(
+          currentRow.id,
+          buildStandardUpsertPayload(form, {
+            tenantId: currentTenantId.value,
+            status: submitState.status,
+            publishDate: submitState.publishDate,
+            standardGroupId: currentRow.standardGroupId,
+            versionNumber: currentRow.versionNumber,
+            previousVersionId: currentRow.previousVersionId,
+            changeLog: currentRow.changeLog,
+          }),
+        ),
       )
-      ElMessage.success(statusSaveMessage(form.status, true))
     } else {
-      await standardApi.create(
-        buildStandardUpsertPayload(form, {
-          tenantId: currentTenantId.value,
-          status: submitState.status,
-          publishDate: submitState.publishDate,
-          changeLog: '\u521d\u59cb\u521b\u5efa',
-        }),
+      savedStandard = normalizeStandardFromApi(
+        await standardApi.create(
+          buildStandardUpsertPayload(form, {
+            tenantId: currentTenantId.value,
+            status: submitState.status,
+            publishDate: submitState.publishDate,
+            changeLog: '\u521d\u59cb\u521b\u5efa',
+          }),
+        ),
       )
-      ElMessage.success(statusSaveMessage(form.status, false))
     }
 
+    const uploadedCount = await uploadPendingAttachments(savedStandard.id)
     dialogVisible.value = false
     await loadStandards()
+    updateDetailRow(savedStandard.id)
+    ElMessage.success(
+      uploadedCount > 0
+        ? `${statusSaveMessage(nextStatus, Boolean(currentRow))}，附件已上传`
+        : statusSaveMessage(nextStatus, Boolean(currentRow)),
+    )
   } finally {
     loading.value = false
   }
 }
 
 const handleQuickPublish = async () => {
-  form.status = 'active'
-  await handleSave()
+  await handleSave('active')
 }
 
 const handlePublishFromDrawer = async () => {
@@ -1087,6 +1188,61 @@ const handleDelete = (row: Standard) => {
   })
 }
 
+const handleAttachmentFileChange: UploadProps['onChange'] = (file, uploadFiles) => {
+  const raw = file.raw
+  if (!raw || !validateAttachmentFile(raw)) {
+    pendingAttachmentFiles.value = uploadFiles.filter((item) => item.uid !== file.uid)
+    return
+  }
+
+  pendingAttachmentFiles.value = uploadFiles
+}
+
+const handleAttachmentFileRemove: UploadProps['onRemove'] = (_file, uploadFiles) => {
+  pendingAttachmentFiles.value = uploadFiles
+}
+
+const handleAttachmentFileExceed: UploadProps['onExceed'] = () => {
+  ElMessage.warning('最多上传 5 个附件')
+}
+
+const handleDownloadAttachment = (attachment: Attachment) => {
+  if (!attachment.url) {
+    ElMessage.warning('当前附件暂无可用下载地址')
+    return
+  }
+
+  window.open(attachment.url, '_blank', 'noopener,noreferrer')
+}
+
+const handleDeleteExistingAttachment = (attachment: Attachment) => {
+  if (!editingRow.value) {
+    return
+  }
+
+  ElMessageBox.confirm(`确认删除附件“${attachment.name}”吗？`, '提示', {
+    type: 'warning',
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+  }).then(async () => {
+    loading.value = true
+
+    try {
+      const currentEditingId = editingRow.value?.id
+      if (!currentEditingId) {
+        return
+      }
+
+      await standardApi.deleteAttachment(currentEditingId, attachment.id)
+      await loadStandards()
+      editingRow.value = allStandards.value.find((item) => item.id === currentEditingId) || null
+      ElMessage.success('附件已删除')
+    } finally {
+      loading.value = false
+    }
+  })
+}
+
 const handleEditFromDrawer = () => {
   if (detailRow.value && detailAccessState.value?.canEdit) {
     openDialog(detailRow.value)
@@ -1154,6 +1310,19 @@ const statusType = (value: string) =>
 const statusLabel = (value: string) =>
   (({ active: '\u751f\u6548\u4e2d', draft: '\u8349\u7a3f', archived: '\u5df2\u5f52\u6863' }) as any)[value] || value
 
+const formatAttachmentSize = (size?: number) => {
+  if (!size) {
+    return '0 B'
+  }
+  if (size < 1024) {
+    return `${size} B`
+  }
+  if (size < 1024 * 1024) {
+    return `${(size / 1024).toFixed(1)} KB`
+  }
+  return `${(size / 1024 / 1024).toFixed(1)} MB`
+}
+
 function syncSelectedRows() {
   if (detailRow.value) {
     updateDetailRow(detailRow.value.id)
@@ -1181,6 +1350,35 @@ function updateDetailRow(id: string) {
 function today() {
   return new Date().toISOString().slice(0, 10)
 }
+
+async function uploadPendingAttachments(standardId: string) {
+  const files = pendingAttachmentFiles.value
+    .map((file) => file.raw)
+    .filter((file): file is UploadRawFile => Boolean(file))
+
+  for (const file of files) {
+    await standardApi.uploadAttachment(standardId, file)
+  }
+
+  pendingAttachmentFiles.value = []
+  return files.length
+}
+
+function validateAttachmentFile(file: File) {
+  const extension = file.name.split('.').pop()?.toLowerCase() || ''
+  if (!ATTACHMENT_ALLOWED_EXTENSIONS.has(extension)) {
+    ElMessage.warning('附件仅支持 PDF、Word、Excel 格式')
+    return false
+  }
+
+  if (file.size > ATTACHMENT_MAX_SIZE) {
+    ElMessage.warning('单个附件不能超过 20MB')
+    return false
+  }
+
+  return true
+}
+
 </script>
 
 <style lang="scss" scoped>
@@ -1212,6 +1410,69 @@ function today() {
   background: white;
   border-radius: 12px;
   box-shadow: $iris-shadow-sm;
+}
+
+.attachment-editor {
+  width: 100%;
+}
+
+.attachment-section {
+  margin-bottom: 12px;
+}
+
+.attachment-section-title {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: $iris-text-secondary;
+}
+
+.attachment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.attachment-list--detail {
+  width: 100%;
+}
+
+.attachment-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid $iris-border-light;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.attachment-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.attachment-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: $iris-text-primary;
+  word-break: break-all;
+}
+
+.attachment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: $iris-text-secondary;
+}
+
+.attachment-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 // 版本列样式
@@ -1351,11 +1612,31 @@ function today() {
         padding-top: 12px;
         border-top: 1px dashed #e2e8f0;
 
+        .version-detail-block + .version-detail-block {
+          margin-top: 12px;
+        }
+
+        .version-detail-title {
+          margin-bottom: 8px;
+          font-size: 13px;
+          font-weight: 600;
+          color: $iris-text-primary;
+        }
+
         .version-desc {
           :deep(.el-descriptions__label) {
             width: 80px;
             white-space: nowrap;
           }
+        }
+
+        .version-empty-text {
+          padding: 10px 12px;
+          border: 1px dashed #dbe3ee;
+          border-radius: 10px;
+          font-size: 13px;
+          color: $iris-text-secondary;
+          background: #f8fafc;
         }
       }
 

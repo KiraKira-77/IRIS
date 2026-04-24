@@ -41,6 +41,10 @@ export const standardApi = {
   update: (id: string, data: StandardUpsertPayload) =>
     request.put<Standard>(`/v1/standards/${id}`, data),
   delete: (id: string) => request.delete(`/v1/standards/${id}`),
+  uploadAttachment: (id: string, file: File) =>
+    request.upload(`/v1/standards/${id}/attachments`, file),
+  deleteAttachment: (id: string, fileId: string) =>
+    request.delete(`/v1/standards/${id}/attachments/${fileId}`),
 }
 
 export const checklistApi = {

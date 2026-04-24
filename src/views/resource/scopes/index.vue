@@ -195,6 +195,35 @@
         </el-table-column>
       </el-table>
 
+      <div class="member-permission-guide">
+        <div class="member-permission-guide__title">权限说明</div>
+        <div class="member-permission-guide__list">
+          <div class="member-permission-guide__item">
+            <span class="member-permission-guide__label">查询</span>
+            <span class="member-permission-guide__text">可查看该资源域下的数据列表、详情和基础信息。</span>
+          </div>
+          <div class="member-permission-guide__item">
+            <span class="member-permission-guide__label">创建</span>
+            <span class="member-permission-guide__text">可在该资源域下新增数据。</span>
+          </div>
+          <div class="member-permission-guide__item">
+            <span class="member-permission-guide__label">编辑</span>
+            <span class="member-permission-guide__text">可修改该资源域下已有数据。</span>
+          </div>
+          <div class="member-permission-guide__item">
+            <span class="member-permission-guide__label">删除</span>
+            <span class="member-permission-guide__text">可删除该资源域下允许删除的数据。</span>
+          </div>
+          <div class="member-permission-guide__item">
+            <span class="member-permission-guide__label">管理</span>
+            <span class="member-permission-guide__text">包含查询、创建、编辑、删除全部权限。</span>
+          </div>
+        </div>
+        <div class="member-permission-guide__note">
+          补充说明：勾选管理时默认包含查询、创建、编辑、删除；具体业务中的可操作范围，还会受数据状态和业务规则限制。
+        </div>
+      </div>
+
       <template #footer>
         <el-button @click="memberDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="savingMembers" @click="saveMembers">保存权限</el-button>
@@ -558,5 +587,52 @@ function compareEntityIds(left: { id: string }, right: { id: string }) {
     font-size: 12px;
     color: $iris-text-muted;
   }
+}
+
+.member-permission-guide {
+  margin-top: 16px;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: rgba($iris-primary, 0.06);
+  border: 1px solid rgba($iris-primary, 0.12);
+}
+
+.member-permission-guide__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: $iris-text-primary;
+}
+
+.member-permission-guide__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px 18px;
+  margin-top: 12px;
+}
+
+.member-permission-guide__item {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  line-height: 1.6;
+  color: $iris-text-secondary;
+}
+
+.member-permission-guide__label {
+  flex: 0 0 auto;
+  font-weight: 600;
+  color: $iris-text-primary;
+}
+
+.member-permission-guide__text {
+  flex: 1;
+}
+
+.member-permission-guide__note {
+  margin-top: 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: $iris-text-muted;
 }
 </style>

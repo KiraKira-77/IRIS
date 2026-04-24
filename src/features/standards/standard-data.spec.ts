@@ -1,4 +1,4 @@
-import type { Standard, StandardStatus, StandardVisibilityLevel } from '../../types/index.ts'
+import type { Standard, StandardVisibilityLevel } from '../../types/index.ts'
 import * as standardData from './standard-data.ts'
 import {
   buildStandardSubmitState,
@@ -163,14 +163,13 @@ describe('standard-data', () => {
         category: 'system',
         version: 'V3.0',
         description: 'sync backend',
-        status: 'draft' as StandardStatus,
         visibilityLevel: 'SCOPED' as StandardVisibilityLevel,
         ownerScopeId: '9001',
         grantScopeIds: ['9001', '9002', '9002'],
       },
       {
         tenantId: 1001,
-        status: 'draft' as StandardStatus,
+        status: 'draft',
         publishDate: null,
         standardGroupId: 'group-9',
         versionNumber: 3,
