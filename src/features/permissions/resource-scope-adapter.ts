@@ -117,3 +117,10 @@ export function mergeResourceScopeOptions(
 
   return Array.from(merged.values())
 }
+
+export function resolveResourceScopeOptions(
+  primary: ResourceScopeOption[],
+  fallback: ResourceScopeOption[] = [],
+): ResourceScopeOption[] {
+  return primary.length > 0 ? primary : [...fallback]
+}

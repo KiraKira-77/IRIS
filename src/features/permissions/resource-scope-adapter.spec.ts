@@ -10,6 +10,7 @@ import {
   mapResourceScopeMemberToPermission,
   mapResourceScopesToOptions,
   mergeResourceScopeOptions,
+  resolveResourceScopeOptions,
 } from './resource-scope-adapter.ts'
 
 describe('resource scope adapter', () => {
@@ -106,6 +107,25 @@ describe('resource scope adapter', () => {
     ).toEqual([
       { id: '9001', code: 'FINANCE', label: 'Finance Scope', type: 'RESOURCE', status: 1 },
       { id: '9002', code: 'IT', label: 'IT 信息内控域', type: 'RESOURCE', status: 1 },
+    ])
+  })
+
+  it('prefers live scope options over default fallback options', () => {
+    expect(
+      resolveResourceScopeOptions(
+        [
+          { id: '9201', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 },
+          { id: '9202', code: 'IT', label: 'IT 信息内控域', type: 'RESOURCE', status: 1 },
+        ],
+        [
+          { id: '9001', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 },
+          { id: '9002', code: 'IT', label: 'IT 信息内控域', type: 'RESOURCE', status: 1 },
+          { id: '9003', code: 'COMPLIANCE', label: '内控合规域', type: 'RESOURCE', status: 1 },
+        ],
+      ),
+    ).toEqual([
+      { id: '9201', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 },
+      { id: '9202', code: 'IT', label: 'IT 信息内控域', type: 'RESOURCE', status: 1 },
     ])
   })
 

@@ -582,7 +582,7 @@ import {
   filterOwnerScopeOptions,
   formatResourceScopeOptionLabel,
   mapResourceScopesToOptions,
-  mergeResourceScopeOptions,
+  resolveResourceScopeOptions,
 } from '@/features/permissions/resource-scope-adapter'
 import { useUserStore } from '@/stores'
 import type { ResourceScopeOption, Standard, UserAccessContext } from '@/types'
@@ -702,10 +702,7 @@ const loadScopeOptions = async () => {
     const scopes = await resourceScopeApi.list()
     const mappedOptions = mapResourceScopesToOptions(scopes)
 
-    scopeOptions.value =
-      mappedOptions.length > 0
-        ? mergeResourceScopeOptions(mappedOptions, DEFAULT_RESOURCE_SCOPE_OPTIONS)
-        : [...DEFAULT_RESOURCE_SCOPE_OPTIONS]
+    scopeOptions.value = resolveResourceScopeOptions(mappedOptions, DEFAULT_RESOURCE_SCOPE_OPTIONS)
   } catch {
     scopeOptions.value = [...DEFAULT_RESOURCE_SCOPE_OPTIONS]
   }
