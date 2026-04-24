@@ -37,9 +37,9 @@
             style="width: 160px"
           >
             <el-option label="法律法规" value="law" />
-            <el-option label="行业规范" value="industry" />
+            <el-option label="行业准则" value="industry" />
             <el-option label="内部制度" value="internal" />
-            <el-option label="系统制度" value="system" />
+            <el-option label="通用标准" value="system" />
           </el-select>
         </el-form-item>
         <el-form-item label="状态">
@@ -109,7 +109,11 @@
           <el-tag type="info" effect="plain" round>{{ scopeLabel(row.ownerScopeId) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="publishDate" label="发布日期" width="130" sortable />
+      <el-table-column label="上传日期" width="130" sortable>
+        <template #default="{ row }">
+          {{ uploadDateLabel(row) }}
+        </template>
+      </el-table-column>
       <el-table-column prop="status" label="状态" width="110">
         <template #default="{ row }">
           <el-tag :type="statusType(row.status)" effect="dark" size="small">{{
@@ -180,9 +184,9 @@
             <el-form-item label="分类" required>
               <el-select v-model="form.category" placeholder="请选择分类" style="width: 100%">
                 <el-option label="法律法规" value="law" />
-                <el-option label="行业规范" value="industry" />
+                <el-option label="行业准则" value="industry" />
                 <el-option label="内部制度" value="internal" />
-                <el-option label="系统制度" value="system" />
+                <el-option label="通用标准" value="system" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -202,6 +206,15 @@
         </el-form-item>
         <el-row :gutter="20">
           <el-col :span="12">
+            <el-form-item label="状态" required>
+              <el-select v-model="form.status" style="width: 100%">
+                <el-option label="草稿" value="draft" />
+                <el-option label="生效中" value="active" />
+                <el-option label="已归档" value="archived" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="可见范围" required>
               <el-select v-model="form.visibilityLevel" style="width: 100%">
                 <el-option label="全员可见" value="PUBLIC" />
@@ -209,6 +222,8 @@
               </el-select>
             </el-form-item>
           </el-col>
+        </el-row>
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="维护域" required>
               <el-select v-model="form.ownerScopeId" style="width: 100%">
@@ -251,9 +266,14 @@
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" @click="handleSave">{{
-          editingRow ? '保存修改' : '保存为草稿'
+          editingRow ? '保存修改' : '保存'
         }}</el-button>
-        <el-button type="success" @click="handlePublish" v-if="!editingRow">发布</el-button>
+        <el-button
+          type="success"
+          @click="handleQuickPublish"
+          v-if="!editingRow && form.status !== 'active'"
+          >立即发布</el-button
+        >
       </template>
     </el-dialog>
 
@@ -283,7 +303,7 @@
             placeholder="请输入新版本号，如 V2.0、2026版、Rev.3 等"
           />
         </el-form-item>
-        <el-form-item label="修订说明" required>
+        <el-form-item label="说明" required>
           <el-input
             v-model="upgradeForm.changeLog"
             type="textarea"
@@ -549,8 +569,10 @@ import {
   buildStandardDraftPayload,
   buildStandardListPage,
   buildStandardSearchInteraction,
+  buildStandardSubmitState,
   buildStandardMutationPayload,
   buildStandardUpsertPayload,
+  formatStandardUploadDate,
   normalizeStandardFromApi,
 } from '@/features/standards/standard-data'
 import { buildStandardAccessState } from '@/features/permissions/standard-access'
@@ -604,6 +626,7 @@ const form = reactive({
   category: '',
   version: 'V1.0',
   description: '',
+  status: 'draft' as Standard['status'],
   visibilityLevel: 'PUBLIC' as Standard['visibilityLevel'],
   ownerScopeId: '',
   grantScopeIds: [] as string[],
@@ -785,6 +808,7 @@ const openDialog = (row?: Standard) => {
     form.category = row.category
     form.version = row.version
     form.description = row.description || ''
+    form.status = row.status
     form.visibilityLevel = row.visibilityLevel
     form.ownerScopeId = row.ownerScopeId
     form.grantScopeIds = row.grants.map((grant) => grant.scopeId)
@@ -795,6 +819,7 @@ const openDialog = (row?: Standard) => {
     form.category = ''
     form.version = 'V1.0'
     form.description = ''
+    form.status = 'draft'
     form.visibilityLevel = 'PUBLIC'
     form.ownerScopeId = editableScopeOptions.value[0]?.id || ''
     form.grantScopeIds = []
@@ -830,31 +855,32 @@ const handleSave = async () => {
 
   try {
     const currentRow = editingRow.value
+    const submitState = buildStandardSubmitState(form.status, currentRow, today())
 
     if (currentRow) {
       await standardApi.update(
         currentRow.id,
         buildStandardUpsertPayload(form, {
           tenantId: currentTenantId.value,
-          status: currentRow.status,
-          publishDate: normalizePublishDate(currentRow.publishDate),
+          status: submitState.status,
+          publishDate: submitState.publishDate,
           standardGroupId: currentRow.standardGroupId,
           versionNumber: currentRow.versionNumber,
           previousVersionId: currentRow.previousVersionId,
           changeLog: currentRow.changeLog,
         }),
       )
-      ElMessage.success('\u4fee\u6539\u5df2\u4fdd\u5b58')
+      ElMessage.success(statusSaveMessage(form.status, true))
     } else {
       await standardApi.create(
         buildStandardUpsertPayload(form, {
           tenantId: currentTenantId.value,
-          status: 'draft',
-          publishDate: null,
+          status: submitState.status,
+          publishDate: submitState.publishDate,
           changeLog: '\u521d\u59cb\u521b\u5efa',
         }),
       )
-      ElMessage.success('\u5df2\u4fdd\u5b58\u4e3a\u8349\u7a3f')
+      ElMessage.success(statusSaveMessage(form.status, false))
     }
 
     dialogVisible.value = false
@@ -864,29 +890,9 @@ const handleSave = async () => {
   }
 }
 
-const handlePublish = async () => {
-  if (!validateForm()) {
-    return
-  }
-
-  loading.value = true
-
-  try {
-    await standardApi.create(
-      buildStandardUpsertPayload(form, {
-        tenantId: currentTenantId.value,
-        status: 'active',
-        publishDate: today(),
-        changeLog: '\u521d\u59cb\u53d1\u5e03',
-      }),
-    )
-
-    dialogVisible.value = false
-    await loadStandards()
-    ElMessage.success('\u6807\u51c6\u5df2\u53d1\u5e03')
-  } finally {
-    loading.value = false
-  }
+const handleQuickPublish = async () => {
+  form.status = 'active'
+  await handleSave()
 }
 
 const handlePublishFromDrawer = async () => {
@@ -1076,6 +1082,18 @@ const getRowAccessState = (row: Standard) =>
 const scopeLabel = (scopeId: string) =>
   scopeOptions.value.find((scope) => scope.id === scopeId)?.label || scopeId
 
+const uploadDateLabel = (row: Standard) => formatStandardUploadDate(row.createdAt, row.publishDate)
+
+const statusSaveMessage = (status: Standard['status'], isEditing: boolean) => {
+  if (status === 'active') {
+    return isEditing ? '\u6807\u51c6\u4fee\u6539\u5e76\u751f\u6548' : '\u6807\u51c6\u5df2\u53d1\u5e03'
+  }
+  if (status === 'archived') {
+    return isEditing ? '\u6807\u51c6\u5df2\u4fee\u6539\u5e76\u5f52\u6863' : '\u6807\u51c6\u5df2\u5f52\u6863'
+  }
+  return isEditing ? '\u4fee\u6539\u5df2\u4fdd\u5b58' : '\u5df2\u4fdd\u5b58\u4e3a\u8349\u7a3f'
+}
+
 const hasScopeAction = (scopeId: string, action: 'create' | 'manage') => {
   const scopePermission = currentAccessContext.value.scopePermissions.find(
     (permission) => permission.scopeId === scopeId,
@@ -1110,7 +1128,7 @@ const categoryType = (value: string) =>
   (({ law: 'danger', industry: 'warning', internal: 'primary', system: 'info' }) as any)[value] ||
   'info'
 const categoryLabel = (value: string) =>
-  (({ law: '\u6cd5\u5f8b\u6cd5\u89c4', industry: '\u884c\u4e1a\u89c4\u8303', internal: '\u5185\u90e8\u5236\u5ea6', system: '\u7cfb\u7edf\u5236\u5ea6' }) as any)[
+  (({ law: '\u6cd5\u5f8b\u6cd5\u89c4', industry: '\u884c\u4e1a\u51c6\u5219', internal: '\u5185\u90e8\u5236\u5ea6', system: '\u901a\u7528\u6807\u51c6' }) as any)[
     value
   ] || value
 const statusType = (value: string) =>
@@ -1144,10 +1162,6 @@ function updateDetailRow(id: string) {
 
 function today() {
   return new Date().toISOString().slice(0, 10)
-}
-
-function normalizePublishDate(value: string) {
-  return value === '-' ? null : value
 }
 </script>
 

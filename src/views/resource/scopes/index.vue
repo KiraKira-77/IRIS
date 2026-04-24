@@ -91,8 +91,15 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="域编码" required>
-              <el-input v-model="scopeForm.scopeCode" placeholder="例如：FINANCE" />
+            <el-form-item label="域编码">
+              <el-input
+                v-model="scopeForm.scopeCode"
+                :disabled="true"
+                :placeholder="editingScope ? '' : '系统自动生成，例如：RS0001'"
+              />
+              <div class="scope-type-hint">
+                {{ editingScope ? '资源域编码创建后自动生成并固定，不支持手动修改。' : '保存后由系统自动生成资源域编码。' }}
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -323,10 +330,8 @@ const openScopeDialog = (scope?: ResourceScope) => {
 }
 
 const saveScope = async () => {
-  const scopeCode = normalizeScopeCode(scopeForm.scopeCode)
-
-  if (!scopeForm.scopeName.trim() || !scopeCode) {
-    ElMessage.warning('请填写资源域名称和域编码')
+  if (!scopeForm.scopeName.trim()) {
+    ElMessage.warning('请填写资源域名称')
     return
   }
 
@@ -335,7 +340,7 @@ const saveScope = async () => {
   try {
     const payload = {
       tenantId: editingScope.value?.tenantId || 1001,
-      scopeCode,
+      scopeCode: editingScope.value ? normalizeScopeCode(scopeForm.scopeCode) : '',
       scopeName: scopeForm.scopeName.trim(),
       scopeType: scopeForm.scopeType,
       status: scopeForm.status,

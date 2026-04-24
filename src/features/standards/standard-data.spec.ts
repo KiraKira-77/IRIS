@@ -1,10 +1,12 @@
 import type { Standard, StandardStatus, StandardVisibilityLevel } from '../../types/index.ts'
 import * as standardData from './standard-data.ts'
 import {
+  buildStandardSubmitState,
   buildStandardDraftPayload,
   buildStandardListPage,
   buildStandardMutationPayload,
   buildStandardUpsertPayload,
+  formatStandardUploadDate,
   normalizeStandardFromApi,
 } from './standard-data.ts'
 import { describe, expect, it } from 'vitest'
@@ -121,6 +123,37 @@ describe('standard-data', () => {
     expect(page.list.map((item) => item.id)).toEqual(['1001'])
   })
 
+  it('builds submit state for a new active standard', () => {
+    expect(buildStandardSubmitState('active', null, '2026-04-24')).toEqual({
+      status: 'active',
+      publishDate: '2026-04-24',
+    })
+  })
+
+  it('keeps existing publish date when archiving an active standard', () => {
+    expect(
+      buildStandardSubmitState(
+        'archived',
+        createStandard({
+          status: 'active',
+          publishDate: '2026-04-20',
+        }),
+        '2026-04-24',
+      ),
+    ).toEqual({
+      status: 'archived',
+      publishDate: '2026-04-20',
+    })
+  })
+
+  it('formats upload date from created time when timestamp exists', () => {
+    expect(formatStandardUploadDate('2026-04-24T09:15:00', '-')).toBe('2026-04-24')
+  })
+
+  it('falls back to publish date when created time is missing', () => {
+    expect(formatStandardUploadDate('', '2026-04-23')).toBe('2026-04-23')
+  })
+
   it('builds upsert payload without tags and normalizes grants', () => {
     const payload = buildStandardUpsertPayload(
       {
@@ -129,6 +162,7 @@ describe('standard-data', () => {
         category: 'system',
         version: 'V3.0',
         description: 'sync backend',
+        status: 'draft' as StandardStatus,
         visibilityLevel: 'SCOPED' as StandardVisibilityLevel,
         ownerScopeId: '9001',
         grantScopeIds: ['9001', '9002', '9002'],

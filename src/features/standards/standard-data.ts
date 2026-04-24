@@ -45,6 +45,7 @@ export interface StandardEditorFormValue {
   category: string
   version: string
   description: string
+  status: StandardStatus
   visibilityLevel: StandardVisibilityLevel
   ownerScopeId: string
   grantScopeIds: string[]
@@ -76,6 +77,11 @@ export interface StandardMutationOptions {
   status?: StandardStatus
   publishDate?: string | null
   changeLog?: string
+}
+
+export interface StandardSubmitState {
+  status: StandardStatus
+  publishDate: string | null
 }
 
 export function buildStandardListPage(
@@ -149,6 +155,40 @@ export function buildStandardSearchInteraction(
     },
     shouldReload: false,
   }
+}
+
+export function buildStandardSubmitState(
+  status: StandardStatus,
+  standard: Pick<Standard, 'publishDate'> | null,
+  today: string,
+): StandardSubmitState {
+  if (status === 'active') {
+    return {
+      status,
+      publishDate: normalizePublishDate(standard?.publishDate) || today,
+    }
+  }
+
+  if (status === 'archived') {
+    return {
+      status,
+      publishDate: normalizePublishDate(standard?.publishDate),
+    }
+  }
+
+  return {
+    status,
+    publishDate: null,
+  }
+}
+
+export function formatStandardUploadDate(createdAt: string | null | undefined, publishDate: string): string {
+  const createdDate = normalizeDateText(createdAt)
+  if (createdDate) {
+    return createdDate
+  }
+
+  return normalizeDateText(publishDate) || '-'
 }
 
 export function buildStandardUpsertPayload(
@@ -262,4 +302,12 @@ function normalizeStringList(values: string[]): string[] {
 
 function normalizePublishDate(value: string | null | undefined): string | null {
   return !value || value === '-' ? null : value
+}
+
+function normalizeDateText(value: string | null | undefined): string | null {
+  if (!value || value === '-') {
+    return null
+  }
+
+  return value.length >= 10 ? value.slice(0, 10) : value
 }
