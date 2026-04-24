@@ -20,21 +20,18 @@ export const DEFAULT_RESOURCE_SCOPE_OPTIONS: ResourceScopeOption[] = [
     id: STANDARD_SCOPE_IDS.finance,
     code: 'FINANCE',
     label: '财务内控域',
-    type: 'RESOURCE',
     status: 1,
   },
   {
     id: STANDARD_SCOPE_IDS.it,
     code: 'IT',
     label: 'IT 信息内控域',
-    type: 'RESOURCE',
     status: 1,
   },
   {
     id: STANDARD_SCOPE_IDS.compliance,
     code: 'COMPLIANCE',
     label: '内控合规域',
-    type: 'RESOURCE',
     status: 1,
   },
 ]

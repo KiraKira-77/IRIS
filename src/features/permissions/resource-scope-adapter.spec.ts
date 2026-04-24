@@ -4,8 +4,6 @@ import {
   filterGrantScopeOptions,
   filterOwnerScopeOptions,
   formatResourceScopeOptionLabel,
-  getResourceScopeTypeHint,
-  getResourceScopeTypeLabel,
   mapResourceScopeMemberToActions,
   mapResourceScopeMemberToPermission,
   mapResourceScopesToOptions,
@@ -22,7 +20,6 @@ describe('resource scope adapter', () => {
           tenantId: '1001',
           scopeCode: 'FINANCE',
           scopeName: 'Finance Scope',
-          scopeType: 'RESOURCE',
           status: 1,
           remark: 'finance',
         },
@@ -32,7 +29,6 @@ describe('resource scope adapter', () => {
         id: '9001',
         code: 'FINANCE',
         label: 'Finance Scope',
-        type: 'RESOURCE',
         status: 1,
       },
     ])
@@ -98,15 +94,15 @@ describe('resource scope adapter', () => {
   it('merges scope options with primary values taking precedence', () => {
     expect(
       mergeResourceScopeOptions(
-        [{ id: '9001', code: 'FINANCE', label: 'Finance Scope', type: 'RESOURCE', status: 1 }],
+        [{ id: '9001', code: 'FINANCE', label: 'Finance Scope', status: 1 }],
         [
-          { id: '9001', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 },
-          { id: '9002', code: 'IT', label: 'IT 信息内控域', type: 'RESOURCE', status: 1 },
+          { id: '9001', code: 'FINANCE', label: '财务内控域', status: 1 },
+          { id: '9002', code: 'IT', label: 'IT 信息内控域', status: 1 },
         ],
       ),
     ).toEqual([
-      { id: '9001', code: 'FINANCE', label: 'Finance Scope', type: 'RESOURCE', status: 1 },
-      { id: '9002', code: 'IT', label: 'IT 信息内控域', type: 'RESOURCE', status: 1 },
+      { id: '9001', code: 'FINANCE', label: 'Finance Scope', status: 1 },
+      { id: '9002', code: 'IT', label: 'IT 信息内控域', status: 1 },
     ])
   })
 
@@ -114,63 +110,59 @@ describe('resource scope adapter', () => {
     expect(
       resolveResourceScopeOptions(
         [
-          { id: '9201', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 },
-          { id: '9202', code: 'IT', label: 'IT 信息内控域', type: 'RESOURCE', status: 1 },
+          { id: '9201', code: 'FINANCE', label: '财务内控域', status: 1 },
+          { id: '9202', code: 'IT', label: 'IT 信息内控域', status: 1 },
         ],
         [
-          { id: '9001', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 },
-          { id: '9002', code: 'IT', label: 'IT 信息内控域', type: 'RESOURCE', status: 1 },
-          { id: '9003', code: 'COMPLIANCE', label: '内控合规域', type: 'RESOURCE', status: 1 },
+          { id: '9001', code: 'FINANCE', label: '财务内控域', status: 1 },
+          { id: '9002', code: 'IT', label: 'IT 信息内控域', status: 1 },
+          { id: '9003', code: 'COMPLIANCE', label: '内控合规域', status: 1 },
         ],
       ),
     ).toEqual([
-      { id: '9201', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 },
-      { id: '9202', code: 'IT', label: 'IT 信息内控域', type: 'RESOURCE', status: 1 },
+      { id: '9201', code: 'FINANCE', label: '财务内控域', status: 1 },
+      { id: '9202', code: 'IT', label: 'IT 信息内控域', status: 1 },
     ])
   })
 
-  it('maps scope types to chinese labels', () => {
-    expect(getResourceScopeTypeLabel('RESOURCE')).toBe('维护域')
-    expect(getResourceScopeTypeLabel('STANDARD')).toBe('共享域')
-    expect(getResourceScopeTypeLabel('UNKNOWN')).toBe('UNKNOWN')
-  })
-
-  it('maps scope types to chinese hints', () => {
-    expect(getResourceScopeTypeHint('RESOURCE')).toContain('维护域可作为标准的维护域')
-    expect(getResourceScopeTypeHint('STANDARD')).toContain('不能作为维护域选择')
-    expect(getResourceScopeTypeHint('UNKNOWN')).toBe('')
-  })
-
-  it('filters owner scope options to maintenance scopes only', () => {
+  it('keeps all scopes available in owner scope options', () => {
     expect(
       filterOwnerScopeOptions([
-        { id: '9001', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 },
-        { id: '9008', code: 'SHARED', label: '专家共享域', type: 'STANDARD', status: 1 },
+        { id: '9001', code: 'FINANCE', label: '财务内控域', status: 1 },
+        { id: '9008', code: 'SHARED', label: '专家共享域', status: 1 },
       ]),
-    ).toEqual([{ id: '9001', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 }])
+    ).toEqual([
+      { id: '9001', code: 'FINANCE', label: '财务内控域', status: 1 },
+      { id: '9008', code: 'SHARED', label: '专家共享域', status: 1 },
+    ])
   })
 
-  it('keeps shared-only scopes available in grant scope options', () => {
+  it('keeps all other scopes available in grant scope options', () => {
     expect(
       filterGrantScopeOptions(
         [
-          { id: '9001', code: 'FINANCE', label: '财务内控域', type: 'RESOURCE', status: 1 },
-          { id: '9008', code: 'SHARED', label: '专家共享域', type: 'STANDARD', status: 1 },
+          { id: '9001', code: 'FINANCE', label: '财务内控域', status: 1 },
+          { id: '9002', code: 'IT', label: 'IT 内控域', status: 1 },
+          { id: '9008', code: 'SHARED', label: '专家共享域', status: 1 },
+          { id: '9009', code: 'LEGAL', label: '法务共享域', status: 1 },
         ],
         '9001',
       ),
-    ).toEqual([{ id: '9008', code: 'SHARED', label: '专家共享域', type: 'STANDARD', status: 1 }])
+    ).toEqual([
+      { id: '9002', code: 'IT', label: 'IT 内控域', status: 1 },
+      { id: '9008', code: 'SHARED', label: '专家共享域', status: 1 },
+      { id: '9009', code: 'LEGAL', label: '法务共享域', status: 1 },
+    ])
   })
 
-  it('formats scope option labels with chinese type names', () => {
+  it('formats scope option labels without type names', () => {
     expect(
       formatResourceScopeOptionLabel({
         id: '9008',
         code: 'SHARED',
         label: '专家共享域',
-        type: 'STANDARD',
         status: 1,
       }),
-    ).toBe('专家共享域（共享域）')
+    ).toBe('专家共享域')
   })
 })

@@ -119,7 +119,6 @@ export interface ResourceScope {
   tenantId: string
   scopeCode: string
   scopeName: string
-  scopeType: string
   status: number
   remark?: string
 }
@@ -140,14 +139,12 @@ export interface ResourceScopeOption {
   id: string
   code: string
   label: string
-  type: string
   status: number
 }
 export interface ResourceScopeUpsertPayload {
   tenantId: string | number
   scopeCode: string
   scopeName: string
-  scopeType: string
   status: number
   remark?: string
 }

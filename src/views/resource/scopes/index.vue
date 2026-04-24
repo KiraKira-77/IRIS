@@ -38,13 +38,6 @@
           <el-tag effect="plain" type="info">{{ row.scopeCode }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="scopeType" label="类型" width="130">
-        <template #default="{ row }">
-          <el-tag :type="row.scopeType === 'RESOURCE' ? 'primary' : 'warning'" effect="light">
-            {{ getResourceScopeTypeLabel(row.scopeType) }}
-          </el-tag>
-        </template>
-      </el-table-column>
       <el-table-column prop="status" label="状态" width="120">
         <template #default="{ row }">
           <el-tag :type="row.status === 1 ? 'success' : 'info'" effect="dark" round>
@@ -104,17 +97,6 @@
           </el-col>
         </el-row>
         <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="类型" required>
-              <el-select v-model="scopeForm.scopeType" style="width: 100%">
-                <el-option label="维护域" value="RESOURCE" />
-                <el-option label="共享域" value="STANDARD" />
-              </el-select>
-              <div class="scope-type-hint">
-                {{ getResourceScopeTypeHint(scopeForm.scopeType) }}
-              </div>
-            </el-form-item>
-          </el-col>
           <el-col :span="12">
             <el-form-item label="状态" required>
               <el-radio-group v-model="scopeForm.status">
@@ -244,8 +226,6 @@ import type {
 } from '@/types'
 import {
   createResourceScopeMemberPayload,
-  getResourceScopeTypeHint,
-  getResourceScopeTypeLabel,
   mapResourceScopeMemberToActions,
 } from '@/features/permissions/resource-scope-adapter'
 
@@ -276,7 +256,6 @@ const editingScope = ref<ResourceScope | null>(null)
 const scopeForm = reactive({
   scopeName: '',
   scopeCode: '',
-  scopeType: 'RESOURCE',
   status: 1,
   remark: '',
 })
@@ -352,7 +331,6 @@ const openScopeDialog = (scope?: ResourceScope) => {
   editingScope.value = scope || null
   scopeForm.scopeName = scope?.scopeName || ''
   scopeForm.scopeCode = scope?.scopeCode || ''
-  scopeForm.scopeType = scope?.scopeType || 'RESOURCE'
   scopeForm.status = scope?.status ?? 1
   scopeForm.remark = scope?.remark || ''
   scopeDialogVisible.value = true
@@ -371,7 +349,6 @@ const saveScope = async () => {
       tenantId: editingScope.value?.tenantId || 1001,
       scopeCode: editingScope.value ? normalizeScopeCode(scopeForm.scopeCode) : '',
       scopeName: scopeForm.scopeName.trim(),
-      scopeType: scopeForm.scopeType,
       status: scopeForm.status,
       remark: scopeForm.remark.trim(),
     }
@@ -396,7 +373,6 @@ const toggleScopeStatus = async (scope: ResourceScope) => {
     tenantId: scope.tenantId,
     scopeCode: scope.scopeCode,
     scopeName: scope.scopeName,
-    scopeType: scope.scopeType,
     status: scope.status === 1 ? 0 : 1,
     remark: scope.remark,
   })

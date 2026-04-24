@@ -3,8 +3,8 @@ import type {
   ResourceScopeMember,
   ResourceScopeMemberUpsertPayload,
   ResourceScopeOption,
-  ScopePermission,
   ScopeAction,
+  ScopePermission,
 } from '../../types/index.ts'
 
 export function mapResourceScopesToOptions(scopes: ResourceScope[]): ResourceScopeOption[] {
@@ -12,41 +12,16 @@ export function mapResourceScopesToOptions(scopes: ResourceScope[]): ResourceSco
     id: String(scope.id),
     code: scope.scopeCode,
     label: scope.scopeName,
-    type: scope.scopeType,
     status: scope.status,
   }))
 }
 
-export function getResourceScopeTypeLabel(type: string): string {
-  if (type === 'RESOURCE') {
-    return '维护域'
-  }
-
-  if (type === 'STANDARD') {
-    return '共享域'
-  }
-
-  return type
-}
-
-export function getResourceScopeTypeHint(type: string): string {
-  if (type === 'RESOURCE') {
-    return '维护域可作为标准的维护域，用于控制创建、编辑、删除等维护权限。'
-  }
-
-  if (type === 'STANDARD') {
-    return '共享域只能在标准的共享可见范围内使用，不能作为维护域选择。'
-  }
-
-  return ''
-}
-
 export function formatResourceScopeOptionLabel(scope: ResourceScopeOption): string {
-  return `${scope.label}（${getResourceScopeTypeLabel(scope.type)}）`
+  return scope.label
 }
 
 export function filterOwnerScopeOptions(scopes: ResourceScopeOption[]): ResourceScopeOption[] {
-  return scopes.filter((scope) => scope.type === 'RESOURCE')
+  return [...scopes]
 }
 
 export function filterGrantScopeOptions(

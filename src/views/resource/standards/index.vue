@@ -671,7 +671,6 @@ import { buildStandardAccessState } from '@/features/permissions/standard-access
 import { DEFAULT_RESOURCE_SCOPE_OPTIONS } from '@/features/permissions/user-access'
 import {
   filterGrantScopeOptions,
-  filterOwnerScopeOptions,
   formatResourceScopeOptionLabel,
   mapResourceScopesToOptions,
   resolveResourceScopeOptions,
@@ -699,15 +698,21 @@ const emptyAccessContext: UserAccessContext = {
 const currentAccessContext = computed(() => userStore.accessContext || emptyAccessContext)
 const visibleStandards = computed(() => allStandards.value)
 const editableScopeOptions = computed(() => {
-  const ownerScopes = filterOwnerScopeOptions(scopeOptions.value)
+  const permittedScopes = currentAccessContext.value.isSuperAdmin
+    ? scopeOptions.value
+    : scopeOptions.value.filter(
+        (scope) => hasScopeAction(scope.id, 'create') || hasScopeAction(scope.id, 'manage'),
+      )
 
-  if (currentAccessContext.value.isSuperAdmin) {
-    return ownerScopes
+  const currentOwnerScope = editingRow.value
+    ? scopeOptions.value.find((scope) => scope.id === editingRow.value?.ownerScopeId)
+    : null
+
+  if (!currentOwnerScope || permittedScopes.some((scope) => scope.id === currentOwnerScope.id)) {
+    return permittedScopes
   }
 
-  return ownerScopes.filter(
-    (scope) => hasScopeAction(scope.id, 'create') || hasScopeAction(scope.id, 'manage'),
-  )
+  return [currentOwnerScope, ...permittedScopes]
 })
 const canCreateStandard = computed(
   () => currentAccessContext.value.isSuperAdmin || editableScopeOptions.value.length > 0,
