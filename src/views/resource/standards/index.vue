@@ -380,6 +380,9 @@
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="发布日期">{{ detailRow.publishDate }}</el-descriptions-item>
+          <el-descriptions-item label="操作人">{{
+            detailRow.operatorName || '未知'
+          }}</el-descriptions-item>
           <el-descriptions-item label="描述">{{
             detailRow.description || '暂无描述'
           }}</el-descriptions-item>
@@ -434,6 +437,7 @@
                   <el-icon style="margin-right: 4px; vertical-align: -2px"><EditPen /></el-icon>
                   {{ v.changeLog }}
                 </p>
+                <p class="timeline-operator">操作人：{{ v.operatorName || '未知' }}</p>
 
                 <!-- 展开的完整内容 -->
                 <el-collapse-transition>
@@ -450,6 +454,9 @@
                       </el-descriptions-item>
                       <el-descriptions-item label="描述">
                         {{ v.description || '暂无描述' }}
+                      </el-descriptions-item>
+                      <el-descriptions-item label="操作人">
+                        {{ v.operatorName || '未知' }}
                       </el-descriptions-item>
                       <el-descriptions-item label="创建时间">{{
                         v.createdAt
@@ -1330,6 +1337,12 @@ function today() {
         font-size: 13px;
         color: #64748b;
         line-height: 1.5;
+      }
+
+      .timeline-operator {
+        margin: 8px 0 0;
+        font-size: 13px;
+        color: #94a3b8;
       }
 
       // 展开区域

@@ -227,6 +227,7 @@ export interface Standard {
   visibilityLevel: StandardVisibilityLevel
   ownerScopeId: string
   grants: ScopeGrant[]
+  operatorName?: string
 }
 export interface StandardUpsertPayload {
   tenantId: number

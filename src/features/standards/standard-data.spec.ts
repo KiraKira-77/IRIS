@@ -31,6 +31,7 @@ function createStandard(overrides: Partial<Standard> = {}): Standard {
     ownerScopeId: '9001',
     grants: [],
     changeLog: 'initial',
+    operatorName: 'Platform Administrator',
     ...overrides,
   }
 }
