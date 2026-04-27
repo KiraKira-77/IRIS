@@ -18,6 +18,8 @@ export interface StandardListQuery {
 export interface StandardListPage {
   list: Standard[]
   total: number
+  page?: number
+  pageSize?: number
 }
 
 export interface StandardSearchFormValue {
@@ -38,7 +40,7 @@ export interface StandardSearchInteraction {
   shouldReload: boolean
 }
 
-export type StandardSearchAction = 'submit' | 'reset' | 'paginate' | 'resize'
+export type StandardSearchAction = 'submit' | 'filter' | 'reset' | 'paginate' | 'resize'
 
 export interface StandardEditorFormValue {
   standardCode: string
@@ -67,9 +69,19 @@ export interface StandardDraftOptions {
   changeLog: string
 }
 
-export interface StandardApiRecord extends Omit<Standard, 'attachments' | 'publishDate'> {
+export interface StandardApiRecord extends Omit<Standard, 'attachments' | 'publishDate' | 'versionCount'> {
   attachments?: unknown[]
   publishDate: string | null
+  versionCount?: number
+}
+
+export interface StandardApiPageRecord {
+  records?: StandardApiRecord[]
+  list?: StandardApiRecord[]
+  total?: number
+  pageNo?: number
+  page?: number
+  pageSize?: number
 }
 
 export interface StandardMutationOptions {
@@ -122,7 +134,7 @@ export function buildStandardSearchInteraction(
     }
   }
 
-  if (action === 'submit') {
+  if (action === 'submit' || action === 'filter') {
     return {
       form: { ...form },
       pagination: {
@@ -246,7 +258,75 @@ export function normalizeStandardFromApi(standard: StandardApiRecord): Standard 
     ...standard,
     publishDate: standard.publishDate || '-',
     attachments: normalizeAttachments(standard.attachments),
+    versionCount: Number(standard.versionCount || 1),
   }
+}
+
+export function normalizeStandardPageFromApi(page: StandardApiPageRecord): Required<StandardListPage> {
+  const records = Array.isArray(page.records) ? page.records : page.list || []
+
+  return {
+    list: records.map(normalizeStandardFromApi),
+    total: Number(page.total || 0),
+    page: Number(page.pageNo || page.page || 1),
+    pageSize: Number(page.pageSize || 10),
+  }
+}
+
+export function validateStandardEditorForm(
+  form: StandardEditorFormValue,
+  standards: Standard[],
+  editingRow: Standard | null,
+): string[] {
+  const errors: string[] = []
+  const standardCode = form.standardCode.trim()
+  const title = form.title.trim()
+  const version = form.version.trim()
+
+  if (!standardCode) {
+    errors.push('请输入标准编号')
+  }
+  if (!title) {
+    errors.push('请输入标准名称')
+  }
+  if (!form.category.trim()) {
+    errors.push('请选择分类')
+  }
+  if (!version) {
+    errors.push('请输入版本号')
+  }
+  if (!form.visibilityLevel) {
+    errors.push('请选择可见范围')
+  }
+  if (!form.ownerScopeId.trim()) {
+    errors.push('请选择维护域')
+  }
+
+  const duplicatedCode = standards.some(
+    (standard) =>
+      standard.id !== editingRow?.id &&
+      standard.standardCode.trim().toUpperCase() === standardCode.toUpperCase() &&
+      standard.standardGroupId !== editingRow?.standardGroupId,
+  )
+  if (standardCode && duplicatedCode) {
+    errors.push('标准编号已存在')
+  }
+
+  const groupId = editingRow?.standardGroupId
+  const duplicatedVersion = Boolean(
+    groupId &&
+      standards.some(
+        (standard) =>
+          standard.id !== editingRow?.id &&
+          standard.standardGroupId === groupId &&
+          standard.version.trim().toUpperCase() === version.toUpperCase(),
+      ),
+  )
+  if (version && duplicatedVersion) {
+    errors.push('当前标准组已存在相同版本号')
+  }
+
+  return errors
 }
 
 export function buildStandardMutationPayload(

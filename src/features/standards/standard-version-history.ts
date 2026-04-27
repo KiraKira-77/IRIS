@@ -6,6 +6,19 @@ interface VersionHistoryDetailFormatters {
   scopeLabel: (scopeId: string) => string
 }
 
+interface VersionChangeFormatters {
+  categoryLabel: (value: Standard['category']) => string
+  visibilityLabel: (value: Standard['visibilityLevel']) => string
+  scopeLabel: (scopeId: string) => string
+}
+
+export interface StandardVersionChange {
+  field: string
+  label: string
+  oldVal: string
+  newVal: string
+}
+
 export interface VersionHistoryDetailItem {
   label: string
   value: string
@@ -56,4 +69,64 @@ export function buildVersionHistoryDetailSections(
       ],
     },
   ]
+}
+
+export function buildStandardVersionChanges(
+  current: Standard,
+  previous: Standard | undefined,
+  formatters: VersionChangeFormatters,
+): StandardVersionChange[] {
+  if (!previous) return []
+
+  const sharedScopeText = (standard: Standard) =>
+    standard.grants.length > 0
+      ? standard.grants.map((grant) => formatters.scopeLabel(grant.scopeId)).join('、')
+      : '无'
+
+  const fields: Array<{
+    field: string
+    label: string
+    oldVal: string
+    newVal: string
+  }> = [
+    {
+      field: 'standardCode',
+      label: '标准编号',
+      oldVal: previous.standardCode,
+      newVal: current.standardCode,
+    },
+    { field: 'title', label: '标准名称', oldVal: previous.title, newVal: current.title },
+    {
+      field: 'category',
+      label: '分类',
+      oldVal: formatters.categoryLabel(previous.category),
+      newVal: formatters.categoryLabel(current.category),
+    },
+    {
+      field: 'description',
+      label: '描述',
+      oldVal: previous.description || '',
+      newVal: current.description || '',
+    },
+    {
+      field: 'visibilityLevel',
+      label: '可见范围',
+      oldVal: formatters.visibilityLabel(previous.visibilityLevel),
+      newVal: formatters.visibilityLabel(current.visibilityLevel),
+    },
+    {
+      field: 'ownerScopeId',
+      label: '维护域',
+      oldVal: formatters.scopeLabel(previous.ownerScopeId),
+      newVal: formatters.scopeLabel(current.ownerScopeId),
+    },
+    {
+      field: 'grants',
+      label: '共享范围',
+      oldVal: sharedScopeText(previous),
+      newVal: sharedScopeText(current),
+    },
+  ]
+
+  return fields.filter((item) => item.oldVal !== item.newVal)
 }

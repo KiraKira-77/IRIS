@@ -5,6 +5,7 @@ import type {
   PageQuery,
   PageResult,
   Standard,
+  StandardRollbackPayload,
   StandardUpgradePayload,
   StandardUpsertPayload,
   ControlChecklist,
@@ -33,11 +34,15 @@ export const authApi = {
 }
 
 export const standardApi = {
-  list: () => request.get<Standard[]>('/v1/standards'),
+  list: (params?: PageQuery) => request.get<PageResult<Standard>>('/v1/standards', params),
   detail: (id: string) => request.get<Standard>(`/v1/standards/${id}`),
   create: (data: StandardUpsertPayload) => request.post<Standard>('/v1/standards', data),
   upgrade: (id: string, data: StandardUpgradePayload) =>
     request.post<Standard>(`/v1/standards/${id}/upgrade`, data),
+  publish: (id: string) => request.post<Standard>(`/v1/standards/${id}/publish`),
+  rollback: (id: string, data: StandardRollbackPayload) =>
+    request.post<Standard>(`/v1/standards/${id}/rollback`, data),
+  versions: (id: string) => request.get<Standard[]>(`/v1/standards/${id}/versions`),
   update: (id: string, data: StandardUpsertPayload) =>
     request.put<Standard>(`/v1/standards/${id}`, data),
   delete: (id: string) => request.delete(`/v1/standards/${id}`),

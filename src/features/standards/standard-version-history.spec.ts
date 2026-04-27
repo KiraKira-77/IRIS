@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { Standard } from '@/types'
-import { buildVersionHistoryDetailSections } from '@/features/standards/standard-version-history'
+import {
+  buildStandardVersionChanges,
+  buildVersionHistoryDetailSections,
+} from '@/features/standards/standard-version-history'
 
 function createStandard(overrides: Partial<Standard> = {}): Standard {
   return {
@@ -17,6 +20,7 @@ function createStandard(overrides: Partial<Standard> = {}): Standard {
     updatedAt: '2026-04-24T10:00:00',
     standardGroupId: 'group-1',
     versionNumber: 1,
+    versionCount: 1,
     previousVersionId: undefined,
     visibilityLevel: 'PUBLIC',
     ownerScopeId: '9001',
@@ -88,6 +92,43 @@ describe('standard-version-history', () => {
           { label: '更新时间', value: '2026-04-24T10:00:00' },
         ],
       },
+    ])
+  })
+
+  it('builds version changes for permission and attachment relevant fields', () => {
+    const previous = createStandard({
+      standardCode: 'STD-FIN-001',
+      title: 'Old Finance Standard',
+      category: 'internal',
+      description: 'old desc',
+      visibilityLevel: 'PUBLIC',
+      ownerScopeId: '9001',
+      grants: [],
+    })
+    const current = createStandard({
+      standardCode: 'STD-FIN-002',
+      title: 'New Finance Standard',
+      category: 'law',
+      description: 'new desc',
+      visibilityLevel: 'SCOPED',
+      ownerScopeId: '9002',
+      grants: [{ scopeId: '9003', actions: ['view'] }],
+    })
+
+    expect(
+      buildStandardVersionChanges(current, previous, {
+        categoryLabel: (value) => (value === 'law' ? '法律法规' : '内部制度'),
+        visibilityLabel: (value) => (value === 'PUBLIC' ? '全员可见' : '域内可见'),
+        scopeLabel: (scopeId) => `范围-${scopeId}`,
+      }),
+    ).toEqual([
+      { field: 'standardCode', label: '标准编号', oldVal: 'STD-FIN-001', newVal: 'STD-FIN-002' },
+      { field: 'title', label: '标准名称', oldVal: 'Old Finance Standard', newVal: 'New Finance Standard' },
+      { field: 'category', label: '分类', oldVal: '内部制度', newVal: '法律法规' },
+      { field: 'description', label: '描述', oldVal: 'old desc', newVal: 'new desc' },
+      { field: 'visibilityLevel', label: '可见范围', oldVal: '全员可见', newVal: '域内可见' },
+      { field: 'ownerScopeId', label: '维护域', oldVal: '范围-9001', newVal: '范围-9002' },
+      { field: 'grants', label: '共享范围', oldVal: '无', newVal: '范围-9003' },
     ])
   })
 })

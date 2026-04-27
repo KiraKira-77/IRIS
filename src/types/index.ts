@@ -219,6 +219,7 @@ export interface Standard {
   // 版本控制字段
   standardGroupId: string // 同一标准所有版本共享此 ID
   versionNumber: number // 数值版本号 (1, 2, 3...)
+  versionCount?: number
   changeLog?: string // 本次修订说明
   previousVersionId?: string // 前一版本 ID
   visibilityLevel: StandardVisibilityLevel
@@ -246,6 +247,10 @@ export interface StandardUpsertPayload {
 export interface StandardUpgradePayload {
   version: string
   changeLog: string
+}
+export interface StandardRollbackPayload {
+  version: string
+  reason: string
 }
 export interface ControlChecklist {
   id: string

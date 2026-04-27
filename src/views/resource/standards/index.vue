@@ -7,6 +7,7 @@
       </div>
       <div class="right">
         <el-button
+          v-if="canCreateStandard"
           type="primary"
           :icon="Plus"
           size="large"
@@ -34,6 +35,7 @@
             placeholder="全部分类"
             clearable
             style="width: 160px"
+            @change="handleFilterChange"
           >
             <el-option label="法律法规" value="law" />
             <el-option label="行业准则" value="industry" />
@@ -47,6 +49,7 @@
             placeholder="全部状态"
             clearable
             style="width: 130px"
+            @change="handleFilterChange"
           >
             <el-option label="生效中" value="active" />
             <el-option label="草稿" value="draft" />
@@ -298,7 +301,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="handleSave">{{
+        <el-button type="primary" @click="handleSave()">{{
           editingRow ? '保存修改' : '保存'
         }}</el-button>
         <el-button
@@ -656,16 +659,18 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadProps, UploadRawFile, UploadUserFile } from 'element-plus'
 import { resourceScopeApi, standardApi } from '@/api'
 import {
-  buildStandardDraftPayload,
-  buildStandardListPage,
   buildStandardSearchInteraction,
   buildStandardSubmitState,
-  buildStandardMutationPayload,
   buildStandardUpsertPayload,
   formatStandardUploadDate,
+  normalizeStandardPageFromApi,
   normalizeStandardFromApi,
+  validateStandardEditorForm,
 } from '@/features/standards/standard-data'
-import { buildVersionHistoryDetailSections } from '@/features/standards/standard-version-history'
+import {
+  buildStandardVersionChanges,
+  buildVersionHistoryDetailSections,
+} from '@/features/standards/standard-version-history'
 import { refreshStandardDialogContext } from '@/features/standards/standard-dialog-context'
 import { buildStandardAccessState } from '@/features/permissions/standard-access'
 import { DEFAULT_RESOURCE_SCOPE_OPTIONS } from '@/features/permissions/user-access'
@@ -696,7 +701,6 @@ const emptyAccessContext: UserAccessContext = {
 }
 
 const currentAccessContext = computed(() => userStore.accessContext || emptyAccessContext)
-const visibleStandards = computed(() => allStandards.value)
 const editableScopeOptions = computed(() => {
   const permittedScopes = currentAccessContext.value.isSuperAdmin
     ? scopeOptions.value
@@ -743,6 +747,7 @@ const upgradeForm = reactive({
 
 const drawerVisible = ref(false)
 const detailRow = ref<Standard | null>(null)
+const versionHistory = ref<Standard[]>([])
 const detailAccessState = computed(() =>
   detailRow.value ? buildStandardAccessState(detailRow.value, currentAccessContext.value) : null,
 )
@@ -756,46 +761,24 @@ const toggleVersionExpand = (id: string) => {
 const getVersionHistoryDetailSections = (standard: Standard) =>
   buildVersionHistoryDetailSections(standard, { categoryLabel, statusLabel, scopeLabel })
 
-const getVersionChanges = (current: Standard, previous?: Standard) => {
-  if (!previous) return []
-  const changes: { field: string; label: string; oldVal: string; newVal: string }[] = []
-  const fieldMap: { field: keyof Standard; label: string; format?: (value: any) => string }[] = [
-    { field: 'description', label: '\u63cf\u8ff0' },
-    { field: 'category', label: '\u5206\u7c7b', format: categoryLabel },
-    { field: 'title', label: '\u6807\u51c6\u540d\u79f0' },
-  ]
-
-  for (const { field, label, format } of fieldMap) {
-    const oldValue = previous[field]
-    const newValue = current[field]
-    const oldText = format ? format(oldValue) : String(oldValue ?? '')
-    const newText = format ? format(newValue) : String(newValue ?? '')
-
-    if (oldText !== newText) {
-      changes.push({ field, label, oldVal: oldText, newVal: newText })
-    }
-  }
-
-  return changes
-}
+const getVersionChanges = (current: Standard, previous?: Standard) =>
+  buildStandardVersionChanges(current, previous, {
+    categoryLabel,
+    visibilityLabel,
+    scopeLabel,
+  })
 
 const getCurrentActiveId = (groupId: string): string | null => {
-  const active = allStandards.value.find(
+  const active = versionHistory.value.find(
     (item) => item.standardGroupId === groupId && item.status === 'active',
   )
   return active?.id ?? null
 }
 
 const getVersionCount = (row: Standard) =>
-  allStandards.value.filter((item) => item.standardGroupId === row.standardGroupId).length
-
-const versionHistory = computed(() => {
-  if (!detailRow.value) return []
-
-  return [...allStandards.value]
-    .filter((item) => item.standardGroupId === detailRow.value?.standardGroupId)
-    .sort((left, right) => right.versionNumber - left.versionNumber)
-})
+  row.versionCount ||
+  versionHistory.value.filter((item) => item.standardGroupId === row.standardGroupId).length ||
+  1
 
 onMounted(() => {
   void Promise.all([loadScopeOptions(), loadStandards()])
@@ -816,38 +799,24 @@ const loadStandards = async () => {
   loading.value = true
 
   try {
-    allStandards.value = (await standardApi.list()).map(normalizeStandardFromApi)
+    const page = normalizeStandardPageFromApi(
+      await standardApi.list({
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        keyword: searchForm.keyword || undefined,
+        category: searchForm.category || undefined,
+        status: searchForm.status || undefined,
+      }),
+    )
+    allStandards.value = page.list
+    tableData.value = page.list
+    pagination.total = page.total
+    pagination.page = page.page
+    pagination.pageSize = page.pageSize
     syncSelectedRows()
-    applySearchResult()
   } finally {
     loading.value = false
   }
-}
-
-const applySearchResult = () => {
-  const preview = buildStandardListPage(visibleStandards.value, {
-    keyword: searchForm.keyword,
-    category: searchForm.category,
-    status: searchForm.status,
-    page: 1,
-    pageSize: pagination.pageSize,
-  })
-  const maxPage = Math.max(1, Math.ceil(preview.total / pagination.pageSize))
-
-  if (pagination.page > maxPage) {
-    pagination.page = maxPage
-  }
-
-  const page = buildStandardListPage(visibleStandards.value, {
-    keyword: searchForm.keyword,
-    category: searchForm.category,
-    status: searchForm.status,
-    page: pagination.page,
-    pageSize: pagination.pageSize,
-  })
-
-  pagination.total = page.total
-  tableData.value = page.list
 }
 
 const handleSearchSubmit = async () => {
@@ -856,26 +825,30 @@ const handleSearchSubmit = async () => {
   Object.assign(searchForm, interaction.form)
   Object.assign(pagination, interaction.pagination)
 
-  if (interaction.shouldReload) {
-    await loadStandards()
-    return
-  }
-
-  applySearchResult()
+  await loadStandards()
 }
 
-const handlePageChange = (page: number) => {
+const handleFilterChange = async () => {
+  const interaction = buildStandardSearchInteraction('filter', searchForm, pagination)
+
+  Object.assign(searchForm, interaction.form)
+  Object.assign(pagination, interaction.pagination)
+
+  await loadStandards()
+}
+
+const handlePageChange = async (page: number) => {
   const interaction = buildStandardSearchInteraction('paginate', searchForm, pagination, { page })
 
   Object.assign(pagination, interaction.pagination)
-  applySearchResult()
+  await loadStandards()
 }
 
-const handlePageSizeChange = (pageSize: number) => {
+const handlePageSizeChange = async (pageSize: number) => {
   const interaction = buildStandardSearchInteraction('resize', searchForm, pagination, { pageSize })
 
   Object.assign(pagination, interaction.pagination)
-  applySearchResult()
+  await loadStandards()
 }
 
 const handleReset = async () => {
@@ -884,12 +857,7 @@ const handleReset = async () => {
   Object.assign(searchForm, interaction.form)
   Object.assign(pagination, interaction.pagination)
 
-  if (interaction.shouldReload) {
-    await loadStandards()
-    return
-  }
-
-  applySearchResult()
+  await loadStandards()
 }
 
 const refreshScopeDialogContext = async () => {
@@ -942,9 +910,16 @@ const openDialog = async (row?: Standard) => {
   dialogVisible.value = true
 }
 
-const openDetail = (row: Standard) => {
-  detailRow.value = row
-  drawerVisible.value = true
+const openDetail = async (row: Standard) => {
+  loading.value = true
+
+  try {
+    detailRow.value = normalizeStandardFromApi(await standardApi.detail(row.id))
+    versionHistory.value = (await standardApi.versions(row.id)).map(normalizeStandardFromApi)
+    drawerVisible.value = true
+  } finally {
+    loading.value = false
+  }
 }
 
 const openUpgradeDialog = async (row: Standard) => {
@@ -1034,35 +1009,12 @@ const handlePublishFromDrawer = async () => {
   loading.value = true
 
   try {
-    const activeVersion = allStandards.value.find(
-      (item) =>
-        item.standardGroupId === current.standardGroupId &&
-        item.id !== current.id &&
-        item.status === 'active',
-    )
-
-    if (activeVersion) {
-      await standardApi.update(
-        activeVersion.id,
-        buildStandardMutationPayload(activeVersion, {
-          tenantId: currentTenantId.value,
-          status: 'archived',
-        }),
-      )
-    }
-
-    await standardApi.update(
-      current.id,
-      buildStandardMutationPayload(current, {
-        tenantId: currentTenantId.value,
-        status: 'active',
-        publishDate: today(),
-      }),
-    )
+    const published = normalizeStandardFromApi(await standardApi.publish(current.id))
 
     await loadStandards()
-    updateDetailRow(current.id)
-    ElMessage.success(activeVersion ? '\u6807\u51c6\u5df2\u53d1\u5e03\uff0c\u65e7\u7248\u5df2\u81ea\u52a8\u5f52\u6863' : '\u6807\u51c6\u5df2\u53d1\u5e03')
+    detailRow.value = published
+    versionHistory.value = (await standardApi.versions(published.id)).map(normalizeStandardFromApi)
+    ElMessage.success('标准已发布，旧版已自动归档')
   } finally {
     loading.value = false
   }
@@ -1086,25 +1038,18 @@ const handleUpgrade = async () => {
   try {
     const version = upgradeForm.newVersion.trim()
 
-    await standardApi.upgrade(source.id, {
-      version,
-      changeLog: upgradeForm.changeLog.trim(),
-    })
+    const createdDraft = normalizeStandardFromApi(
+      await standardApi.upgrade(source.id, {
+        version,
+        changeLog: upgradeForm.changeLog.trim(),
+      }),
+    )
     upgradeDialogVisible.value = false
     await loadStandards()
 
-    const createdDraft = allStandards.value.find(
-      (item) =>
-        item.standardGroupId === source.standardGroupId &&
-        item.previousVersionId === source.id &&
-        item.version === version,
-    )
-
     ElMessage.success(`\u5df2\u521b\u5efa ${version} \u7248\u672c\u8349\u7a3f`)
 
-    if (createdDraft) {
-      openDialog(createdDraft)
-    }
+    await openDialog(createdDraft)
   } finally {
     loading.value = false
   }
@@ -1112,51 +1057,51 @@ const handleUpgrade = async () => {
 
 const openRollbackDialog = (targetVersion: Standard) => {
   ElMessageBox.prompt(
-    `\u5c06\u57fa\u4e8e\u300c${targetVersion.version}\u300d\u7684\u5185\u5bb9\u521b\u5efa\u65b0\u7248\u672c\u8349\u7a3f\uff0c\u8bf7\u8f93\u5165\u56de\u9000\u539f\u56e0\uff1a`,
+    `将基于「${targetVersion.version}」的内容创建新版本草稿，请输入新版本号：`,
     `\u56de\u9000\u5230 ${targetVersion.version}`,
     {
-      confirmButtonText: '\u786e\u8ba4\u56de\u9000',
+      confirmButtonText: '下一步',
       cancelButtonText: '\u53d6\u6d88',
       type: 'warning',
-      inputType: 'textarea',
-      inputPlaceholder: '\u8bf7\u8f93\u5165\u56de\u9000\u539f\u56e0',
+      inputPlaceholder: '例如 V3.0',
       inputValidator: (value: string) => {
-        if (!value || !value.trim()) return '\u56de\u9000\u539f\u56e0\u4e0d\u80fd\u4e3a\u7a7a'
+        if (!value || !value.trim()) return '版本号不能为空'
         return true
       },
     },
   ).then((result) => {
-    const reason = typeof result === 'string' ? result : (result as { value: string }).value
-    void handleRollback(targetVersion, reason)
+    const version = typeof result === 'string' ? result : (result as { value: string }).value
+    ElMessageBox.prompt(`请输入回退到「${targetVersion.version}」的原因：`, '回退原因', {
+      confirmButtonText: '确认回退',
+      cancelButtonText: '取消',
+      type: 'warning',
+      inputType: 'textarea',
+      inputPlaceholder: '请输入回退原因',
+      inputValidator: (value: string) => {
+        if (!value || !value.trim()) return '回退原因不能为空'
+        return true
+      },
+    }).then((reasonResult) => {
+      const reason =
+        typeof reasonResult === 'string' ? reasonResult : (reasonResult as { value: string }).value
+      void handleRollback(targetVersion, version, reason)
+    })
   })
 }
 
-const handleRollback = async (targetVersion: Standard, reason: string) => {
+const handleRollback = async (targetVersion: Standard, version: string, reason: string) => {
   loading.value = true
 
   try {
-    const payload = buildStandardDraftPayload(
-      targetVersion,
-      {
-        tenantId: currentTenantId.value,
-        version: targetVersion.version,
-        changeLog: `[\u56de\u9000] \u56de\u9000\u81f3 ${targetVersion.version}\uff1a${reason}`,
-      },
-      allStandards.value,
+    const rollbackDraft = normalizeStandardFromApi(
+      await standardApi.rollback(targetVersion.id, {
+        version: version.trim(),
+        reason: reason.trim(),
+      }),
     )
-
-    await standardApi.create(payload)
     await loadStandards()
-
-    const rollbackDraft = allStandards.value.find(
-      (item) =>
-        item.standardGroupId === payload.standardGroupId &&
-        item.versionNumber === payload.versionNumber,
-    )
-
-    if (rollbackDraft) {
-      detailRow.value = rollbackDraft
-    }
+    detailRow.value = rollbackDraft
+    versionHistory.value = (await standardApi.versions(rollbackDraft.id)).map(normalizeStandardFromApi)
 
     ElMessage.success('\u5df2\u521b\u5efa\u56de\u9000\u8349\u7a3f\uff0c\u53ef\u7f16\u8f91\u540e\u53d1\u5e03')
   } finally {
@@ -1240,7 +1185,7 @@ const handleDeleteExistingAttachment = (attachment: Attachment) => {
 
       await standardApi.deleteAttachment(currentEditingId, attachment.id)
       await loadStandards()
-      editingRow.value = allStandards.value.find((item) => item.id === currentEditingId) || null
+      editingRow.value = normalizeStandardFromApi(await standardApi.detail(currentEditingId))
       ElMessage.success('附件已删除')
     } finally {
       loading.value = false
@@ -1287,16 +1232,13 @@ const hasScopeAction = (scopeId: string, action: 'create' | 'manage') => {
 }
 
 const validateForm = () => {
-  if (!form.standardCode.trim()) {
-    ElMessage.warning('\u8bf7\u8f93\u5165\u6807\u51c6\u7f16\u53f7')
-    return false
-  }
-  if (!form.title.trim()) {
-    ElMessage.warning('\u8bf7\u8f93\u5165\u6807\u51c6\u540d\u79f0')
-    return false
-  }
-  if (!form.ownerScopeId.trim()) {
-    ElMessage.warning('\u8bf7\u9009\u62e9\u7ef4\u62a4\u57df')
+  const validationSource = editingRow.value
+    ? [...versionHistory.value, ...allStandards.value]
+    : allStandards.value
+  const errors = validateStandardEditorForm(form, validationSource, editingRow.value)
+
+  if (errors.length > 0) {
+    ElMessage.warning(errors[0])
     return false
   }
 
@@ -1314,6 +1256,8 @@ const statusType = (value: string) =>
   (({ active: 'success', draft: 'info', archived: 'warning' }) as any)[value] || 'info'
 const statusLabel = (value: string) =>
   (({ active: '\u751f\u6548\u4e2d', draft: '\u8349\u7a3f', archived: '\u5df2\u5f52\u6863' }) as any)[value] || value
+const visibilityLabel = (value: Standard['visibilityLevel']) =>
+  value === 'PUBLIC' ? '全员可见' : '域内可见'
 
 const formatAttachmentSize = (size?: number) => {
   if (!size) {
@@ -1330,23 +1274,32 @@ const formatAttachmentSize = (size?: number) => {
 
 function syncSelectedRows() {
   if (detailRow.value) {
-    updateDetailRow(detailRow.value.id)
+    detailRow.value =
+      versionHistory.value.find((item) => item.id === detailRow.value?.id) ||
+      allStandards.value.find((item) => item.id === detailRow.value?.id) ||
+      detailRow.value
   }
 
   if (editingRow.value) {
     editingRow.value =
-      allStandards.value.find((item) => item.id === editingRow.value?.id) || editingRow.value
+      versionHistory.value.find((item) => item.id === editingRow.value?.id) ||
+      allStandards.value.find((item) => item.id === editingRow.value?.id) ||
+      editingRow.value
   }
 
   if (upgradeSourceRow.value) {
     upgradeSourceRow.value =
+      versionHistory.value.find((item) => item.id === upgradeSourceRow.value?.id) ||
       allStandards.value.find((item) => item.id === upgradeSourceRow.value?.id) ||
       upgradeSourceRow.value
   }
 }
 
 function updateDetailRow(id: string) {
-  detailRow.value = allStandards.value.find((item) => item.id === id) || null
+  detailRow.value =
+    versionHistory.value.find((item) => item.id === id) ||
+    allStandards.value.find((item) => item.id === id) ||
+    null
   if (!detailRow.value) {
     drawerVisible.value = false
   }

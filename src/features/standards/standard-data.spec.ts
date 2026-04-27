@@ -5,9 +5,12 @@ import {
   buildStandardDraftPayload,
   buildStandardListPage,
   buildStandardMutationPayload,
+  buildStandardSearchInteraction,
   buildStandardUpsertPayload,
   formatStandardUploadDate,
+  normalizeStandardPageFromApi,
   normalizeStandardFromApi,
+  validateStandardEditorForm,
 } from './standard-data.ts'
 import { describe, expect, it } from 'vitest'
 
@@ -26,6 +29,7 @@ function createStandard(overrides: Partial<Standard> = {}): Standard {
     updatedAt: '2026-04-23 00:00:00',
     standardGroupId: 'group-1',
     versionNumber: 1,
+    versionCount: 1,
     previousVersionId: undefined,
     visibilityLevel: 'PUBLIC',
     ownerScopeId: '9001',
@@ -83,6 +87,20 @@ describe('standard-data', () => {
     ).toEqual({
       form: { keyword: '', category: '', status: '' },
       pagination: { page: 1, pageSize: 10, total: 28 },
+      shouldReload: true,
+    })
+  })
+
+  it('applies dropdown filter changes by resetting to first page and reloading', () => {
+    const interaction = buildStandardSearchInteraction(
+      'filter' as never,
+      { keyword: 'finance', category: 'internal', status: 'active' },
+      { page: 4, pageSize: 20, total: 56 },
+    )
+
+    expect(interaction).toEqual({
+      form: { keyword: 'finance', category: 'internal', status: 'active' },
+      pagination: { page: 1, pageSize: 20, total: 56 },
       shouldReload: true,
     })
   })
@@ -253,6 +271,7 @@ describe('standard-data', () => {
       updatedAt: '2026-04-23T00:00:00',
       standardGroupId: 'group-8',
       versionNumber: 2,
+      versionCount: 3,
       previousVersionId: '1007',
       visibilityLevel: 'PUBLIC',
       ownerScopeId: '9002',
@@ -274,12 +293,76 @@ describe('standard-data', () => {
       updatedAt: '2026-04-23T00:00:00',
       standardGroupId: 'group-8',
       versionNumber: 2,
+      versionCount: 3,
       previousVersionId: '1007',
       visibilityLevel: 'PUBLIC',
       ownerScopeId: '9002',
       grants: [],
       changeLog: 'draft',
     })
+  })
+
+  it('normalizes backend page records into frontend page shape', () => {
+    const page = normalizeStandardPageFromApi({
+      records: [
+        {
+          id: '1008',
+          standardCode: 'STD-SEC-008',
+          title: 'Information Security Policy',
+          category: 'system',
+          version: 'V1.1',
+          publishDate: null,
+          status: 'draft',
+          attachments: [],
+          description: '',
+          createdAt: '2026-04-23T00:00:00',
+          updatedAt: '2026-04-23T00:00:00',
+          standardGroupId: 'group-8',
+          versionNumber: 2,
+          versionCount: 3,
+          previousVersionId: '1007',
+          visibilityLevel: 'PUBLIC',
+          ownerScopeId: '9002',
+          grants: [],
+          changeLog: 'draft',
+        },
+      ],
+      total: 16,
+      pageNo: 2,
+      pageSize: 10,
+    })
+
+    expect(page.total).toBe(16)
+    expect(page.page).toBe(2)
+    expect(page.pageSize).toBe(10)
+    expect(page.list[0]?.publishDate).toBe('-')
+    expect(page.list[0]?.versionCount).toBe(3)
+  })
+
+  it('validates required fields and duplicate version labels before submit', () => {
+    const current = createStandard({
+      id: '1002',
+      standardGroupId: 'group-1',
+      standardCode: 'STD-FIN-001',
+      version: 'V2.0',
+    })
+
+    expect(
+      validateStandardEditorForm(
+        {
+          standardCode: 'STD-FIN-001',
+          title: 'Updated',
+          category: '',
+          version: 'V1.0',
+          description: '',
+          visibilityLevel: 'PUBLIC',
+          ownerScopeId: '9001',
+          grantScopeIds: [],
+        },
+        [createStandard({ id: '1001', standardGroupId: 'group-1', version: 'V1.0' }), current],
+        current,
+      ),
+    ).toEqual(['请选择分类', '当前标准组已存在相同版本号'])
   })
 
   it('builds mutation payload without tags', () => {
