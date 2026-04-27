@@ -257,8 +257,12 @@ export interface ControlChecklist {
   code: string
   name: string
   description?: string
+  version: string
+  primaryTagId?: string
+  secondaryTagIds: string[]
   items: ChecklistItem[]
   status: 'draft' | 'active' | 'disabled'
+  uploadDate: string
   createdAt: string
   updatedAt: string
 }
@@ -268,8 +272,9 @@ export interface ChecklistItem {
   sequence: number
   content: string
   criterion: string
-  method?: string
-  riskLevel: 'high' | 'medium' | 'low'
+  controlFrequency: string
+  evaluationType: string
+  organizationIds: string[]
 }
 export interface Archive {
   id: string
