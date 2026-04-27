@@ -1,11 +1,31 @@
 <template>
   <div class="page-container iris-page">
-    <div class="page-header">
-      <div class="left">
+    <section class="standards-hero">
+      <div class="hero-copy">
+        <span class="hero-kicker">资源库</span>
         <h2 class="page-title">标准管理</h2>
-        <span class="page-subtitle">内控标准文档的统一维护与发布</span>
+        <p class="page-subtitle">维护内控标准、发布状态、可见范围与版本记录。</p>
       </div>
-      <div class="right">
+      <div class="hero-panel">
+        <div class="hero-stat hero-stat-main">
+          <span class="stat-label">标准总量</span>
+          <strong>{{ standardStats.total }}</strong>
+          <span class="stat-note">当前筛选结果</span>
+        </div>
+        <div class="hero-stat">
+          <span class="stat-label">生效中</span>
+          <strong>{{ standardStats.active }}</strong>
+        </div>
+        <div class="hero-stat">
+          <span class="stat-label">草稿</span>
+          <strong>{{ standardStats.draft }}</strong>
+        </div>
+        <div class="hero-stat">
+          <span class="stat-label">域内可见</span>
+          <strong>{{ standardStats.scoped }}</strong>
+        </div>
+      </div>
+      <div class="hero-actions">
         <el-button
           v-if="canCreateStandard"
           type="primary"
@@ -15,17 +35,17 @@
           >新建标准</el-button
         >
       </div>
-    </div>
+    </section>
 
     <!-- 搜索栏 -->
-    <div class="search-bar">
+    <div class="standards-toolbar">
       <el-form :inline="true" :model="searchForm">
         <el-form-item label="标准名称">
           <el-input
             v-model="searchForm.keyword"
-            placeholder="请输入关键字"
+            placeholder="名称、编号或描述"
             clearable
-            style="width: 220px"
+            class="keyword-input"
             @keyup.enter="handleSearchSubmit"
           />
         </el-form-item>
@@ -34,7 +54,7 @@
             v-model="searchForm.category"
             placeholder="全部分类"
             clearable
-            style="width: 160px"
+            class="category-select"
             @change="handleFilterChange"
           >
             <el-option label="法律法规" value="law" />
@@ -48,7 +68,7 @@
             v-model="searchForm.status"
             placeholder="全部状态"
             clearable
-            style="width: 130px"
+            class="status-select"
             @change="handleFilterChange"
           >
             <el-option label="生效中" value="active" />
@@ -64,95 +84,107 @@
     </div>
 
     <!-- 数据表格 -->
-    <el-table :data="tableData" v-loading="loading" style="width: 100%" stripe size="large">
-      <el-table-column prop="title" label="标准名称" min-width="280" show-overflow-tooltip>
-        <template #default="{ row }">
-          <el-link
-            type="primary"
-            @click="openDetail(row)"
-            :underline="false"
-            style="font-weight: 500"
-            >{{ row.title }}</el-link
-          >
-        </template>
-      </el-table-column>
-      <el-table-column prop="category" label="分类" width="130">
-        <template #default="{ row }">
-          <el-tag :type="categoryType(row.category)" effect="light" round>{{
-            categoryLabel(row.category)
-          }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="version" label="版本" width="140" align="center">
-        <template #default="{ row }">
-          <div class="version-cell">
-            <span class="version-label">{{ row.version }}</span>
+    <section class="table-shell">
+      <div class="table-heading">
+        <div>
+          <h3>标准台账</h3>
+          <p>按最新筛选结果展示，可进入详情查看版本历史。</p>
+        </div>
+        <span class="table-count">当前页 {{ tableData.length }} 条</span>
+      </div>
+      <el-table :data="tableData" v-loading="loading" style="width: 100%" size="large">
+        <el-table-column prop="title" label="标准名称" min-width="320" show-overflow-tooltip>
+          <template #default="{ row }">
+            <button class="standard-title-button" type="button" @click="openDetail(row)">
+              <span>{{ row.title }}</span>
+              <small>{{ row.standardCode }}</small>
+            </button>
+          </template>
+        </el-table-column>
+        <el-table-column prop="category" label="分类" width="130">
+          <template #default="{ row }">
+            <el-tag :type="categoryType(row.category)" effect="light" round>{{
+              categoryLabel(row.category)
+            }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="version" label="版本" width="140" align="center">
+          <template #default="{ row }">
+            <div class="version-cell">
+              <span class="version-label">{{ row.version }}</span>
+              <el-tag
+                v-if="getVersionCount(row) > 1"
+                size="small"
+                effect="plain"
+                round
+                type="info"
+                class="version-count"
+                >共{{ getVersionCount(row) }}版</el-tag
+              >
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="可见范围" width="140">
+          <template #default="{ row }">
             <el-tag
-              v-if="getVersionCount(row) > 1"
-              size="small"
-              effect="plain"
+              :type="row.visibilityLevel === 'PUBLIC' ? 'success' : 'warning'"
+              effect="light"
               round
-              type="info"
-              class="version-count"
-              >共{{ getVersionCount(row) }}版</el-tag
             >
-          </div>
-        </template>
-      </el-table-column>
-      <el-table-column label="可见范围" width="140">
-        <template #default="{ row }">
-          <el-tag :type="row.visibilityLevel === 'PUBLIC' ? 'success' : 'warning'" effect="light" round>
-            {{ row.visibilityLevel === 'PUBLIC' ? '全员可见' : '域内可见' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="维护域" width="150">
-        <template #default="{ row }">
-          <el-tag type="info" effect="plain" round>{{ scopeLabel(row.ownerScopeId) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="上传日期" width="130" sortable>
-        <template #default="{ row }">
-          {{ uploadDateLabel(row) }}
-        </template>
-      </el-table-column>
-      <el-table-column prop="status" label="状态" width="110">
-        <template #default="{ row }">
-          <el-tag :type="statusType(row.status)" effect="dark" size="small">{{
-            statusLabel(row.status)
-          }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="240" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
-          <el-button
-            v-if="getRowAccessState(row).canEdit"
-            link
-            type="primary"
-            size="small"
-            @click="openDialog(row)"
-            >编辑</el-button
-          >
-          <el-button
-            v-if="getRowAccessState(row).canEdit && row.status === 'active'"
-            link
-            type="success"
-            size="small"
-            @click="openUpgradeDialog(row)"
-            >升版</el-button
-          >
-          <el-button
-            v-if="getRowAccessState(row).canDelete"
-            link
-            type="danger"
-            size="small"
-            @click="handleDelete(row)"
-            >删除</el-button
-          >
-        </template>
-      </el-table-column>
-    </el-table>
+              {{ row.visibilityLevel === 'PUBLIC' ? '全员可见' : '域内可见' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="维护域" width="150">
+          <template #default="{ row }">
+            <el-tag type="info" effect="plain" round>{{ scopeLabel(row.ownerScopeId) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="上传日期" width="130" sortable>
+          <template #default="{ row }">
+            {{ uploadDateLabel(row) }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="110">
+          <template #default="{ row }">
+            <el-tag :type="statusType(row.status)" effect="dark" size="small">{{
+              statusLabel(row.status)
+            }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="240" fixed="right">
+          <template #default="{ row }">
+            <div class="row-actions">
+              <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
+              <el-button
+                v-if="getRowAccessState(row).canEdit"
+                link
+                type="primary"
+                size="small"
+                @click="openDialog(row)"
+                >编辑</el-button
+              >
+              <el-button
+                v-if="getRowAccessState(row).canEdit && row.status === 'active'"
+                link
+                type="success"
+                size="small"
+                @click="openUpgradeDialog(row)"
+                >升版</el-button
+              >
+              <el-button
+                v-if="getRowAccessState(row).canDelete"
+                link
+                type="danger"
+                size="small"
+                @click="handleDelete(row)"
+                >删除</el-button
+              >
+            </div>
+          </template>
+        </el-table-column>
+      </el-table>
+    </section>
 
     <!-- 分页 -->
     <div class="pagination-wrapper">
@@ -167,22 +199,39 @@
       />
     </div>
 
-    <!-- 新建/编辑弹窗 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="editingRow ? '编辑标准' : '新建标准'"
-      width="640px"
-      destroy-on-close
-    >
-      <el-form :model="form" label-width="90px" label-position="top" size="large">
-        <el-form-item label="标准编号" required>
-          <el-input v-model="form.standardCode" placeholder="请输入标准编号" />
-        </el-form-item>
-        <el-form-item label="标准名称" required>
-          <el-input v-model="form.title" placeholder="请输入标准名称" />
-        </el-form-item>
-        <el-row :gutter="20">
-          <el-col :span="12">
+    <!-- 新建/编辑抽屉 -->
+    <el-drawer v-model="dialogVisible" size="720px" class="standard-editor-drawer" destroy-on-close>
+      <template #header>
+        <div class="editor-header">
+          <div>
+            <span class="editor-kicker">{{ editingRow ? '维护标准' : '录入标准' }}</span>
+            <h3>{{ editingRow ? '编辑标准' : '新建标准' }}</h3>
+          </div>
+          <el-tag v-if="editingRow" :type="statusType(editingRow.status)" effect="light" round>
+            {{ statusLabel(editingRow.status) }}
+          </el-tag>
+        </div>
+      </template>
+      <el-form :model="form" label-position="top" size="large" class="standard-editor-form">
+        <section class="form-section">
+          <div class="form-section-heading">
+            <span>01</span>
+            <div>
+              <h4>基础信息</h4>
+            </div>
+          </div>
+          <div class="form-grid">
+            <el-form-item label="标准编号" required>
+              <el-input v-model="form.standardCode" placeholder="例如 STD-001" />
+            </el-form-item>
+            <el-form-item label="版本号">
+              <el-input v-model="form.version" placeholder="如 V1.0" />
+            </el-form-item>
+          </div>
+          <el-form-item label="标准名称" required>
+            <el-input v-model="form.title" placeholder="请输入标准名称" />
+          </el-form-item>
+          <div class="form-grid">
             <el-form-item label="分类" required>
               <el-select v-model="form.category" placeholder="请选择分类" style="width: 100%">
                 <el-option label="法律法规" value="law" />
@@ -191,61 +240,66 @@
                 <el-option label="通用标准" value="system" />
               </el-select>
             </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="版本号">
-              <el-input v-model="form.version" placeholder="如 V1.0" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item label="描述">
-          <el-input
-            v-model="form.description"
-            type="textarea"
-            :rows="3"
-            placeholder="请输入标准描述"
-          />
-        </el-form-item>
-        <el-row :gutter="20">
-          <el-col :span="12">
             <el-form-item label="可见范围" required>
-              <el-select v-model="form.visibilityLevel" style="width: 100%">
-                <el-option label="全员可见" value="PUBLIC" />
-                <el-option label="域内可见" value="SCOPED" />
-              </el-select>
+              <el-radio-group v-model="form.visibilityLevel" class="visibility-radio-group">
+                <el-radio-button label="PUBLIC">全员可见</el-radio-button>
+                <el-radio-button label="SCOPED">域内可见</el-radio-button>
+              </el-radio-group>
             </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="维护域" required>
-              <el-select v-model="form.ownerScopeId" style="width: 100%">
-                <el-option
-                  v-for="scope in editableScopeOptions"
-                  :key="scope.id"
-                  :label="formatResourceScopeOptionLabel(scope)"
-                  :value="scope.id"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-        <el-form-item v-if="form.visibilityLevel === 'SCOPED'" label="共享可见范围">
-          <el-select
-            v-model="form.grantScopeIds"
-            multiple
-            clearable
-            collapse-tags
-            collapse-tags-tooltip
-            style="width: 100%"
-          >
-            <el-option
-              v-for="scope in grantScopeOptions"
-              :key="scope.id"
-              :label="formatResourceScopeOptionLabel(scope)"
-              :value="scope.id"
+          </div>
+          <el-form-item label="描述">
+            <el-input
+              v-model="form.description"
+              type="textarea"
+              :rows="3"
+              placeholder="概括适用范围、控制要求或引用场景"
             />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="附件">
+          </el-form-item>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section-heading">
+            <span>02</span>
+            <div>
+              <h4>权限范围</h4>
+            </div>
+          </div>
+          <el-form-item label="维护域" required>
+            <el-select v-model="form.ownerScopeId" style="width: 100%">
+              <el-option
+                v-for="scope in editableScopeOptions"
+                :key="scope.id"
+                :label="formatResourceScopeOptionLabel(scope)"
+                :value="scope.id"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item v-if="form.visibilityLevel === 'SCOPED'" label="共享可见范围">
+            <el-select
+              v-model="form.grantScopeIds"
+              multiple
+              clearable
+              collapse-tags
+              collapse-tags-tooltip
+              style="width: 100%"
+            >
+              <el-option
+                v-for="scope in grantScopeOptions"
+                :key="scope.id"
+                :label="formatResourceScopeOptionLabel(scope)"
+                :value="scope.id"
+              />
+            </el-select>
+          </el-form-item>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section-heading">
+            <span>03</span>
+            <div>
+              <h4>附件</h4>
+            </div>
+          </div>
           <div class="attachment-editor">
             <div v-if="editingAttachments.length > 0" class="attachment-section">
               <div class="attachment-section-title">已上传附件</div>
@@ -288,6 +342,7 @@
               :on-change="handleAttachmentFileChange"
               :on-remove="handleAttachmentFileRemove"
               :on-exceed="handleAttachmentFileExceed"
+              class="attachment-upload"
             >
               <el-button type="primary" plain>上传附件</el-button>
               <template #tip>
@@ -297,7 +352,7 @@
               </template>
             </el-upload>
           </div>
-        </el-form-item>
+        </section>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
@@ -311,7 +366,7 @@
           >{{ editingRow ? '保存并发布' : '立即发布' }}</el-button
         >
       </template>
-    </el-dialog>
+    </el-drawer>
 
     <!-- 升版弹窗 -->
     <el-dialog v-model="upgradeDialogVisible" title="升版标准" width="520px" destroy-on-close>
@@ -361,9 +416,7 @@
     <el-drawer v-model="drawerVisible" title="标准详情" size="560px" destroy-on-close>
       <div v-if="detailRow" class="detail-content">
         <el-descriptions :column="1" border>
-          <el-descriptions-item label="标准编号">{{
-            detailRow.standardCode
-          }}</el-descriptions-item>
+          <el-descriptions-item label="标准编号">{{ detailRow.standardCode }}</el-descriptions-item>
           <el-descriptions-item label="标准名称"
             ><strong>{{ detailRow.title }}</strong></el-descriptions-item
           >
@@ -408,11 +461,7 @@
             <span v-else>无</span>
           </el-descriptions-item>
           <el-descriptions-item label="我的权限">
-            <el-tag
-              :type="detailAccessState?.canEdit ? 'success' : 'info'"
-              effect="light"
-              round
-            >
+            <el-tag :type="detailAccessState?.canEdit ? 'success' : 'info'" effect="light" round>
               {{ detailAccessState?.canEdit ? '可编辑' : '只读' }}
             </el-tag>
           </el-descriptions-item>
@@ -427,7 +476,10 @@
             {{ detailRow.changeLog }}
           </el-descriptions-item>
           <el-descriptions-item label="附件">
-            <div v-if="detailRow.attachments.length > 0" class="attachment-list attachment-list--detail">
+            <div
+              v-if="detailRow.attachments.length > 0"
+              class="attachment-list attachment-list--detail"
+            >
               <div
                 v-for="attachment in detailRow.attachments"
                 :key="attachment.id"
@@ -735,7 +787,9 @@ const form = reactive({
   ownerScopeId: '',
   grantScopeIds: [] as string[],
 })
-const grantScopeOptions = computed(() => filterGrantScopeOptions(scopeOptions.value, form.ownerScopeId))
+const grantScopeOptions = computed(() =>
+  filterGrantScopeOptions(scopeOptions.value, form.ownerScopeId),
+)
 const editingAttachments = computed(() => editingRow.value?.attachments || [])
 
 const upgradeDialogVisible = ref(false)
@@ -779,6 +833,17 @@ const getVersionCount = (row: Standard) =>
   row.versionCount ||
   versionHistory.value.filter((item) => item.standardGroupId === row.standardGroupId).length ||
   1
+
+const standardStats = computed(() => {
+  const rows = tableData.value
+
+  return {
+    total: pagination.total,
+    active: rows.filter((item) => item.status === 'active').length,
+    draft: rows.filter((item) => item.status === 'draft').length,
+    scoped: rows.filter((item) => item.visibilityLevel === 'SCOPED').length,
+  }
+})
 
 onMounted(() => {
   void Promise.all([loadScopeOptions(), loadStandards()])
@@ -865,7 +930,9 @@ const refreshScopeDialogContext = async () => {
     await refreshStandardDialogContext(userStore.fetchUserInfo, loadScopeOptions)
     return true
   } catch {
-    ElMessage.error('\u52a0\u8f7d\u6700\u65b0\u7ef4\u62a4\u57df\u5931\u8d25\uff0c\u8bf7\u5237\u65b0\u9875\u9762\u540e\u91cd\u8bd5')
+    ElMessage.error(
+      '\u52a0\u8f7d\u6700\u65b0\u7ef4\u62a4\u57df\u5931\u8d25\uff0c\u8bf7\u5237\u65b0\u9875\u9762\u540e\u91cd\u8bd5',
+    )
     return false
   }
 }
@@ -880,7 +947,9 @@ const openDialog = async (row?: Standard) => {
     return
   }
   if (!row && !canCreateStandard.value) {
-    ElMessage.warning('\u5f53\u524d\u8d26\u53f7\u6ca1\u6709\u53ef\u521b\u5efa\u6807\u51c6\u7684\u7ef4\u62a4\u57df')
+    ElMessage.warning(
+      '\u5f53\u524d\u8d26\u53f7\u6ca1\u6709\u53ef\u521b\u5efa\u6807\u51c6\u7684\u7ef4\u62a4\u57df',
+    )
     return
   }
 
@@ -1101,9 +1170,13 @@ const handleRollback = async (targetVersion: Standard, version: string, reason: 
     )
     await loadStandards()
     detailRow.value = rollbackDraft
-    versionHistory.value = (await standardApi.versions(rollbackDraft.id)).map(normalizeStandardFromApi)
+    versionHistory.value = (await standardApi.versions(rollbackDraft.id)).map(
+      normalizeStandardFromApi,
+    )
 
-    ElMessage.success('\u5df2\u521b\u5efa\u56de\u9000\u8349\u7a3f\uff0c\u53ef\u7f16\u8f91\u540e\u53d1\u5e03')
+    ElMessage.success(
+      '\u5df2\u521b\u5efa\u56de\u9000\u8349\u7a3f\uff0c\u53ef\u7f16\u8f91\u540e\u53d1\u5e03',
+    )
   } finally {
     loading.value = false
   }
@@ -1115,11 +1188,15 @@ const handleDelete = (row: Standard) => {
     return
   }
 
-  ElMessageBox.confirm(`\u786e\u8ba4\u5220\u9664\u6807\u51c6\u300c${row.title}\u300d(${row.version}) \u5417\uff1f`, '\u8b66\u544a', {
-    type: 'warning',
-    confirmButtonText: '\u786e\u5b9a',
-    cancelButtonText: '\u53d6\u6d88',
-  }).then(async () => {
+  ElMessageBox.confirm(
+    `\u786e\u8ba4\u5220\u9664\u6807\u51c6\u300c${row.title}\u300d(${row.version}) \u5417\uff1f`,
+    '\u8b66\u544a',
+    {
+      type: 'warning',
+      confirmButtonText: '\u786e\u5b9a',
+      cancelButtonText: '\u53d6\u6d88',
+    },
+  ).then(async () => {
     loading.value = true
 
     try {
@@ -1210,10 +1287,14 @@ const uploadDateLabel = (row: Standard) => formatStandardUploadDate(row.createdA
 
 const statusSaveMessage = (status: Standard['status'], isEditing: boolean) => {
   if (status === 'active') {
-    return isEditing ? '\u6807\u51c6\u4fee\u6539\u5e76\u751f\u6548' : '\u6807\u51c6\u5df2\u53d1\u5e03'
+    return isEditing
+      ? '\u6807\u51c6\u4fee\u6539\u5e76\u751f\u6548'
+      : '\u6807\u51c6\u5df2\u53d1\u5e03'
   }
   if (status === 'archived') {
-    return isEditing ? '\u6807\u51c6\u5df2\u4fee\u6539\u5e76\u5f52\u6863' : '\u6807\u51c6\u5df2\u5f52\u6863'
+    return isEditing
+      ? '\u6807\u51c6\u5df2\u4fee\u6539\u5e76\u5f52\u6863'
+      : '\u6807\u51c6\u5df2\u5f52\u6863'
   }
   return isEditing ? '\u4fee\u6539\u5df2\u4fdd\u5b58' : '\u5df2\u4fdd\u5b58\u4e3a\u8349\u7a3f'
 }
@@ -1249,13 +1330,20 @@ const categoryType = (value: string) =>
   (({ law: 'danger', industry: 'warning', internal: 'primary', system: 'info' }) as any)[value] ||
   'info'
 const categoryLabel = (value: string) =>
-  (({ law: '\u6cd5\u5f8b\u6cd5\u89c4', industry: '\u884c\u4e1a\u51c6\u5219', internal: '\u5185\u90e8\u5236\u5ea6', system: '\u901a\u7528\u6807\u51c6' }) as any)[
-    value
-  ] || value
+  (
+    ({
+      law: '\u6cd5\u5f8b\u6cd5\u89c4',
+      industry: '\u884c\u4e1a\u51c6\u5219',
+      internal: '\u5185\u90e8\u5236\u5ea6',
+      system: '\u901a\u7528\u6807\u51c6',
+    }) as any
+  )[value] || value
 const statusType = (value: string) =>
   (({ active: 'success', draft: 'info', archived: 'warning' }) as any)[value] || 'info'
 const statusLabel = (value: string) =>
-  (({ active: '\u751f\u6548\u4e2d', draft: '\u8349\u7a3f', archived: '\u5df2\u5f52\u6863' }) as any)[value] || value
+  (
+    ({ active: '\u751f\u6548\u4e2d', draft: '\u8349\u7a3f', archived: '\u5df2\u5f52\u6863' }) as any
+  )[value] || value
 const visibilityLabel = (value: Standard['visibilityLevel']) =>
   value === 'PUBLIC' ? '全员可见' : '域内可见'
 
@@ -1336,38 +1424,381 @@ function validateAttachmentFile(file: File) {
 
   return true
 }
-
 </script>
 
 <style lang="scss" scoped>
 @use '@/styles/variables.scss' as *;
 
-.page-header {
+.standards-hero {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(420px, 0.9fr) auto;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
+.hero-copy,
+.hero-panel,
+.standards-toolbar,
+.table-shell,
+.pagination-wrapper {
+  background: oklch(99% 0.005 248);
+  border: 1px solid oklch(91% 0.016 248);
+  box-shadow: 0 10px 28px oklch(55% 0.035 248 / 8%);
+}
+
+.hero-copy {
+  min-height: 142px;
+  padding: 24px 28px;
+  border-radius: 18px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-  .page-title {
-    font-size: 24px;
-    font-weight: 700;
-    color: $iris-text-primary;
-    margin-bottom: 4px;
-    letter-spacing: -0.5px;
-  }
-  .page-subtitle {
-    font-size: 14px;
-    color: $iris-text-secondary;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.hero-kicker,
+.editor-kicker {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: oklch(50% 0.1 250);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 760;
+  color: oklch(24% 0.035 248);
+}
+
+.page-subtitle {
+  max-width: 52ch;
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: oklch(48% 0.03 248);
+}
+
+.hero-panel {
+  border-radius: 18px;
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1.35fr 1fr 1fr;
+  gap: 10px;
+}
+
+.hero-stat {
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: oklch(97.5% 0.01 248);
+  border: 1px solid oklch(92% 0.014 248);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.hero-stat-main {
+  grid-row: span 2;
+  background: oklch(95% 0.035 250);
+  border-color: oklch(85% 0.06 250);
+}
+
+.stat-label,
+.stat-note,
+.table-count {
+  font-size: 12px;
+  color: oklch(50% 0.028 248);
+}
+
+.hero-stat strong {
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 760;
+  color: oklch(28% 0.05 248);
+}
+
+.hero-stat-main strong {
+  font-size: 38px;
+  color: oklch(41% 0.14 250);
+}
+
+.hero-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.standards-toolbar {
+  margin-bottom: 18px;
+  padding: 16px 18px 0;
+  border-radius: 14px;
+
+  :deep(.el-form) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 10px;
   }
 }
 
+.keyword-input {
+  width: 260px;
+}
+
+.category-select {
+  width: 160px;
+}
+
+.status-select {
+  width: 132px;
+}
+
+.table-shell {
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.table-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid oklch(92% 0.014 248);
+
+  h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 720;
+    color: oklch(26% 0.035 248);
+  }
+
+  p {
+    margin-top: 5px;
+    font-size: 13px;
+    color: oklch(52% 0.028 248);
+  }
+}
+
+.standard-title-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: oklch(35% 0.1 250);
+    font-weight: 680;
+    white-space: nowrap;
+  }
+
+  small {
+    color: oklch(56% 0.026 248);
+    font-size: 12px;
+  }
+
+  &:hover span {
+    color: oklch(42% 0.15 250);
+  }
+
+  &:focus-visible {
+    border-radius: 6px;
+    outline: 2px solid oklch(68% 0.13 250);
+    outline-offset: 3px;
+  }
+}
+
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+
 .pagination-wrapper {
-  margin-top: 24px;
+  margin-top: 16px;
   display: flex;
   justify-content: flex-end;
-  padding: 16px 24px;
-  background: white;
+  padding: 14px 18px;
+  border-radius: 14px;
+}
+
+.editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  h3 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.25;
+    font-weight: 760;
+    color: oklch(25% 0.035 248);
+  }
+}
+
+.standard-editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  :deep(.el-form-item) {
+    margin-bottom: 12px;
+  }
+
+  :deep(.el-form-item:last-child) {
+    margin-bottom: 0;
+  }
+}
+
+.form-section {
+  padding: 14px;
+  border: 1px solid oklch(91% 0.014 248);
   border-radius: 12px;
-  box-shadow: $iris-shadow-sm;
+  background: oklch(98.5% 0.006 248);
+}
+
+.form-section-heading {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+
+  > span {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: oklch(94% 0.035 250);
+    color: oklch(41% 0.13 250);
+    font-size: 12px;
+    font-weight: 760;
+  }
+
+  h4 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 720;
+    color: oklch(26% 0.035 248);
+  }
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.visibility-radio-group {
+  width: 100%;
+
+  :deep(.el-radio-button) {
+    width: 50%;
+  }
+
+  :deep(.el-radio-button__inner) {
+    width: 100%;
+  }
+}
+
+:deep(.standard-editor-drawer) {
+  background: oklch(98% 0.006 248);
+}
+
+:deep(.standard-editor-drawer .el-drawer__header) {
+  margin-bottom: 0;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid oklch(91% 0.014 248);
+}
+
+:deep(.standard-editor-drawer .el-drawer__body) {
+  padding: 14px;
+  background: oklch(98% 0.006 248);
+  overflow-y: auto;
+}
+
+:deep(.standard-editor-drawer .el-drawer__footer) {
+  padding: 12px 20px;
+  border-top: 1px solid oklch(91% 0.014 248);
+  background: oklch(99% 0.005 248);
+}
+
+:deep(.table-shell .el-table) {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:deep(.table-shell .el-table th.el-table__cell) {
+  background: oklch(97% 0.01 248);
+}
+
+@media (max-width: 1180px) {
+  .standards-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .standards-hero {
+    gap: 12px;
+  }
+
+  .hero-copy,
+  .hero-panel,
+  .standards-toolbar,
+  .table-shell,
+  .pagination-wrapper {
+    border-radius: 12px;
+  }
+
+  .hero-copy {
+    min-height: auto;
+    padding: 18px;
+  }
+
+  .hero-panel,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .hero-stat-main {
+    grid-row: auto;
+  }
+
+  .page-title {
+    font-size: 23px;
+  }
+
+  .keyword-input,
+  .category-select,
+  .status-select {
+    width: 100%;
+  }
+
+  .table-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
 }
 
 .attachment-editor {
@@ -1402,7 +1833,14 @@ function validateAttachmentFile(file: File) {
   padding: 10px 12px;
   border: 1px solid $iris-border-light;
   border-radius: 10px;
-  background: #f8fafc;
+  background: oklch(97.5% 0.01 248);
+}
+
+.attachment-upload {
+  padding: 14px;
+  border: 1px dashed oklch(83% 0.035 248);
+  border-radius: 12px;
+  background: oklch(99% 0.004 248);
 }
 
 .attachment-info {
