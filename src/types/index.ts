@@ -258,8 +258,8 @@ export interface ControlChecklist {
   name: string
   description?: string
   version: string
-  primaryTagId?: string
-  secondaryTagIds: string[]
+  ownerScopeId: string
+  grants: ScopeGrant[]
   items: ChecklistItem[]
   status: 'draft' | 'active' | 'disabled'
   uploadDate: string
@@ -275,6 +275,25 @@ export interface ChecklistItem {
   controlFrequency: string
   evaluationType: string
   organizationIds: string[]
+}
+export interface ChecklistItemUpsertPayload {
+  id?: string
+  content: string
+  criterion: string
+  controlFrequency: string
+  evaluationType: string
+  organizationIds: string[]
+}
+export interface ChecklistUpsertPayload {
+  code: string
+  name: string
+  description?: string
+  version: string
+  ownerScopeId: string
+  grantScopeIds: string[]
+  status: ControlChecklist['status']
+  uploadDate?: string
+  items: ChecklistItemUpsertPayload[]
 }
 export interface Archive {
   id: string

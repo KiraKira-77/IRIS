@@ -9,6 +9,7 @@ import type {
   StandardUpgradePayload,
   StandardUpsertPayload,
   ControlChecklist,
+  ChecklistUpsertPayload,
   Archive,
   Personnel,
   ControlPlan,
@@ -55,9 +56,8 @@ export const standardApi = {
 export const checklistApi = {
   list: (params: PageQuery) => request.get<PageResult<ControlChecklist>>('/v1/checklists', params),
   detail: (id: string) => request.get<ControlChecklist>(`/v1/checklists/${id}`),
-  create: (data: Partial<ControlChecklist>) =>
-    request.post<ControlChecklist>('/v1/checklists', data),
-  update: (id: string, data: Partial<ControlChecklist>) =>
+  create: (data: ChecklistUpsertPayload) => request.post<ControlChecklist>('/v1/checklists', data),
+  update: (id: string, data: ChecklistUpsertPayload) =>
     request.put<ControlChecklist>(`/v1/checklists/${id}`, data),
   delete: (id: string) => request.delete(`/v1/checklists/${id}`),
 }

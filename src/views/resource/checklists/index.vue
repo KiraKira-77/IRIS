@@ -51,19 +51,26 @@
             placeholder="全部状态"
             clearable
             class="status-select"
+            @change="handleSearch"
           >
             <el-option label="启用" value="active" />
             <el-option label="草稿" value="draft" />
             <el-option label="停用" value="disabled" />
           </el-select>
         </el-form-item>
-        <el-form-item label="标签">
-          <el-select v-model="searchForm.tagId" placeholder="全部标签" clearable class="tag-select">
+        <el-form-item label="维护域">
+          <el-select
+            v-model="searchForm.scopeId"
+            placeholder="全部维护域"
+            clearable
+            class="scope-select"
+            @change="handleSearch"
+          >
             <el-option
-              v-for="tag in CHECKLIST_TAG_OPTIONS"
-              :key="tag.value"
-              :label="tag.label"
-              :value="tag.value"
+              v-for="scope in scopeOptions"
+              :key="scope.id"
+              :label="formatResourceScopeOptionLabel(scope)"
+              :value="scope.id"
             />
           </el-select>
         </el-form-item>
@@ -81,14 +88,15 @@
           <h3>清单台账</h3>
           <p>按最新筛选结果展示，可展开维护检查项。</p>
         </div>
-        <span class="table-count">当前 {{ filteredData.length }} 条</span>
+        <span class="table-count">当前页 {{ tableData.length }} 条</span>
       </div>
       <el-table
-        :data="filteredData"
+        :data="tableData"
         style="width: 100%"
         size="large"
         row-key="id"
         :expand-row-keys="expandedKeys"
+        v-loading="loading"
         @expand-change="handleExpandChange"
       >
         <el-table-column type="expand">
@@ -96,66 +104,52 @@
             <div class="checklist-detail">
               <div class="detail-header">
                 <h4>检查项列表 ({{ row.items?.length || 0 }})</h4>
-                <el-button
-                  type="primary"
-                  text
-                  :icon="Plus"
-                  size="small"
-                  @click="openItemDialog(row)"
-                  >添加检查项</el-button
-                >
               </div>
-              <el-table v-if="row.items?.length" :data="row.items" size="small" border>
-                <el-table-column type="index" label="序号" width="60" align="center" />
-                <el-table-column prop="content" label="检查内容" min-width="250">
-                  <template #default="{ row: item }">
-                    <span style="font-weight: 500">{{ item.content }}</span>
-                  </template>
-                </el-table-column>
-                <el-table-column
-                  prop="criterion"
-                  label="判断标准"
-                  min-width="250"
-                  show-overflow-tooltip
-                />
-                <el-table-column label="控制频率" width="120">
-                  <template #default="{ row: item }">
-                    {{ controlFrequencyLabel(item.controlFrequency) }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="评估类" width="120">
-                  <template #default="{ row: item }">
+              <div v-if="row.items?.length" class="item-table">
+                <div class="item-table-header">
+                  <span>序号</span>
+                  <span>检查内容</span>
+                  <span>判断标准</span>
+                  <span>控制频率</span>
+                  <span>评估类</span>
+                  <span>关联组织</span>
+                  <span>操作</span>
+                </div>
+                <div
+                  v-for="(item, index) in row.items"
+                  :key="item.id || index"
+                  class="item-table-row"
+                >
+                  <span class="item-cell item-sequence">{{ index + 1 }}</span>
+                  <span class="item-cell item-cell-strong" :title="item.content">
+                    {{ item.content }}
+                  </span>
+                  <span class="item-cell" :title="item.criterion">{{ item.criterion }}</span>
+                  <span class="item-cell">{{ controlFrequencyLabel(item.controlFrequency) }}</span>
+                  <span class="item-cell">
                     <el-tag type="info" effect="light" size="small">
                       {{ evaluationTypeLabel(item.evaluationType) }}
                     </el-tag>
-                  </template>
-                </el-table-column>
-                <el-table-column label="关联组织" min-width="180" show-overflow-tooltip>
-                  <template #default="{ row: item }">
+                  </span>
+                  <span class="item-cell" :title="organizationLabels(item.organizationIds).join('、')">
                     {{ organizationLabels(item.organizationIds).join('、') }}
-                  </template>
-                </el-table-column>
-                <el-table-column label="操作" width="120" fixed="right">
-                  <template #default="{ row: item, $index }">
-                    <el-button
-                      link
-                      type="primary"
-                      size="small"
-                      @click="openItemDialog(row, item, $index)"
+                  </span>
+                  <div class="item-actions">
+                    <el-button link type="primary" size="small" @click="openItemDialog(row, item, index)"
+                      >编辑</el-button
                     >
-                      编辑
-                    </el-button>
-                    <el-button
-                      link
-                      type="danger"
-                      size="small"
-                      @click="handleDeleteItem(row, $index)"
+                    <el-button link type="danger" size="small" @click="handleDeleteItem(row, index)"
                       >删除</el-button
                     >
-                  </template>
-                </el-table-column>
-              </el-table>
-              <el-empty v-else description="暂无检查项，点击上方按钮添加" :image-size="60" />
+                  </div>
+                </div>
+              </div>
+              <el-empty v-else description="暂无检查项" :image-size="60" />
+              <div class="detail-footer">
+                <el-button type="primary" :icon="Plus" size="small" @click="openItemDialog(row)"
+                  >添加检查项</el-button
+                >
+              </div>
             </div>
           </template>
         </el-table-column>
@@ -180,18 +174,18 @@
             <el-tag effect="plain" type="info">{{ row.version }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="标签" min-width="180">
+        <el-table-column label="维护域" min-width="150">
+          <template #default="{ row }">
+            <el-tag type="info" effect="plain" round>{{ scopeLabel(row.ownerScopeId) }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="共享域" min-width="180">
           <template #default="{ row }">
             <div class="tag-list">
-              <el-tag
-                v-for="tag in checklistTagLabels(row)"
-                :key="tag"
-                size="small"
-                effect="light"
-                round
-              >
-                {{ tag }}
+              <el-tag v-for="grant in row.grants" :key="grant.scopeId" size="small" effect="light" round>
+                {{ scopeLabel(grant.scopeId) }}
               </el-tag>
+              <span v-if="row.grants.length === 0" class="muted-text">-</span>
             </div>
           </template>
         </el-table-column>
@@ -214,6 +208,18 @@
         </el-table-column>
       </el-table>
     </section>
+
+    <div class="pagination-wrapper">
+      <el-pagination
+        v-model:current-page="pagination.page"
+        v-model:page-size="pagination.pageSize"
+        :page-sizes="[10, 20, 50]"
+        layout="total, sizes, prev, pager, next, jumper"
+        :total="pagination.total"
+        @size-change="handlePageSizeChange"
+        @current-change="handlePageChange"
+      />
+    </div>
 
     <!-- 新建/编辑清单抽屉 -->
     <el-drawer
@@ -275,23 +281,23 @@
           <div class="form-section-heading">
             <span>02</span>
             <div>
-              <h4>标签归类</h4>
+              <h4>域权限</h4>
             </div>
           </div>
           <div class="form-grid">
-            <el-form-item label="主标签" required>
-              <el-select v-model="form.primaryTagId" placeholder="选择主标签" style="width: 100%">
+            <el-form-item label="维护域" required>
+              <el-select v-model="form.ownerScopeId" placeholder="选择维护域" style="width: 100%">
                 <el-option
-                  v-for="tag in CHECKLIST_TAG_OPTIONS"
-                  :key="tag.value"
-                  :label="tag.label"
-                  :value="tag.value"
+                  v-for="scope in scopeOptions"
+                  :key="scope.id"
+                  :label="formatResourceScopeOptionLabel(scope)"
+                  :value="scope.id"
                 />
               </el-select>
             </el-form-item>
-            <el-form-item label="辅标签">
+            <el-form-item label="共享域">
               <el-select
-                v-model="form.secondaryTagIds"
+                v-model="form.grantScopeIds"
                 multiple
                 clearable
                 collapse-tags
@@ -299,10 +305,10 @@
                 style="width: 100%"
               >
                 <el-option
-                  v-for="tag in CHECKLIST_TAG_OPTIONS"
-                  :key="tag.value"
-                  :label="tag.label"
-                  :value="tag.value"
+                  v-for="scope in grantScopeOptions"
+                  :key="scope.id"
+                  :label="formatResourceScopeOptionLabel(scope)"
+                  :value="scope.id"
                 />
               </el-select>
             </el-form-item>
@@ -422,60 +428,107 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
-import { mockChecklists } from '@/mock'
-import type { ChecklistItem, ControlChecklist } from '@/types'
+import { checklistApi, resourceScopeApi } from '@/api'
+import type {
+  ChecklistItem,
+  ChecklistItemUpsertPayload,
+  ChecklistUpsertPayload,
+  ControlChecklist,
+  ResourceScopeOption,
+} from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   CHECKLIST_ORGANIZATION_OPTIONS,
-  CHECKLIST_TAG_OPTIONS,
   CONTROL_FREQUENCY_OPTIONS,
   EVALUATION_TYPE_OPTIONS,
   countChecklistItems,
+  normalizeChecklistFromApi,
+  normalizeChecklistPageFromApi,
   optionLabel,
-  tagLabels,
 } from '@/features/checklists/checklist-data'
+import { DEFAULT_RESOURCE_SCOPE_OPTIONS } from '@/features/permissions/user-access'
+import {
+  filterGrantScopeOptions,
+  formatResourceScopeOptionLabel,
+  mapResourceScopesToOptions,
+  resolveResourceScopeOptions,
+} from '@/features/permissions/resource-scope-adapter'
 
-const searchForm = reactive({ keyword: '', status: '', tagId: '' })
+const searchForm = reactive({ keyword: '', status: '', scopeId: '' })
 const expandedKeys = ref<string[]>([])
+const loading = ref(false)
+const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const scopeOptions = ref<ResourceScopeOption[]>([...DEFAULT_RESOURCE_SCOPE_OPTIONS])
 
-const tableData = ref<ControlChecklist[]>(mockChecklists.map((item) => ({ ...item })))
-
-const filteredData = computed(() => {
-  return tableData.value.filter((item) => {
-    if (
-      searchForm.keyword &&
-      !item.name.includes(searchForm.keyword) &&
-      !item.code.includes(searchForm.keyword)
-    )
-      return false
-    if (searchForm.status && item.status !== searchForm.status) return false
-    if (
-      searchForm.tagId &&
-      item.primaryTagId !== searchForm.tagId &&
-      !item.secondaryTagIds.includes(searchForm.tagId)
-    )
-      return false
-    return true
-  })
-})
+const tableData = ref<ControlChecklist[]>([])
 
 const checklistStats = computed(() => ({
-  total: filteredData.value.length,
-  active: filteredData.value.filter((item) => item.status === 'active').length,
-  draft: filteredData.value.filter((item) => item.status === 'draft').length,
-  items: filteredData.value.reduce((total, item) => total + countChecklistItems(item), 0),
+  total: pagination.total,
+  active: tableData.value.filter((item) => item.status === 'active').length,
+  draft: tableData.value.filter((item) => item.status === 'draft').length,
+  items: tableData.value.reduce((total, item) => total + countChecklistItems(item), 0),
 }))
 
-const handleSearch = () => {
-  /* computed handles filtering */
+onMounted(() => {
+  void Promise.all([loadScopeOptions(), loadChecklists()])
+})
+
+const loadScopeOptions = async () => {
+  try {
+    const scopes = await resourceScopeApi.list()
+    const mappedOptions = mapResourceScopesToOptions(scopes)
+
+    scopeOptions.value = resolveResourceScopeOptions(mappedOptions, DEFAULT_RESOURCE_SCOPE_OPTIONS)
+  } catch {
+    scopeOptions.value = [...DEFAULT_RESOURCE_SCOPE_OPTIONS]
+  }
 }
 
-const handleReset = () => {
+const loadChecklists = async () => {
+  loading.value = true
+  try {
+    const page = normalizeChecklistPageFromApi(
+      await checklistApi.list({
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        keyword: searchForm.keyword || undefined,
+        status: searchForm.status || undefined,
+        scopeId: searchForm.scopeId || undefined,
+      }),
+    )
+    tableData.value = page.list
+    pagination.total = page.total
+    pagination.page = page.page
+    pagination.pageSize = page.pageSize
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSearch = async () => {
+  pagination.page = 1
+  await loadChecklists()
+}
+
+const handleReset = async () => {
   searchForm.keyword = ''
   searchForm.status = ''
-  searchForm.tagId = ''
+  searchForm.scopeId = ''
+  pagination.page = 1
+  await loadChecklists()
+}
+
+const handlePageChange = async (page: number) => {
+  pagination.page = page
+  await loadChecklists()
+}
+
+const handlePageSizeChange = async (pageSize: number) => {
+  pagination.page = 1
+  pagination.pageSize = pageSize
+  await loadChecklists()
 }
 const handleExpandChange = (row: any, expandedRows: any[]) => {
   expandedKeys.value = expandedRows.map((r: any) => r.id)
@@ -489,10 +542,13 @@ const form = reactive({
   name: '',
   description: '',
   version: 'V1.0',
-  primaryTagId: '',
-  secondaryTagIds: [] as string[],
+  ownerScopeId: '',
+  grantScopeIds: [] as string[],
   status: 'draft' as ControlChecklist['status'],
 })
+const grantScopeOptions = computed(() =>
+  filterGrantScopeOptions(scopeOptions.value, form.ownerScopeId),
+)
 
 const openDialog = (row?: ControlChecklist) => {
   if (row) {
@@ -501,8 +557,8 @@ const openDialog = (row?: ControlChecklist) => {
     form.name = row.name
     form.description = row.description || ''
     form.version = row.version
-    form.primaryTagId = row.primaryTagId || ''
-    form.secondaryTagIds = [...row.secondaryTagIds]
+    form.ownerScopeId = row.ownerScopeId || ''
+    form.grantScopeIds = row.grants.map((grant) => grant.scopeId)
     form.status = row.status
   } else {
     editingRow.value = null
@@ -510,48 +566,41 @@ const openDialog = (row?: ControlChecklist) => {
     form.name = ''
     form.description = ''
     form.version = 'V1.0'
-    form.primaryTagId = ''
-    form.secondaryTagIds = []
+    form.ownerScopeId = scopeOptions.value[0]?.id || ''
+    form.grantScopeIds = []
     form.status = 'draft'
   }
   dialogVisible.value = true
 }
 
-const handleSaveChecklist = () => {
-  if (!form.code.trim() || !form.name.trim() || !form.version.trim() || !form.primaryTagId) {
-    ElMessage.warning('请填写清单编号、名称、版本和主标签')
+const handleSaveChecklist = async () => {
+  if (!form.code.trim() || !form.name.trim() || !form.version.trim() || !form.ownerScopeId) {
+    ElMessage.warning('请填写清单编号、名称、版本和维护域')
     return
   }
 
   const now = new Date().toISOString().slice(0, 10)
+  const payload: ChecklistUpsertPayload = {
+    code: form.code,
+    name: form.name,
+    description: form.description,
+    version: form.version,
+    ownerScopeId: form.ownerScopeId,
+    grantScopeIds: form.grantScopeIds.filter((scopeId) => scopeId !== form.ownerScopeId),
+    status: form.status,
+    uploadDate: editingRow.value?.uploadDate || now,
+    items: editingRow.value ? toItemPayloads(editingRow.value.items) : [],
+  }
 
   if (editingRow.value) {
-    editingRow.value.code = form.code
-    editingRow.value.name = form.name
-    editingRow.value.description = form.description
-    editingRow.value.version = form.version
-    editingRow.value.primaryTagId = form.primaryTagId
-    editingRow.value.secondaryTagIds = [...form.secondaryTagIds]
-    editingRow.value.status = form.status
-    editingRow.value.uploadDate = now
-    editingRow.value.updatedAt = now
+    const updated = normalizeChecklistFromApi(
+      await checklistApi.update(editingRow.value.id, payload),
+    )
+    replaceChecklistInTable(updated)
     ElMessage.success('修改已保存')
   } else {
-    const newItem: ControlChecklist = {
-      id: `chk-${Date.now()}`,
-      code: form.code,
-      name: form.name,
-      description: form.description,
-      version: form.version,
-      primaryTagId: form.primaryTagId,
-      secondaryTagIds: [...form.secondaryTagIds],
-      items: [],
-      status: form.status,
-      uploadDate: now,
-      createdAt: now,
-      updatedAt: now,
-    }
-    tableData.value.unshift(newItem)
+    await checklistApi.create(payload)
+    await loadChecklists()
     ElMessage.success('清单已创建')
   }
   dialogVisible.value = false
@@ -580,7 +629,7 @@ const openItemDialog = (row: ControlChecklist, item?: ChecklistItem, index?: num
   itemDialogVisible.value = true
 }
 
-const handleSaveItem = () => {
+const handleSaveItem = async () => {
   if (
     !itemForm.content.trim() ||
     !itemForm.criterion.trim() ||
@@ -597,12 +646,9 @@ const handleSaveItem = () => {
     return
   }
 
-  const items = checklist.items || []
-  const nextItem: ChecklistItem = {
-    id: `ci-${Date.now()}`,
-    checklistId: checklist.id,
-    sequence:
-      editingItemIndex.value === null ? items.length + 1 : items[editingItemIndex.value]!.sequence,
+  const items: Array<ChecklistItem | ChecklistItemUpsertPayload> = [...(checklist.items || [])]
+  const nextItem: ChecklistItemUpsertPayload = {
+    id: editingItemIndex.value === null ? undefined : items[editingItemIndex.value]!.id,
     content: itemForm.content,
     criterion: itemForm.criterion,
     controlFrequency: itemForm.controlFrequency,
@@ -613,35 +659,33 @@ const handleSaveItem = () => {
   if (editingItemIndex.value === null) {
     items.push(nextItem)
   } else {
-    items.splice(editingItemIndex.value, 1, {
-      ...nextItem,
-      id: items[editingItemIndex.value]!.id,
-    })
+    items.splice(editingItemIndex.value, 1, nextItem)
   }
 
-  checklist.items = items
-  checklist.updatedAt = new Date().toISOString().slice(0, 10)
+  const updated = normalizeChecklistFromApi(
+    await checklistApi.update(checklist.id, toChecklistPayload(checklist, items)),
+  )
+  replaceChecklistInTable(updated)
+  currentChecklist.value = updated
   ElMessage.success(editingItemIndex.value === null ? '检查项已添加' : '检查项已保存')
   itemDialogVisible.value = false
 }
 
 const handleCopy = (row: ControlChecklist) => {
-  const now = new Date().toISOString().slice(0, 10)
-  const copy: ControlChecklist = {
-    ...row,
-    id: `chk-${Date.now()}`,
-    code: `CL-2026-${String(tableData.value.length + 1).padStart(3, '0')}`,
+  void copyChecklist(row)
+}
+
+const copyChecklist = async (row: ControlChecklist) => {
+  const copy = await checklistApi.create({
+    ...toChecklistPayload(row, row.items),
+    code: `CL-2026-${String(pagination.total + 1).padStart(3, '0')}`,
     name: row.name + ' (副本)',
-    items: row.items.map((item) => ({
-      ...item,
-      id: `ci-${Date.now()}-${Math.random()}`,
-    })),
+    items: toItemPayloads(row.items).map(withoutItemId),
     status: 'draft',
-    uploadDate: now,
-    createdAt: now,
-    updatedAt: now,
-  }
-  tableData.value.unshift(copy)
+    uploadDate: new Date().toISOString().slice(0, 10),
+  })
+  tableData.value.unshift(normalizeChecklistFromApi(copy))
+  pagination.total += 1
   ElMessage.success('清单已复制')
 }
 
@@ -652,10 +696,8 @@ const handleDelete = async (row: ControlChecklist) => {
       confirmButtonText: '确认删除',
       cancelButtonText: '取消',
     })
-    const idx = tableData.value.findIndex((item) => item.id === row.id)
-    if (idx !== -1) {
-      tableData.value.splice(idx, 1)
-    }
+    await checklistApi.delete(row.id)
+    await loadChecklists()
     ElMessage.success('删除成功')
   } catch {
     // cancelled
@@ -669,15 +711,64 @@ const handleDeleteItem = async (checklist: ControlChecklist, index: number) => {
       confirmButtonText: '确认删除',
       cancelButtonText: '取消',
     })
-    checklist.items.splice(index, 1)
+    const items = checklist.items.filter((_item, itemIndex) => itemIndex !== index)
+    const updated = normalizeChecklistFromApi(
+      await checklistApi.update(checklist.id, toChecklistPayload(checklist, items)),
+    )
+    replaceChecklistInTable(updated)
+    currentChecklist.value = updated
     ElMessage.success('检查项已删除')
   } catch {
     // cancelled
   }
 }
 
-const checklistTagLabels = (checklist: ControlChecklist) =>
-  tagLabels(checklist.primaryTagId, checklist.secondaryTagIds)
+const toChecklistPayload = (
+  checklist: ControlChecklist,
+  items: Array<ChecklistItem | ChecklistItemUpsertPayload>,
+): ChecklistUpsertPayload => ({
+  code: checklist.code,
+  name: checklist.name,
+  description: checklist.description || '',
+  version: checklist.version,
+  ownerScopeId: checklist.ownerScopeId,
+  grantScopeIds: checklist.grants.map((grant) => grant.scopeId),
+  status: checklist.status,
+  uploadDate: checklist.uploadDate,
+  items: toItemPayloads(items),
+})
+
+const toItemPayloads = (
+  items: Array<ChecklistItem | ChecklistItemUpsertPayload>,
+): ChecklistItemUpsertPayload[] =>
+  items.map((item) => ({
+    id: item.id,
+    content: item.content,
+    criterion: item.criterion,
+    controlFrequency: item.controlFrequency,
+    evaluationType: item.evaluationType,
+    organizationIds: [...item.organizationIds],
+  }))
+
+const withoutItemId = (item: ChecklistItemUpsertPayload): ChecklistItemUpsertPayload => ({
+  content: item.content,
+  criterion: item.criterion,
+  controlFrequency: item.controlFrequency,
+  evaluationType: item.evaluationType,
+  organizationIds: [...item.organizationIds],
+})
+
+const replaceChecklistInTable = (checklist: ControlChecklist) => {
+  const index = tableData.value.findIndex((item) => item.id === checklist.id)
+  if (index === -1) {
+    tableData.value.unshift(checklist)
+    return
+  }
+  tableData.value.splice(index, 1, checklist)
+}
+
+const scopeLabel = (scopeId: string) =>
+  scopeOptions.value.find((scope) => scope.id === scopeId)?.label || scopeId
 
 const controlFrequencyLabel = (value: string) => optionLabel(CONTROL_FREQUENCY_OPTIONS, value)
 
@@ -707,7 +798,8 @@ const statusLabel = (status: ControlChecklist['status']) =>
 .hero-copy,
 .hero-panel,
 .checklists-toolbar,
-.table-shell {
+.table-shell,
+.pagination-wrapper {
   background: oklch(99% 0.005 248);
   border: 1px solid oklch(91% 0.016 248);
   box-shadow: 0 10px 28px oklch(55% 0.035 248 / 8%);
@@ -818,7 +910,7 @@ const statusLabel = (status: ControlChecklist['status']) =>
   width: 132px;
 }
 
-.tag-select {
+.scope-select {
   width: 150px;
 }
 
@@ -899,6 +991,18 @@ const statusLabel = (status: ControlChecklist['status']) =>
   gap: 2px;
 }
 
+.pagination-wrapper {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 18px;
+  border-radius: 14px;
+}
+
+.muted-text {
+  color: oklch(58% 0.02 248);
+}
+
 .checklist-detail {
   margin: 4px 12px 12px 54px;
   padding: 16px 18px;
@@ -916,6 +1020,80 @@ const statusLabel = (status: ControlChecklist['status']) =>
       color: oklch(26% 0.035 248);
       font-weight: 720;
     }
+  }
+
+  .item-table {
+    border: 1px solid oklch(91% 0.014 248);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .item-table-header,
+  .item-table-row {
+    display: grid;
+    grid-template-columns:
+      42px minmax(0, 1.35fr) minmax(0, 1.45fr) 78px 76px minmax(0, 0.9fr)
+      86px;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .item-table-header {
+    min-height: 34px;
+    padding: 0 10px;
+    background: oklch(97% 0.01 248);
+    border-bottom: 1px solid oklch(91% 0.014 248);
+    color: oklch(48% 0.028 248);
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .item-table-row {
+    min-height: 42px;
+    padding: 0 10px;
+    border-bottom: 1px solid oklch(93% 0.012 248);
+
+    &:last-child {
+      border-bottom: 0;
+    }
+  }
+
+  .item-cell {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: oklch(31% 0.035 248);
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .item-cell-strong {
+    color: oklch(27% 0.04 248);
+    font-weight: 680;
+  }
+
+  .item-sequence {
+    color: oklch(50% 0.1 250);
+    font-size: 12px;
+    font-weight: 760;
+    text-align: center;
+  }
+
+  .item-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+    white-space: nowrap;
+  }
+
+  .detail-footer {
+    display: flex;
+    justify-content: flex-start;
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid oklch(91% 0.014 248);
   }
 }
 
@@ -1039,6 +1217,16 @@ const statusLabel = (status: ControlChecklist['status']) =>
   .hero-actions {
     justify-content: flex-start;
   }
+
+  .checklist-detail {
+    .item-table-header,
+    .item-table-row {
+      grid-template-columns:
+        38px minmax(0, 1.15fr) minmax(0, 1.25fr) 72px 70px minmax(0, 0.8fr)
+        82px;
+      gap: 6px;
+    }
+  }
 }
 
 @media (max-width: 720px) {
@@ -1049,7 +1237,8 @@ const statusLabel = (status: ControlChecklist['status']) =>
   .hero-copy,
   .hero-panel,
   .checklists-toolbar,
-  .table-shell {
+  .table-shell,
+  .pagination-wrapper {
     border-radius: 12px;
   }
 
@@ -1073,7 +1262,7 @@ const statusLabel = (status: ControlChecklist['status']) =>
 
   .keyword-input,
   .status-select,
-  .tag-select {
+  .scope-select {
     width: 100%;
   }
 
@@ -1084,6 +1273,21 @@ const statusLabel = (status: ControlChecklist['status']) =>
 
   .checklist-detail {
     margin-left: 0;
+
+    .item-table-header,
+    .item-table-row {
+      grid-template-columns:
+        32px minmax(0, 1.1fr) minmax(0, 1.1fr) 58px 54px minmax(0, 0.75fr)
+        68px;
+      gap: 4px;
+      padding-left: 6px;
+      padding-right: 6px;
+    }
+
+    .item-cell,
+    .item-table-header {
+      font-size: 12px;
+    }
   }
 }
 </style>

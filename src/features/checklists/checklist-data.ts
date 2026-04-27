@@ -1,21 +1,30 @@
-import type { ControlChecklist } from '@/types'
+import type { ControlChecklist, PageResult } from '@/types'
 
 export interface ChecklistFieldDefinition {
   key: string
   label: string
 }
 
+export interface ChecklistApiPageRecord {
+  records?: ControlChecklist[]
+  list?: ControlChecklist[]
+  total?: number
+  pageNo?: number
+  page?: number
+  pageSize?: number
+}
+
 export const CHECKLIST_SEARCH_FIELDS: ChecklistFieldDefinition[] = [
   { key: 'name', label: '清单名称' },
   { key: 'status', label: '状态' },
-  { key: 'tags', label: '标签' },
+  { key: 'ownerScopeId', label: '维护域' },
 ]
 
 export const CHECKLIST_LIST_FIELDS: ChecklistFieldDefinition[] = [
   { key: 'name', label: '清单名称' },
   { key: 'itemCount', label: '检查项数' },
   { key: 'version', label: '版本' },
-  { key: 'tags', label: '标签' },
+  { key: 'ownerScopeId', label: '维护域' },
   { key: 'uploadDate', label: '上传日期' },
   { key: 'status', label: '状态' },
 ]
@@ -25,7 +34,8 @@ export const CHECKLIST_EDITOR_FIELDS: ChecklistFieldDefinition[] = [
   { key: 'name', label: '清单名称' },
   { key: 'description', label: '描述' },
   { key: 'version', label: '版本' },
-  { key: 'tags', label: '标签' },
+  { key: 'ownerScopeId', label: '维护域' },
+  { key: 'grantScopeIds', label: '共享域' },
   { key: 'status', label: '状态' },
 ]
 
@@ -35,17 +45,6 @@ export const CHECKLIST_ITEM_EDITOR_FIELDS: ChecklistFieldDefinition[] = [
   { key: 'controlFrequency', label: '控制频率' },
   { key: 'evaluationType', label: '评估类' },
   { key: 'organizationIds', label: '关联组织' },
-]
-
-export const CHECKLIST_TAG_OPTIONS = [
-  { label: '财务', value: 'finance' },
-  { label: '采购', value: 'purchase' },
-  { label: '资产', value: 'asset' },
-  { label: '合同', value: 'contract' },
-  { label: 'IT', value: 'it' },
-  { label: '人力', value: 'hr' },
-  { label: '销售', value: 'sales' },
-  { label: '运营', value: 'operation' },
 ]
 
 export const CONTROL_FREQUENCY_OPTIONS = [
@@ -81,10 +80,26 @@ export function optionLabel(options: { label: string; value: string }[], value: 
   return options.find((option) => option.value === value)?.label || value
 }
 
-export function tagLabels(primaryTagId?: string, secondaryTagIds: string[] = []): string[] {
-  const tagIds = [primaryTagId, ...secondaryTagIds].filter((tagId): tagId is string =>
-    Boolean(tagId),
-  )
+export function normalizeChecklistPageFromApi(
+  page: ChecklistApiPageRecord,
+): PageResult<ControlChecklist> {
+  const records = Array.isArray(page.records) ? page.records : page.list || []
 
-  return tagIds.map((tagId) => optionLabel(CHECKLIST_TAG_OPTIONS, tagId))
+  return {
+    list: records.map(normalizeChecklistFromApi),
+    total: Number(page.total || 0),
+    page: Number(page.pageNo || page.page || 1),
+    pageSize: Number(page.pageSize || 10),
+  }
+}
+
+export function normalizeChecklistFromApi(checklist: ControlChecklist): ControlChecklist {
+  return {
+    ...checklist,
+    description: checklist.description || '',
+    ownerScopeId: checklist.ownerScopeId || '',
+    grants: Array.isArray(checklist.grants) ? checklist.grants : [],
+    items: Array.isArray(checklist.items) ? checklist.items : [],
+    uploadDate: checklist.uploadDate || '',
+  }
 }

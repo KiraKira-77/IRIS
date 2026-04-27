@@ -429,9 +429,8 @@ export const mockChecklists: ControlChecklist[] = checklistNames.map((name, i) =
     name,
     description: `${name}的详细描述，涵盖该业务领域的主要控制点。`,
     version: i < 3 ? 'V2.0' : 'V1.0',
-    primaryTagId:
-      ['finance', 'purchase', 'asset', 'contract', 'it', 'hr', 'finance', 'sales'][i] || 'finance',
-    secondaryTagIds: i % 2 === 0 ? ['operation'] : [],
+    ownerScopeId: ['9001', '9003', '9003', '9003', '9002', '9003', '9001', '9003'][i] || '9001',
+    grants: i % 2 === 0 ? [{ scopeId: '9003', actions: ['view'] }] : [],
     items: checklistItemsMap[id] || [],
     status: i < 6 ? 'active' : ('draft' as any),
     uploadDate: `2026-02-${String(1 + i).padStart(2, '0')}`,
