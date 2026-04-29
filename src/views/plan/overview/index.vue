@@ -38,10 +38,11 @@
           <el-icon class="title-icon"><DataLine /></el-icon>
           <span>{{ selectedYear }}年 计划时间轴</span>
           <div class="legend">
-            <span class="legend-item"><span class="dot draft"></span>编制中</span>
-            <span class="legend-item"><span class="dot pending"></span>审批中</span>
+            <span class="legend-item"><span class="dot draft"></span>草稿</span>
+            <span class="legend-item"><span class="dot approved"></span>待启动</span>
             <span class="legend-item"><span class="dot in_progress"></span>进行中</span>
             <span class="legend-item"><span class="dot completed"></span>已完成</span>
+            <span class="legend-item"><span class="dot archived"></span>已归档</span>
           </div>
         </div>
       </template>
@@ -187,18 +188,40 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { DataLine, Grid, Calendar, CircleCheck, Clock } from '@element-plus/icons-vue'
-import { mockPlans, mockPersonnel } from '@/mock'
-import type { ControlPlan } from '@/types'
+import { planApi, systemUserApi } from '@/api'
+import { normalizePlanPage } from '@/features/plans/plan-data'
+import type { ControlPlan, SystemUser } from '@/types'
 
 const router = useRouter()
 const selectedYear = ref('2026')
+const plans = ref<ControlPlan[]>([])
+const users = ref<SystemUser[]>([])
 
-const onYearChange = () => {}
+onMounted(() => {
+  void Promise.all([loadPlans(), loadUsers()])
+})
 
-const filteredPlans = computed(() => mockPlans.filter((p) => String(p.year) === selectedYear.value))
+const onYearChange = () => loadPlans()
+
+const loadPlans = async () => {
+  const page = normalizePlanPage(
+    await planApi.list({
+      page: 1,
+      pageSize: 100,
+      year: selectedYear.value,
+    }),
+  )
+  plans.value = page.list
+}
+
+const loadUsers = async () => {
+  users.value = await systemUserApi.list()
+}
+
+const filteredPlans = computed(() => plans.value.filter((p) => String(p.year) === selectedYear.value))
 
 // Stats
 const statCards = computed(() => {
@@ -206,11 +229,13 @@ const statCards = computed(() => {
   const totalItems = plans.reduce((sum, p) => sum + p.items.length, 0)
   const inProgress = plans.filter((p) => p.status === 'in_progress').length
   const completed = plans.filter((p) => p.status === 'completed').length
+  const archived = plans.filter((p) => p.status === 'archived').length
   return [
     { label: '计划总数', value: plans.length, icon: Calendar, bg: '#eef2ff', color: '#4f46e5' },
     { label: '检查项总数', value: totalItems, icon: Grid, bg: '#f0fdf4', color: '#16a34a' },
     { label: '进行中', value: inProgress, icon: Clock, bg: '#fffbeb', color: '#d97706' },
     { label: '已完成', value: completed, icon: CircleCheck, bg: '#f0f9ff', color: '#0284c7' },
+    { label: '已归档', value: archived, icon: CircleCheck, bg: '#f8fafc', color: '#64748b' },
   ]
 })
 
@@ -218,26 +243,26 @@ const statCards = computed(() => {
 const statusType = (val: string) => {
   const map: Record<string, string> = {
     draft: 'info',
-    pending: 'warning',
     in_progress: 'success',
-    completed: '',
+    completed: 'success',
     approved: 'primary',
+    archived: 'info',
   }
   return (map[val] || 'info') as any
 }
 
 const statusLabel = (val: string) => {
   const map: Record<string, string> = {
-    draft: '编制中',
-    pending: '审批中',
+    draft: '草稿',
     approved: '待启动',
     in_progress: '进行中',
     completed: '已完成',
+    archived: '已归档',
   }
   return map[val] || val
 }
 
-const getPersonnelName = (id: string) => mockPersonnel.find((p) => p.id === id)?.name || id
+const getPersonnelName = (id: string) => users.value.find((p) => p.id === id)?.username || id
 
 // Date helpers
 const yearStart = computed(() => new Date(`${selectedYear.value}-01-01`))
@@ -393,7 +418,7 @@ const barStyle = (range: { start: string; end: string }) => {
     &.draft {
       background: #94a3b8;
     }
-    &.pending {
+    &.approved {
       background: #f59e0b;
     }
     &.in_progress {
@@ -401,6 +426,9 @@ const barStyle = (range: { start: string; end: string }) => {
     }
     &.completed {
       background: #3b82f6;
+    }
+    &.archived {
+      background: #64748b;
     }
   }
 }
@@ -576,9 +604,6 @@ const barStyle = (range: { start: string; end: string }) => {
   &.draft {
     background: linear-gradient(135deg, #cbd5e1, #94a3b8);
   }
-  &.pending {
-    background: linear-gradient(135deg, #fcd34d, #f59e0b);
-  }
   &.in_progress {
     background: linear-gradient(135deg, #4ade80, #22c55e);
   }
@@ -586,7 +611,10 @@ const barStyle = (range: { start: string; end: string }) => {
     background: linear-gradient(135deg, #60a5fa, #3b82f6);
   }
   &.approved {
-    background: linear-gradient(135deg, #818cf8, #6366f1);
+    background: linear-gradient(135deg, #fcd34d, #f59e0b);
+  }
+  &.archived {
+    background: linear-gradient(135deg, #94a3b8, #64748b);
   }
 
   .bar-label {
@@ -603,9 +631,6 @@ const barStyle = (range: { start: string; end: string }) => {
   &.draft {
     background: rgba(148, 163, 184, 0.35);
   }
-  &.pending {
-    background: rgba(245, 158, 11, 0.3);
-  }
   &.in_progress {
     background: rgba(34, 197, 94, 0.35);
   }
@@ -613,7 +638,10 @@ const barStyle = (range: { start: string; end: string }) => {
     background: rgba(59, 130, 246, 0.3);
   }
   &.approved {
-    background: rgba(99, 102, 241, 0.3);
+    background: rgba(245, 158, 11, 0.3);
+  }
+  &.archived {
+    background: rgba(100, 116, 139, 0.28);
   }
 
   .bar-inner {

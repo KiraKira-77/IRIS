@@ -102,7 +102,7 @@
                     <el-option
                       v-for="person in personnelOptions"
                       :key="person.id"
-                      :label="`${person.name} · ${person.department}`"
+                      :label="`${person.username} · ${person.account}`"
                       :value="person.id"
                     />
                   </el-select>
@@ -114,7 +114,7 @@
                     <el-option
                       v-for="person in reviewerOptions"
                       :key="person.id"
-                      :label="`${person.name} · ${person.department}`"
+                      :label="`${person.username} · ${person.account}`"
                       :value="person.id"
                     />
                   </el-select>
@@ -208,13 +208,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Back, DataAnalysis, Document, EditPen, WarningFilled } from '@element-plus/icons-vue'
-import { mockPersonnel, mockProjects, mockRectifications } from '@/mock'
-import type { CheckTask, RectificationOrder } from '@/types'
+import { systemUserApi } from '@/api'
+import { mockProjects, mockRectifications } from '@/mock'
+import type { CheckTask, RectificationOrder, SystemUser } from '@/types'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
@@ -239,6 +240,7 @@ const defaultForm = () => ({
 })
 
 const form = reactive(defaultForm())
+const users = ref<SystemUser[]>([])
 
 const rules: FormRules = {
   source: [{ required: true, message: '请选择整改来源', trigger: 'change' }],
@@ -252,12 +254,12 @@ const rules: FormRules = {
 }
 
 const projectOptions = computed(() => mockProjects.filter((project) => project.tasks.length > 0))
-const personnelOptions = computed(() => mockPersonnel.filter((person) => person.status === 'active'))
-const reviewerOptions = computed(() =>
-  personnelOptions.value.filter((person) =>
-    person.roles.some((role) => ['leader', 'reviewer', 'auditor'].includes(role)),
-  ),
-)
+const personnelOptions = computed(() => users.value.filter((person) => person.status === 1))
+const reviewerOptions = computed(() => personnelOptions.value)
+
+onMounted(async () => {
+  users.value = await systemUserApi.list()
+})
 
 const selectedProject = computed(() => mockProjects.find((project) => project.id === form.projectId))
 const taskOptions = computed(() => {
@@ -297,12 +299,16 @@ const handleTaskChange = () => {
   if (!selectedTask.value) return
   form.title = `关于${selectedTask.value.checkContent}的整改`
   form.description = `${selectedTask.value.checkContent}。整改标准：${selectedTask.value.checkCriterion}。请补充整改措施并提交证明材料。`
-  form.assigneeId = selectedTask.value.assigneeId || ''
-  form.reviewerId = selectedTask.value.reviewerId || ''
+  form.assigneeId = personnelOptions.value.some((person) => person.id === selectedTask.value?.assigneeId)
+    ? selectedTask.value.assigneeId || ''
+    : ''
+  form.reviewerId = reviewerOptions.value.some((person) => person.id === selectedTask.value?.reviewerId)
+    ? selectedTask.value.reviewerId || ''
+    : ''
   form.deadline = plusDays(5)
 }
 
-const getPerson = (id: string) => mockPersonnel.find((person) => person.id === id)
+const getPerson = (id: string) => personnelOptions.value.find((person) => person.id === id)
 
 const handleSubmit = async () => {
   if (form.source === 'task' && (!form.projectId || !form.taskId)) {
@@ -335,9 +341,9 @@ const handleSubmit = async () => {
     title: form.title,
     description: form.description,
     assigneeId: assignee.id,
-    assigneeName: assignee.name,
+    assigneeName: assignee.username,
     reviewerId: reviewer.id,
-    reviewerName: reviewer.name,
+    reviewerName: reviewer.username,
     status: 'in_progress',
     deadline: form.deadline,
     attachments: [],

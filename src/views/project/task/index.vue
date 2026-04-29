@@ -267,7 +267,12 @@
             style="width: 100%"
             placeholder="请选择负责人"
           >
-            <el-option v-for="p in personnelOptions" :key="p.id" :label="p.name" :value="p.id" />
+            <el-option
+              v-for="p in personnelOptions"
+              :key="p.id"
+              :label="`${p.username} (${p.account})`"
+              :value="p.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item label="审核人">
@@ -277,7 +282,12 @@
             style="width: 100%"
             placeholder="请选择审核人"
           >
-            <el-option v-for="p in personnelOptions" :key="p.id" :label="p.name" :value="p.id" />
+            <el-option
+              v-for="p in personnelOptions"
+              :key="p.id"
+              :label="`${p.username} (${p.account})`"
+              :value="p.id"
+            />
           </el-select>
         </el-form-item>
       </el-form>
@@ -300,8 +310,10 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back, UploadFilled, Tickets, UserFilled } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { mockProjects, mockChecklists, mockPersonnel } from '@/mock'
-import type { CheckTask, TaskAction } from '@/types'
+import { checklistApi, systemUserApi } from '@/api'
+import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
+import { mockProjects } from '@/mock'
+import type { CheckTask, ControlChecklist, SystemUser, TaskAction } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -317,11 +329,22 @@ const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ')
 const showDispatchDialog = ref(false)
 const dispatchPersonIds = ref<string[]>([])
 const dispatchReviewerId = ref('')
-const personnelOptions = computed(() => mockPersonnel)
+const personnelOptions = ref<SystemUser[]>([])
+const checklistOptions = ref<ControlChecklist[]>([])
 
-onMounted(() => {
+onMounted(async () => {
   loadTask()
+  await Promise.all([loadPersonnelOptions(), loadChecklistOptions()])
 })
+
+const loadPersonnelOptions = async () => {
+  personnelOptions.value = (await systemUserApi.list()).filter((user) => user.status === 1)
+}
+
+const loadChecklistOptions = async () => {
+  const page = normalizeChecklistPageFromApi(await checklistApi.list({ page: 1, pageSize: 100 }))
+  checklistOptions.value = page.list
+}
 
 const loadTask = () => {
   const taskId = route.params.id as string
@@ -353,7 +376,7 @@ const canEdit = computed(
 const canReview = computed(
   () => task.value && ['submitted', 'reviewing'].includes(task.value.status),
 )
-const getChecklistName = (id: string) => mockChecklists.find((c) => c.id === id)?.name || id
+const getChecklistName = (id: string) => checklistOptions.value.find((c) => c.id === id)?.name || id
 
 // ========== Dispatch to Many ==========
 const handleDispatchToMany = () => {
@@ -361,10 +384,10 @@ const handleDispatchToMany = () => {
   const proj = mockProjects.find((p) => p.id === projectId.value)
   if (!proj) return
 
-  const reviewer = mockPersonnel.find((p) => p.id === dispatchReviewerId.value)
+  const reviewer = personnelOptions.value.find((p) => p.id === dispatchReviewerId.value)
 
   dispatchPersonIds.value.forEach((personId, i) => {
-    const person = mockPersonnel.find((p) => p.id === personId)
+    const person = personnelOptions.value.find((p) => p.id === personId)
     if (!person) return
 
     const newTaskId = `t-${Date.now()}-${i}`
@@ -378,9 +401,9 @@ const handleDispatchToMany = () => {
       checkContent: task.value!.checkContent,
       checkCriterion: task.value!.checkCriterion,
       assigneeId: person.id,
-      assigneeName: person.name,
+      assigneeName: person.username,
       reviewerId: reviewer?.id,
-      reviewerName: reviewer?.name,
+      reviewerName: reviewer?.username,
       workOrderId: woId,
       workOrderStatus: '0',
       status: 'in_progress',
@@ -399,7 +422,7 @@ const handleDispatchToMany = () => {
           action: '生成工单',
           operator: 'admin',
           operatorName: '系统',
-          remark: `为 ${person.name} 生成工单 ${woId}`,
+          remark: `为 ${person.username} 生成工单 ${woId}`,
           createdAt: nowText(),
         },
       ],

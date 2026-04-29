@@ -15,12 +15,6 @@
           所属主计划：{{ parentPlan.name }}
         </el-tag>
       </div>
-      <div class="header-right">
-        <el-tag effect="plain" type="info" size="large" class="draft-tag">
-          <el-icon><EditPen /></el-icon>
-          草稿
-        </el-tag>
-      </div>
     </div>
 
     <!-- Steps -->
@@ -95,6 +89,38 @@
                       :key="p.value"
                       :label="p.label"
                       :value="p.value"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+            </el-row>
+
+            <el-row :gutter="24">
+              <el-col :span="12">
+                <el-form-item label="维护域" prop="ownerScopeId">
+                  <el-select v-model="form.ownerScopeId" placeholder="选择维护域" style="width: 100%">
+                    <el-option
+                      v-for="scope in activeResourceScopes"
+                      :key="scope.id"
+                      :label="scope.scopeName"
+                      :value="scope.id"
+                    />
+                  </el-select>
+                </el-form-item>
+              </el-col>
+              <el-col :span="12">
+                <el-form-item label="共享域">
+                  <el-select
+                    v-model="form.grantScopeIds"
+                    multiple
+                    placeholder="选择可查看该计划的共享域"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="scope in activeResourceScopes"
+                      :key="scope.id"
+                      :label="scope.scopeName"
+                      :value="scope.id"
                     />
                   </el-select>
                 </el-form-item>
@@ -203,7 +229,7 @@
                       <el-option
                         v-for="p in personnelOptions"
                         :key="p.id"
-                        :label="`${p.name} (${p.department})`"
+                        :label="`${p.username} (${p.account})`"
                         :value="p.id"
                       />
                     </el-select>
@@ -280,6 +306,10 @@
               <el-descriptions-item label="所属年度">{{ form.year }}</el-descriptions-item>
               <el-descriptions-item label="计划频次">{{ cycleLabel }}</el-descriptions-item>
               <el-descriptions-item label="属期">{{ form.period }}</el-descriptions-item>
+              <el-descriptions-item label="维护域">{{ getScopeName(form.ownerScopeId) }}</el-descriptions-item>
+              <el-descriptions-item label="共享域" :span="2">
+                {{ form.grantScopeIds.map(getScopeName).join('、') || '—' }}
+              </el-descriptions-item>
               <el-descriptions-item label="计划说明" :span="3">
                 {{ form.description || '—' }}
               </el-descriptions-item>
@@ -336,7 +366,7 @@
         </el-button>
         <el-button type="primary" size="large" @click="handleSubmit">
           <el-icon><Promotion /></el-icon>
-          提交审批
+          提交计划
         </el-button>
       </template>
     </div>
@@ -344,7 +374,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -363,8 +393,22 @@ import {
   ArrowRight,
   Promotion,
 } from '@element-plus/icons-vue'
-import { mockChecklists, mockPersonnel, mockPlans } from '@/mock'
-import type { PlanItem } from '@/types'
+import { checklistApi, planApi, resourceScopeApi, systemUserApi } from '@/api'
+import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
+import {
+  filterPlanAssigneeUsers,
+  resolvePlanAssigneeScopeIds,
+} from '@/features/plans/plan-assignee-options'
+import { PLAN_SUBMIT_STATUS, createPlanUpsertPayload } from '@/features/plans/plan-data'
+import type {
+  ControlChecklist,
+  ControlPlan,
+  PlanCycle,
+  PlanItem,
+  ResourceScope,
+  ResourceScopeMember,
+  SystemUser,
+} from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -376,9 +420,12 @@ const isEdit = ref(false)
 const editId = ref('')
 const isSubPlan = ref(false)
 const parentPlanId = ref('')
-const parentPlan = computed(() =>
-  parentPlanId.value ? mockPlans.find((p) => p.id === parentPlanId.value) : null,
-)
+const parentPlan = ref<ControlPlan | null>(null)
+const resourceScopes = ref<ResourceScope[]>([])
+const checklists = ref<ControlChecklist[]>([])
+const users = ref<SystemUser[]>([])
+const assigneeScopeMembers = ref<ResourceScopeMember[]>([])
+const activeResourceScopes = computed(() => resourceScopes.value.filter((scope) => scope.status === 1))
 
 const pageTitle = computed(() => {
   if (isEdit.value) return '编辑计划'
@@ -386,23 +433,27 @@ const pageTitle = computed(() => {
   return '新建年度计划'
 })
 
-onMounted(() => {
+onMounted(async () => {
+  await Promise.all([loadResourceScopes(), loadChecklists(), loadUsers()])
   // Edit mode
   const id = route.query.id as string
   if (id) {
-    const plan = mockPlans.find((p) => p.id === id)
+    const plan = await planApi.detail(id)
     if (plan) {
       isEdit.value = true
       editId.value = id
       if (plan.parentId) {
         isSubPlan.value = true
         parentPlanId.value = plan.parentId
+        parentPlan.value = await planApi.detail(plan.parentId)
       }
       form.name = plan.name
       form.year = String(plan.year)
       form.cycle = plan.cycle
       form.period = plan.period
       form.description = plan.description || ''
+      form.ownerScopeId = plan.ownerScopeId
+      form.grantScopeIds = plan.grants?.map((grant) => grant.scopeId) || []
       planItems.value = plan.items.map((item) => ({
         sequence: item.sequence,
         targetScope: item.targetScope,
@@ -413,18 +464,22 @@ onMounted(() => {
         remark: item.remark,
       }))
     }
+    await loadAssigneeScopeMembers()
     return
   }
 
   // Sub-plan creation mode
   const pid = route.query.parentId as string
   if (pid) {
-    const parent = mockPlans.find((p) => p.id === pid)
+    const parent = await planApi.detail(pid)
     if (parent) {
       isSubPlan.value = true
       parentPlanId.value = pid
+      parentPlan.value = parent
       form.year = String(parent.year)
       form.cycle = 'monthly'
+      form.ownerScopeId = parent.ownerScopeId
+      form.grantScopeIds = parent.grants?.map((grant) => grant.scopeId) || []
       // Inherit parent's checklist items as default
       planItems.value = parent.items.map((item, i) => ({
         sequence: i + 1,
@@ -437,6 +492,7 @@ onMounted(() => {
       }))
     }
   }
+  await loadAssigneeScopeMembers()
 })
 
 // ==================
@@ -455,6 +511,8 @@ const form = reactive({
   cycle: '',
   period: '',
   description: '',
+  ownerScopeId: '',
+  grantScopeIds: [] as string[],
 })
 
 const basicRules: FormRules = {
@@ -462,6 +520,7 @@ const basicRules: FormRules = {
   year: [{ required: true, message: '请选择年度', trigger: 'change' }],
   cycle: [{ required: true, message: '请选择频次', trigger: 'change' }],
   period: [{ required: true, message: '请选择属期', trigger: 'change' }],
+  ownerScopeId: [{ required: true, message: '请选择维护域', trigger: 'change' }],
 }
 
 const periodOptions = computed(() => {
@@ -523,17 +582,62 @@ const itemRules: FormRules = {
   dateRange: [{ required: true, message: '请选择时间范围', trigger: 'change' }],
 }
 
-const checklistOptions = computed(() => mockChecklists.filter((c) => c.status === 'active'))
+const checklistOptions = computed(() => checklists.value.filter((c) => c.status === 'active'))
 
-const personnelOptions = computed(() => mockPersonnel.filter((p) => p.status === 'active'))
+const assigneeScopeIds = computed(() =>
+  resolvePlanAssigneeScopeIds(form.ownerScopeId, form.grantScopeIds),
+)
+
+const personnelOptions = computed(() =>
+  filterPlanAssigneeUsers(users.value, assigneeScopeMembers.value),
+)
 
 const getChecklistName = (id: string) => {
-  return mockChecklists.find((c) => c.id === id)?.name || id
+  return checklists.value.find((c) => c.id === id)?.name || id
 }
 
 const getPersonnelName = (id: string) => {
-  return mockPersonnel.find((p) => p.id === id)?.name || id
+  return users.value.find((p) => p.id === id)?.username || id
 }
+
+const loadChecklists = async () => {
+  const page = normalizeChecklistPageFromApi(
+    await checklistApi.list({ page: 1, pageSize: 100, status: 'active' }),
+  )
+  checklists.value = page.list
+}
+
+const loadUsers = async () => {
+  users.value = await systemUserApi.list()
+}
+
+const loadAssigneeScopeMembers = async (scopeIds = assigneeScopeIds.value) => {
+  if (scopeIds.length === 0) {
+    assigneeScopeMembers.value = []
+    return
+  }
+
+  assigneeScopeMembers.value = (await Promise.all(scopeIds.map((id) => resourceScopeApi.listMembers(id)))).flat()
+  if (newItem.assignee && !personnelOptions.value.some((person) => person.id === newItem.assignee)) {
+    newItem.assignee = ''
+  }
+}
+
+const loadResourceScopes = async () => {
+  resourceScopes.value = await resourceScopeApi.list()
+  const firstScope = activeResourceScopes.value[0]
+  if (!form.ownerScopeId && firstScope) {
+    form.ownerScopeId = firstScope.id
+  }
+}
+
+const getScopeName = (id: string) => {
+  return resourceScopes.value.find((scope) => scope.id === id)?.scopeName || id
+}
+
+watch(assigneeScopeIds, (scopeIds) => {
+  void loadAssigneeScopeMembers(scopeIds)
+})
 
 const addPlanItem = async () => {
   if (!itemFormRef.value) return
@@ -590,62 +694,38 @@ const nextStep = async () => {
 const buildPlanData = () => ({
   name: form.name,
   year: Number(form.year),
-  cycle: form.cycle as any,
+  cycle: form.cycle as PlanCycle,
   period: form.period,
   description: form.description,
+  ownerScopeId: form.ownerScopeId,
+  grantScopeIds: form.grantScopeIds,
   parentId: isSubPlan.value ? parentPlanId.value : undefined,
   items: planItems.value.map((item, i) => ({
-    id: `pi-${Date.now()}-${i}`,
-    planId: editId.value || `pl-${Date.now()}`,
     ...item,
+    sequence: i + 1,
   })),
-  updatedAt: new Date().toISOString().split('T')[0],
 })
 
-const handleSaveDraft = () => {
+const handleSaveDraft = async () => {
+  const payload = createPlanUpsertPayload({ ...buildPlanData(), status: 'draft' })
   if (isEdit.value) {
-    const plan = mockPlans.find((p) => p.id === editId.value)
-    if (plan) {
-      Object.assign(plan, buildPlanData(), { status: 'draft' })
-    }
+    await planApi.update(editId.value, payload)
     ElMessage.success('计划已更新')
   } else {
-    const newId = `pl-${Date.now()}`
-    const data = buildPlanData()
-    data.items.forEach((item) => (item.planId = newId))
-    mockPlans.push({
-      id: newId,
-      code: `PL-${form.year}-${String(mockPlans.length + 1).padStart(3, '0')}`,
-      status: 'draft',
-      createdBy: 'admin',
-      createdAt: new Date().toISOString().split('T')[0],
-      ...data,
-    } as any)
+    await planApi.create(payload)
     ElMessage.success('计划已保存为草稿')
   }
   router.push('/plan/list')
 }
 
-const handleSubmit = () => {
+const handleSubmit = async () => {
+  const payload = createPlanUpsertPayload({ ...buildPlanData(), status: PLAN_SUBMIT_STATUS })
   if (isEdit.value) {
-    const plan = mockPlans.find((p) => p.id === editId.value)
-    if (plan) {
-      Object.assign(plan, buildPlanData(), { status: 'pending' })
-    }
-    ElMessage.success('计划已更新并提交审批')
+    await planApi.update(editId.value, payload)
+    ElMessage.success('计划已更新并进入待启动')
   } else {
-    const newId = `pl-${Date.now()}`
-    const data = buildPlanData()
-    data.items.forEach((item) => (item.planId = newId))
-    mockPlans.push({
-      id: newId,
-      code: `PL-${form.year}-${String(mockPlans.length + 1).padStart(3, '0')}`,
-      status: 'pending',
-      createdBy: 'admin',
-      createdAt: new Date().toISOString().split('T')[0],
-      ...data,
-    } as any)
-    ElMessage.success('计划已提交审批')
+    await planApi.create(payload)
+    ElMessage.success('计划已提交并进入待启动')
   }
   router.push('/plan/list')
 }
@@ -672,13 +752,6 @@ const handleSubmit = () => {
     color: $iris-text-primary;
     margin: 0;
     letter-spacing: -0.3px;
-  }
-
-  .draft-tag {
-    font-size: 13px;
-    .el-icon {
-      margin-right: 4px;
-    }
   }
 }
 

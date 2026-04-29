@@ -652,8 +652,8 @@ GET    /api/v1/plans                  # 计划列表
 POST   /api/v1/plans                  # 创建计划
 GET    /api/v1/plans/:id              # 计划详情
 PUT    /api/v1/plans/:id              # 更新计划
-POST   /api/v1/plans/:id/submit      # 提交审批
-POST   /api/v1/plans/:id/approve     # 审批通过
+POST   /api/v1/plans/:id/submit      # 提交计划，直接进入待启动
+POST   /api/v1/plans/:id/approve     # 审批通过（暂不使用）
 POST   /api/v1/plans/:id/changes     # 提交变更
 POST   /api/v1/plans/:id/generate    # 生成项目
 ```

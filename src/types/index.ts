@@ -327,14 +327,13 @@ export interface Personnel {
 // ===========================
 // 计划管控
 // ===========================
-export type PlanCycle = 'monthly' | 'quarterly' | 'yearly'
+export type PlanCycle = 'monthly' | 'quarterly' | 'half-yearly' | 'yearly'
 export type PlanStatus =
   | 'draft'
-  | 'pending'
   | 'approved'
   | 'in_progress'
   | 'completed'
-  | 'cancelled'
+  | 'archived'
 export interface ControlPlan {
   id: string
   code: string
@@ -344,6 +343,8 @@ export interface ControlPlan {
   period: string
   status: PlanStatus
   description?: string
+  ownerScopeId: string
+  grants?: ScopeGrant[]
   items: PlanItem[]
   parentId?: string // 父计划ID（子计划才有）
   children?: ControlPlan[] // 子计划列表（前端展示用）
@@ -363,6 +364,19 @@ export interface PlanItem {
   assignee?: string
   remark?: string
   projectId?: string
+}
+export interface PlanUpsertPayload {
+  code?: string
+  name: string
+  cycle: PlanCycle
+  year: number
+  period: string
+  status?: PlanStatus
+  description?: string
+  ownerScopeId: string
+  grantScopeIds?: string[]
+  parentId?: string
+  items: Array<Omit<PlanItem, 'id' | 'planId'> & { id?: string; planId?: string }>
 }
 export interface PlanChange {
   id: string

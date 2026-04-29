@@ -13,6 +13,7 @@ import type {
   Archive,
   Personnel,
   ControlPlan,
+  PlanUpsertPayload,
   PlanChange,
   Project,
   CheckTask,
@@ -79,12 +80,12 @@ export const personnelApi = {
 export const planApi = {
   list: (params: PageQuery) => request.get<PageResult<ControlPlan>>('/v1/plans', params),
   detail: (id: string) => request.get<ControlPlan>(`/v1/plans/${id}`),
-  create: (data: Partial<ControlPlan>) => request.post<ControlPlan>('/v1/plans', data),
-  update: (id: string, data: Partial<ControlPlan>) =>
+  create: (data: PlanUpsertPayload) => request.post<ControlPlan>('/v1/plans', data),
+  update: (id: string, data: PlanUpsertPayload) =>
     request.put<ControlPlan>(`/v1/plans/${id}`, data),
   delete: (id: string) => request.delete(`/v1/plans/${id}`),
-  submit: (id: string) => request.post(`/v1/plans/${id}/submit`),
-  approve: (id: string) => request.post(`/v1/plans/${id}/approve`),
+  submit: (id: string) => request.post<ControlPlan>(`/v1/plans/${id}/submit`),
+  approve: (id: string) => request.post<ControlPlan>(`/v1/plans/${id}/approve`),
   changes: (id: string) => request.get<PlanChange[]>(`/v1/plans/${id}/changes`),
   submitChange: (id: string, data: Partial<PlanChange>) =>
     request.post(`/v1/plans/${id}/changes`, data),

@@ -171,7 +171,7 @@
                   <el-option
                     v-for="p in personnelOptions"
                     :key="p.id"
-                    :label="`${p.name} - ${p.department}`"
+                    :label="`${p.username} - ${p.account}`"
                     :value="p.id"
                   />
                 </el-select>
@@ -237,8 +237,15 @@ import {
   ArrowRight,
   Promotion,
 } from '@element-plus/icons-vue'
-import { mockPlans, mockChecklists, mockPersonnel, mockProjects } from '@/mock'
-import type { ControlPlan } from '@/types'
+import { checklistApi, planApi, resourceScopeApi, systemUserApi } from '@/api'
+import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
+import {
+  filterPlanAssigneeUsers,
+  resolvePlanAssigneeScopeIds,
+} from '@/features/plans/plan-assignee-options'
+import { normalizePlanPage } from '@/features/plans/plan-data'
+import { mockProjects } from '@/mock'
+import type { ControlChecklist, ControlPlan, ResourceScopeMember, SystemUser } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -273,17 +280,21 @@ const basicRules: FormRules = {
 // ==================
 // Options
 // ==================
-const availablePlans = computed(() =>
-  mockPlans.filter((p) => ['approved', 'in_progress'].includes(p.status)),
-)
+const availablePlans = ref<ControlPlan[]>([])
+const checklistOptions = ref<ControlChecklist[]>([])
+const users = ref<SystemUser[]>([])
+const planScopeMembers = ref<ResourceScopeMember[]>([])
+const personnelOptions = computed(() => {
+  if (form.value.source !== 'plan' || !linkedPlan.value) {
+    return users.value.filter((user) => user.status === 1)
+  }
 
-const checklistOptions = computed(() => mockChecklists.filter((cl) => cl.status === 'active'))
-
-const personnelOptions = computed(() => mockPersonnel)
+  return filterPlanAssigneeUsers(users.value, planScopeMembers.value)
+})
 
 const generatedTaskCount = computed(() => {
   return form.value.checklistIds.reduce((sum, clId) => {
-    const cl = mockChecklists.find((c) => c.id === clId)
+    const cl = checklistOptions.value.find((c) => c.id === clId)
     return sum + (cl?.items.length || 0)
   }, 0)
 })
@@ -291,10 +302,45 @@ const generatedTaskCount = computed(() => {
 // ==================
 // Events
 // ==================
-const onPlanChange = (planId: string) => {
-  const plan = mockPlans.find((p) => p.id === planId)
+const loadAvailablePlans = async () => {
+  const page = normalizePlanPage(await planApi.list({ page: 1, pageSize: 100 }))
+  availablePlans.value = page.list.filter((p) => ['approved', 'in_progress'].includes(p.status))
+}
+
+const loadChecklistOptions = async () => {
+  const page = normalizeChecklistPageFromApi(
+    await checklistApi.list({ page: 1, pageSize: 100, status: 'active' }),
+  )
+  checklistOptions.value = page.list.filter((cl) => cl.status === 'active')
+}
+
+const loadPersonnelOptions = async () => {
+  users.value = await systemUserApi.list()
+}
+
+const loadLinkedPlanScopeMembers = async (plan: ControlPlan) => {
+  const scopeIds = resolvePlanAssigneeScopeIds(
+    plan.ownerScopeId,
+    plan.grants?.map((grant) => grant.scopeId) || [],
+  )
+  planScopeMembers.value = (
+    await Promise.all(scopeIds.map((scopeId) => resourceScopeApi.listMembers(scopeId)))
+  ).flat()
+  pruneUnavailableTeamMembers()
+}
+
+const pruneUnavailableTeamMembers = () => {
+  const allowedUserIds = new Set(personnelOptions.value.map((user) => user.id))
+  teamMembers.value = teamMembers.value.filter(
+    (member) => !member.personnelId || allowedUserIds.has(member.personnelId),
+  )
+}
+
+const onPlanChange = async (planId: string) => {
+  const plan = availablePlans.value.find((p) => p.id === planId) || (await planApi.detail(planId))
   if (plan) {
     linkedPlan.value = plan
+    await loadLinkedPlanScopeMembers(plan)
     form.value.name = `${plan.name} - 执行项目`
     // Auto-select checklists from plan items
     const clIds = new Set<string>()
@@ -306,10 +352,10 @@ const onPlanChange = (planId: string) => {
 }
 
 const onPersonnelChange = (idx: number, personnelId: string) => {
-  const p = mockPersonnel.find((pp) => pp.id === personnelId)
+  const p = personnelOptions.value.find((pp) => pp.id === personnelId)
   const member = teamMembers.value[idx]
   if (p && member) {
-    member.personnelName = p.name
+    member.personnelName = p.username
   }
 }
 
@@ -325,12 +371,13 @@ const toggleChecklist = (id: string) => {
 // ==================
 // Init from planId query
 // ==================
-onMounted(() => {
+onMounted(async () => {
+  await Promise.all([loadAvailablePlans(), loadChecklistOptions(), loadPersonnelOptions()])
   const planId = route.query.planId as string
   if (planId) {
     form.value.source = 'plan'
     form.value.planId = planId
-    onPlanChange(planId)
+    await onPlanChange(planId)
     form.value.startDate = today()
   }
 })
@@ -362,7 +409,7 @@ const handleSubmit = () => {
 
   const newId = `proj-${Date.now()}`
   const tasks = form.value.checklistIds.flatMap((clId) => {
-    const cl = mockChecklists.find((c) => c.id === clId)
+    const cl = checklistOptions.value.find((c) => c.id === clId)
     if (!cl) return []
     return cl.items.map((item, i) => ({
       id: `t-${Date.now()}-${clId}-${i}`,

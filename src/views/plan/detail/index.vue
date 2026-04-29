@@ -47,6 +47,10 @@
           <el-descriptions-item label="所属年度">{{ plan.year }}</el-descriptions-item>
           <el-descriptions-item label="属期">{{ plan.period }}</el-descriptions-item>
           <el-descriptions-item label="频次">{{ cycleLabel }}</el-descriptions-item>
+          <el-descriptions-item label="维护域">{{ getScopeName(plan.ownerScopeId) }}</el-descriptions-item>
+          <el-descriptions-item label="共享域" :span="2">
+            {{ plan.grants?.map((grant) => getScopeName(grant.scopeId)).join('、') || '—' }}
+          </el-descriptions-item>
           <el-descriptions-item v-if="parentPlanInfo" label="所属主计划" :span="3">
             <el-link type="primary" @click="router.push(`/plan/detail/${parentPlanInfo.id}`)">
               {{ parentPlanInfo.name }}
@@ -188,25 +192,59 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back, Document, List, FolderOpened, Plus } from '@element-plus/icons-vue'
-import { mockPlans, mockChecklists, mockPersonnel } from '@/mock'
+import { checklistApi, planApi, resourceScopeApi, systemUserApi } from '@/api'
+import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
+import { normalizePlanPage } from '@/features/plans/plan-data'
+import type { ControlChecklist, ControlPlan, ResourceScope, SystemUser } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 
-const plan = computed(() => mockPlans.find((p) => p.id === route.params.id))
+const plan = ref<ControlPlan | null>(null)
+const allPlans = ref<ControlPlan[]>([])
+const resourceScopes = ref<ResourceScope[]>([])
+const checklists = ref<ControlChecklist[]>([])
+const users = ref<SystemUser[]>([])
 
 const parentPlanInfo = computed(() => {
   if (!plan.value?.parentId) return null
-  return mockPlans.find((p) => p.id === plan.value!.parentId)
+  return allPlans.value.find((p) => p.id === plan.value!.parentId) || null
 })
 
 const childPlans = computed(() => {
   if (!plan.value || plan.value.parentId) return []
-  return mockPlans.filter((p) => p.parentId === plan.value!.id)
+  return allPlans.value.filter((p) => p.parentId === plan.value!.id)
 })
+
+onMounted(() => {
+  loadData()
+})
+
+watch(
+  () => route.params.id,
+  () => {
+    loadData()
+  },
+)
+
+const loadData = async () => {
+  const id = route.params.id as string
+  const [detail, page, scopes, checklistPage, systemUsers] = await Promise.all([
+    planApi.detail(id),
+    planApi.list({ page: 1, pageSize: 100 }),
+    resourceScopeApi.list(),
+    checklistApi.list({ page: 1, pageSize: 100 }),
+    systemUserApi.list(),
+  ])
+  plan.value = detail
+  allPlans.value = normalizePlanPage(page).list
+  resourceScopes.value = scopes
+  checklists.value = normalizeChecklistPageFromApi(checklistPage).list
+  users.value = systemUsers
+}
 
 const cycleLabel = computed(() => {
   const map: Record<string, string> = {
@@ -221,28 +259,33 @@ const cycleLabel = computed(() => {
 const statusType = (val?: string) => {
   const map: Record<string, string> = {
     draft: 'info',
-    pending: 'warning',
     approved: 'primary',
     in_progress: 'success',
-    completed: 'info',
+    completed: 'success',
+    archived: 'info',
   }
   return (map[val || ''] || 'info') as any
 }
 
 const statusLabel = (val?: string) => {
   const map: Record<string, string> = {
-    draft: '编制中',
-    pending: '审批中',
+    draft: '草稿',
     approved: '待启动',
     in_progress: '进行中',
     completed: '已完成',
+    archived: '已归档',
   }
   return map[val || ''] || val || ''
 }
 
-const getChecklistName = (id: string) => mockChecklists.find((c) => c.id === id)?.name || id
+const getChecklistName = (id: string) => checklists.value.find((c) => c.id === id)?.name || id
 
-const getPersonnelName = (id: string) => mockPersonnel.find((p) => p.id === id)?.name || id
+const getPersonnelName = (id: string) => users.value.find((p) => p.id === id)?.username || id
+
+const getScopeName = (id?: string) => {
+  if (!id) return '—'
+  return resourceScopes.value.find((scope) => scope.id === id)?.scopeName || id
+}
 </script>
 
 <style lang="scss" scoped>
