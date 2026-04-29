@@ -359,12 +359,16 @@
         下一步
         <el-icon class="el-icon--right"><ArrowRight /></el-icon>
       </el-button>
+      <el-button v-if="isEdit" type="primary" size="large" @click="handleSaveEdit">
+        <el-icon><EditPen /></el-icon>
+        保存修改
+      </el-button>
       <template v-if="currentStep === 2">
-        <el-button size="large" @click="handleSaveDraft">
+        <el-button v-if="canSaveDraft" size="large" @click="handleSaveDraft">
           <el-icon><EditPen /></el-icon>
           保存草稿
         </el-button>
-        <el-button type="primary" size="large" @click="handleSubmit">
+        <el-button v-if="canSubmitPlan" type="primary" size="large" @click="handleSubmit">
           <el-icon><Promotion /></el-icon>
           提交计划
         </el-button>
@@ -409,6 +413,7 @@ import type {
   ControlPlan,
   PlanCycle,
   PlanItem,
+  PlanStatus,
   ResourceScope,
   ResourceScopeMember,
   SystemUser,
@@ -422,6 +427,7 @@ const route = useRoute()
 // ==================
 const isEdit = ref(false)
 const editId = ref('')
+const currentPlanStatus = ref<PlanStatus>('draft')
 const isSubPlan = ref(false)
 const parentPlanId = ref('')
 const parentPlan = ref<ControlPlan | null>(null)
@@ -446,6 +452,7 @@ onMounted(async () => {
     if (plan) {
       isEdit.value = true
       editId.value = id
+      currentPlanStatus.value = plan.status
       if (plan.parentId) {
         isSubPlan.value = true
         parentPlanId.value = plan.parentId
@@ -512,6 +519,9 @@ onMounted(async () => {
 const currentStep = ref(0)
 const basicFormRef = ref<FormInstance>()
 const itemFormRef = ref<FormInstance>()
+
+const canSaveDraft = computed(() => !isEdit.value || currentPlanStatus.value === 'draft')
+const canSubmitPlan = computed(() => !isEdit.value || currentPlanStatus.value === 'draft')
 
 // ==================
 // Step 1: Basic Info
@@ -751,7 +761,16 @@ const buildPlanData = () => ({
   })),
 })
 
+const validateBasicInfo = async () => {
+  if (!basicFormRef.value) return false
+  return await basicFormRef.value.validate().catch(() => false)
+}
+
 const handleSaveDraft = async () => {
+  if (!canSaveDraft.value) return
+  const valid = await validateBasicInfo()
+  if (!valid) return
+
   const payload = createPlanUpsertPayload({ ...buildPlanData(), status: 'draft' })
   if (isEdit.value) {
     await planApi.update(editId.value, payload)
@@ -763,7 +782,20 @@ const handleSaveDraft = async () => {
   router.push('/plan/list')
 }
 
+const handleSaveEdit = async () => {
+  const valid = await validateBasicInfo()
+  if (!valid) return
+
+  const payload = createPlanUpsertPayload({ ...buildPlanData(), status: currentPlanStatus.value })
+  await planApi.update(editId.value, payload)
+  ElMessage.success('计划修改已保存')
+  router.push('/plan/list')
+}
+
 const handleSubmit = async () => {
+  const valid = await validateBasicInfo()
+  if (!valid) return
+
   const payload = createPlanUpsertPayload({ ...buildPlanData(), status: PLAN_SUBMIT_STATUS })
   if (isEdit.value) {
     await planApi.update(editId.value, payload)

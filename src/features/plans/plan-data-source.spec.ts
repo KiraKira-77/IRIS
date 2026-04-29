@@ -86,6 +86,22 @@ describe('plan related pages data sources', () => {
     expect(planListSource).not.toContain('提交审批')
   })
 
+  it('allows editing plans to save changes from any step without reverting approved plans to draft', () => {
+    const actionsStart = planCreateSource.indexOf('<div class="bottom-actions">')
+    const actionsEnd = planCreateSource.indexOf('</div>\n  </div>\n</template>', actionsStart)
+    const actionsSource = planCreateSource.slice(actionsStart, actionsEnd)
+    const editSaveStart = planCreateSource.indexOf('const handleSaveEdit = async')
+    const editSaveEnd = planCreateSource.indexOf('const handleSubmit = async', editSaveStart)
+    const editSaveSource = planCreateSource.slice(editSaveStart, editSaveEnd)
+
+    expect(actionsSource).toContain('v-if="isEdit"')
+    expect(actionsSource).toContain('handleSaveEdit')
+    expect(actionsSource).toContain('保存修改')
+    expect(actionsSource).toContain('v-if="canSaveDraft"')
+    expect(editSaveSource).toContain('currentPlanStatus.value')
+    expect(editSaveSource).not.toContain("status: 'draft'")
+  })
+
   it('uses the current plan lifecycle states without pending or cancelled', () => {
     expect(typeSource).toContain("| 'archived'")
     expect(typeSource).not.toContain("| 'cancelled'")
