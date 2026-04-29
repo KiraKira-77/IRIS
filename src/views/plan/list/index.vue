@@ -186,7 +186,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { planApi } from '@/api'
-import { normalizePlanPage } from '@/features/plans/plan-data'
+import { normalizePlanPage, sortControlPlansByPeriod } from '@/features/plans/plan-data'
 import type { ControlPlan } from '@/types'
 
 const router = useRouter()
@@ -215,7 +215,7 @@ const treeData = computed(() => {
   const roots = allPlans.value.filter((p) => !p.parentId)
   return roots
     .map((root) => {
-      const children = allPlans.value.filter((p) => p.parentId === root.id)
+      const children = sortControlPlansByPeriod(allPlans.value.filter((p) => p.parentId === root.id))
       return { ...root, children }
     })
     .filter((root) => {

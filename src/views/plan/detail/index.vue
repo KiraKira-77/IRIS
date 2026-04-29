@@ -197,7 +197,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Back, Document, List, FolderOpened, Plus } from '@element-plus/icons-vue'
 import { checklistApi, planApi, resourceScopeApi, systemUserApi } from '@/api'
 import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
-import { normalizePlanPage } from '@/features/plans/plan-data'
+import { normalizePlanPage, sortControlPlansByPeriod } from '@/features/plans/plan-data'
 import type { ControlChecklist, ControlPlan, ResourceScope, SystemUser } from '@/types'
 
 const route = useRoute()
@@ -216,7 +216,7 @@ const parentPlanInfo = computed(() => {
 
 const childPlans = computed(() => {
   if (!plan.value || plan.value.parentId) return []
-  return allPlans.value.filter((p) => p.parentId === plan.value!.id)
+  return sortControlPlansByPeriod(allPlans.value.filter((p) => p.parentId === plan.value!.id))
 })
 
 onMounted(() => {

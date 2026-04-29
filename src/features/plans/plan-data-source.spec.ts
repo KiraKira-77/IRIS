@@ -115,4 +115,9 @@ describe('plan related pages data sources', () => {
     expect(planCreateSource).toContain('resolvePlanPeriodDateRange')
     expect(planCreateSource).toContain('applySubPlanPeriodDateRange')
   })
+
+  it('sorts child plans by plan period in list and detail pages', () => {
+    expect(planListSource).toContain('sortControlPlansByPeriod')
+    expect(planDetailSource).toContain('sortControlPlansByPeriod')
+  })
 })

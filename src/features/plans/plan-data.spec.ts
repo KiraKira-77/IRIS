@@ -5,25 +5,30 @@ import {
   createPlanUpsertPayload,
   normalizePlanPage,
   resolvePlanPeriodDateRange,
+  sortControlPlansByPeriod,
 } from './plan-data'
 
 describe('plan-data', () => {
+  const createPlan = (overrides: Partial<ControlPlan>) =>
+    ({
+      id: overrides.id || '9001',
+      code: overrides.code || 'PL-2026-001',
+      name: overrides.name || '2026 annual control plan',
+      cycle: overrides.cycle || 'yearly',
+      year: overrides.year || 2026,
+      period: overrides.period || 'full-year',
+      status: overrides.status || 'draft',
+      ownerScopeId: overrides.ownerScopeId || '9001',
+      grants: overrides.grants || [{ scopeId: '9002', actions: ['view'] }],
+      items: overrides.items || [],
+      parentId: overrides.parentId,
+      createdBy: overrides.createdBy || '2001',
+      createdAt: overrides.createdAt || '2026-04-27T10:00:00',
+      updatedAt: overrides.updatedAt || '2026-04-27T10:00:00',
+    }) satisfies ControlPlan
+
   it('normalizes backend page records into frontend list shape', () => {
-    const plan = {
-      id: '9001',
-      code: 'PL-2026-001',
-      name: '2026 annual control plan',
-      cycle: 'yearly',
-      year: 2026,
-      period: 'full-year',
-      status: 'draft',
-      ownerScopeId: '9001',
-      grants: [{ scopeId: '9002', actions: ['view'] }],
-      items: [],
-      createdBy: '2001',
-      createdAt: '2026-04-27T10:00:00',
-      updatedAt: '2026-04-27T10:00:00',
-    } satisfies ControlPlan
+    const plan = createPlan({})
 
     const page = normalizePlanPage({
       records: [plan],
@@ -94,6 +99,33 @@ describe('plan-data', () => {
     expect(resolvePlanPeriodDateRange(2028, 'monthly', 'M2')).toEqual([
       '2028-02-01',
       '2028-02-29',
+    ])
+  })
+
+  it('sorts child plans by year and period instead of creation order', () => {
+    const plans = [
+      createPlan({ id: 'm12', cycle: 'monthly', period: 'M12' }),
+      createPlan({ id: 'm2', cycle: 'monthly', period: 'M2' }),
+      createPlan({ id: 'm1', cycle: 'monthly', period: 'M1' }),
+    ]
+
+    expect(sortControlPlansByPeriod(plans).map((plan) => plan.id)).toEqual(['m1', 'm2', 'm12'])
+    expect(plans.map((plan) => plan.id)).toEqual(['m12', 'm2', 'm1'])
+  })
+
+  it('sorts quarterly and half-yearly child plans by their period start date', () => {
+    const plans = [
+      createPlan({ id: 'q4', cycle: 'quarterly', period: 'Q4' }),
+      createPlan({ id: 'h1', cycle: 'half-yearly', period: 'H1' }),
+      createPlan({ id: 'q2', cycle: 'quarterly', period: 'Q2' }),
+      createPlan({ id: 'q1', cycle: 'quarterly', period: 'Q1' }),
+    ]
+
+    expect(sortControlPlansByPeriod(plans).map((plan) => plan.id)).toEqual([
+      'q1',
+      'h1',
+      'q2',
+      'q4',
     ])
   })
 })
