@@ -399,7 +399,11 @@ import {
   filterPlanAssigneeUsers,
   resolvePlanAssigneeScopeIds,
 } from '@/features/plans/plan-assignee-options'
-import { PLAN_SUBMIT_STATUS, createPlanUpsertPayload } from '@/features/plans/plan-data'
+import {
+  PLAN_SUBMIT_STATUS,
+  createPlanUpsertPayload,
+  resolvePlanPeriodDateRange,
+} from '@/features/plans/plan-data'
 import type {
   ControlChecklist,
   ControlPlan,
@@ -478,18 +482,25 @@ onMounted(async () => {
       parentPlan.value = parent
       form.year = String(parent.year)
       form.cycle = 'monthly'
+      form.period = getDefaultPeriodByCycle(form.cycle)
       form.ownerScopeId = parent.ownerScopeId
       form.grantScopeIds = parent.grants?.map((grant) => grant.scopeId) || []
       // Inherit parent's checklist items as default
+      const [plannedStartDate, plannedEndDate] = resolvePlanPeriodDateRange(
+        Number(form.year),
+        form.cycle as PlanCycle,
+        form.period,
+      )
       planItems.value = parent.items.map((item, i) => ({
         sequence: i + 1,
         targetScope: item.targetScope,
         checklistIds: [...item.checklistIds],
-        plannedStartDate: '',
-        plannedEndDate: '',
+        plannedStartDate,
+        plannedEndDate,
         assignee: item.assignee,
         remark: item.remark,
       }))
+      applySubPlanPeriodDateRange()
     }
   }
   await loadAssigneeScopeMembers()
@@ -559,8 +570,18 @@ const cycleLabel = computed(() => {
   return map[form.cycle] || ''
 })
 
+const getDefaultPeriodByCycle = (cycle: string) => {
+  const defaults: Record<PlanCycle, string> = {
+    yearly: '全年',
+    'half-yearly': 'H1',
+    quarterly: 'Q1',
+    monthly: 'M1',
+  }
+  return defaults[cycle as PlanCycle] || ''
+}
+
 const onCycleChange = () => {
-  form.period = ''
+  form.period = isSubPlan.value ? getDefaultPeriodByCycle(form.cycle) : ''
 }
 
 // ==================
@@ -638,6 +659,30 @@ const getScopeName = (id: string) => {
 watch(assigneeScopeIds, (scopeIds) => {
   void loadAssigneeScopeMembers(scopeIds)
 })
+
+const applySubPlanPeriodDateRange = () => {
+  if (!isSubPlan.value || isEdit.value || planItems.value.length === 0) return
+  if (!form.year || !form.cycle || !form.period) return
+
+  const [plannedStartDate, plannedEndDate] = resolvePlanPeriodDateRange(
+    Number(form.year),
+    form.cycle as PlanCycle,
+    form.period,
+  )
+
+  planItems.value = planItems.value.map((item) => ({
+    ...item,
+    plannedStartDate,
+    plannedEndDate,
+  }))
+}
+
+watch(
+  () => [form.year, form.cycle, form.period],
+  () => {
+    applySubPlanPeriodDateRange()
+  },
+)
 
 const addPlanItem = async () => {
   if (!itemFormRef.value) return

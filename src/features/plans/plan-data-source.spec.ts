@@ -110,4 +110,9 @@ describe('plan related pages data sources', () => {
     expect(deleteButtonSource).toContain('handleDelete(row)')
     expect(deleteButtonSource).not.toContain("row.status === 'draft'")
   })
+
+  it('uses plan period dates when inheriting parent plan items for a sub-plan', () => {
+    expect(planCreateSource).toContain('resolvePlanPeriodDateRange')
+    expect(planCreateSource).toContain('applySubPlanPeriodDateRange')
+  })
 })
