@@ -113,8 +113,20 @@ describe('plan-data', () => {
     expect(plans.map((plan) => plan.id)).toEqual(['m12', 'm2', 'm1'])
   })
 
-  it('sorts quarterly and half-yearly child plans by their period start date', () => {
+  it('sorts mixed child plans by cycle group before period', () => {
     const plans = [
+      createPlan({ id: 'q1', cycle: 'quarterly', period: 'Q1' }),
+      createPlan({ id: 'm2', cycle: 'monthly', period: 'M2' }),
+      createPlan({ id: 'm1', cycle: 'monthly', period: 'M1' }),
+      createPlan({ id: 'q2', cycle: 'quarterly', period: 'Q2' }),
+    ]
+
+    expect(sortControlPlansByPeriod(plans).map((plan) => plan.id)).toEqual(['m1', 'm2', 'q1', 'q2'])
+  })
+
+  it('sorts quarterly and half-yearly child plans within their cycle groups', () => {
+    const plans = [
+      createPlan({ id: 'h2', cycle: 'half-yearly', period: 'H2' }),
       createPlan({ id: 'q4', cycle: 'quarterly', period: 'Q4' }),
       createPlan({ id: 'h1', cycle: 'half-yearly', period: 'H1' }),
       createPlan({ id: 'q2', cycle: 'quarterly', period: 'Q2' }),
@@ -123,9 +135,10 @@ describe('plan-data', () => {
 
     expect(sortControlPlansByPeriod(plans).map((plan) => plan.id)).toEqual([
       'q1',
-      'h1',
       'q2',
       'q4',
+      'h1',
+      'h2',
     ])
   })
 })

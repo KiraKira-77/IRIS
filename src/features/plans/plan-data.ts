@@ -38,6 +38,13 @@ const padDatePart = (value: number) => String(value).padStart(2, '0')
 const formatDate = (year: number, month: number, day: number) =>
   `${year}-${padDatePart(month)}-${padDatePart(day)}`
 
+const cycleSortOrder: Record<PlanCycle, number> = {
+  monthly: 1,
+  quarterly: 2,
+  'half-yearly': 3,
+  yearly: 4,
+}
+
 const parsePeriodIndex = (period: string, prefix: string, fallback: number) => {
   const normalized = period.trim().toUpperCase()
   const prefixMatch = normalized.match(new RegExp(`^${prefix}(\\d+)$`))
@@ -82,6 +89,8 @@ export function sortControlPlansByPeriod(plans: ControlPlan[]): ControlPlan[] {
     const [rightStart, rightEnd] = resolvePlanPeriodDateRange(right.year, right.cycle, right.period)
 
     return (
+      left.year - right.year ||
+      cycleSortOrder[left.cycle] - cycleSortOrder[right.cycle] ||
       leftStart.localeCompare(rightStart) ||
       leftEnd.localeCompare(rightEnd) ||
       left.createdAt.localeCompare(right.createdAt) ||
