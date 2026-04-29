@@ -94,7 +94,9 @@
         size="large"
         row-key="id"
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
+        :expand-row-keys="expandedPlanIds"
         :row-class-name="planRowClassName"
+        @expand-change="handlePlanExpandChange"
       >
         <el-table-column prop="name" label="计划名称" min-width="320" show-overflow-tooltip>
           <template #default="{ row }">
@@ -121,7 +123,18 @@
         </el-table-column>
         <el-table-column label="子计划" width="90" align="center">
           <template #default="{ row }">
-            <span v-if="!row.parentId">{{ row.children?.length || 0 }}</span>
+            <div v-if="!row.parentId" class="child-count-cell">
+              <span>{{ row.children?.length || 0 }}</span>
+              <el-button
+                v-if="row.children?.length"
+                link
+                type="primary"
+                size="small"
+                @click.stop="toggleChildPlans(row)"
+              >
+                {{ isPlanExpanded(row) ? '收起' : '展开' }}
+              </el-button>
+            </div>
             <span v-else class="text-muted">—</span>
           </template>
         </el-table-column>
@@ -196,7 +209,10 @@ import type { ControlPlan } from '@/types'
 const router = useRouter()
 
 const allPlans = ref<ControlPlan[]>([])
+const expandedPlanIds = ref<string[]>([])
 const searchForm = reactive({ keyword: '', year: '', status: '' })
+
+type PlanTreeRow = ControlPlan & { children?: ControlPlan[] }
 
 onMounted(() => {
   loadPlans()
@@ -213,6 +229,9 @@ const loadPlans = async () => {
     }),
   )
   allPlans.value = page.list
+  expandedPlanIds.value = expandedPlanIds.value.filter((id) =>
+    page.list.some((plan) => plan.id === id),
+  )
 }
 
 const treeData = computed(() => {
@@ -236,6 +255,33 @@ const treeData = computed(() => {
 
 const planRowClassName = ({ row }: { row: ControlPlan }) =>
   row.parentId ? 'child-plan-row' : 'parent-plan-row'
+
+const isPlanExpanded = (row: PlanTreeRow) => expandedPlanIds.value.includes(row.id)
+
+const toggleChildPlans = (row: PlanTreeRow) => {
+  if (!row.children?.length) return
+
+  expandedPlanIds.value = isPlanExpanded(row)
+    ? expandedPlanIds.value.filter((id) => id !== row.id)
+    : [...expandedPlanIds.value, row.id]
+}
+
+const handlePlanExpandChange = (
+  row: PlanTreeRow,
+  expandedRowsOrExpanded: PlanTreeRow[] | boolean,
+) => {
+  if (Array.isArray(expandedRowsOrExpanded)) {
+    expandedPlanIds.value = expandedRowsOrExpanded.map((item) => item.id)
+    return
+  }
+
+  if (expandedRowsOrExpanded) {
+    expandedPlanIds.value = Array.from(new Set([...expandedPlanIds.value, row.id]))
+    return
+  }
+
+  expandedPlanIds.value = expandedPlanIds.value.filter((id) => id !== row.id)
+}
 
 const visiblePlans = computed(() =>
   treeData.value.flatMap((plan) => [plan, ...(plan.children || [])]),
@@ -535,6 +581,14 @@ const statusLabel = (val: string) => {
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
+}
+
+.child-count-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 64px;
 }
 
 .text-muted {

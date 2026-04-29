@@ -125,6 +125,8 @@ describe('plan related pages data sources', () => {
     expect(planListSource).toContain('buildControlPlanTree')
     expect(planListSource).toContain('canEditControlPlan(row)')
     expect(planListSource).not.toContain('default-expand-all')
+    expect(planListSource).toContain('expandedPlanIds')
+    expect(planListSource).toContain('toggleChildPlans')
     expect(planDetailSource).toContain('canEditControlPlan')
   })
 })
