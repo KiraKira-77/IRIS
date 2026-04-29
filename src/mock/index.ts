@@ -1022,7 +1022,7 @@ export const mockProjects: Project[] = [
     name: '采购流程合规性检查',
     source: 'plan',
     planId: 'pl-2026-m02',
-    status: 'preparing',
+    status: 'not_started',
     description: '对采购流程中的招投标、供应商准入、合同签订等环节进行合规性检查。',
     startDate: '2026-03-01',
     team: [

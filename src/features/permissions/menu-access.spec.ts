@@ -1,4 +1,4 @@
-import assert from 'node:assert/strict'
+import { describe, expect, it } from 'vitest'
 import {
   ALL_MENU_CODES,
   APP_MENU_GROUPS,
@@ -11,23 +11,21 @@ import {
 } from './menu-access.ts'
 import type { UserInfo } from '../../types/index.ts'
 
-{
-  assert.equal(buildDefaultMenuCodes(['SUPER_ADMIN']).length, ALL_MENU_CODES.length)
-}
+describe('menu access', () => {
+  it('grants every menu to super administrators', () => {
+    expect(buildDefaultMenuCodes(['SUPER_ADMIN'])).toHaveLength(ALL_MENU_CODES.length)
+  })
 
-{
-  assert.deepEqual(
-    buildMenuCodesFromRoles(['AUDITOR'], {
-      AUDITOR: ['resource.standards', 'project.list'],
-    }),
-    ['resource.standards', 'project.list'],
-  )
-}
+  it('builds menu codes from role menu bindings', () => {
+    expect(
+      buildMenuCodesFromRoles(['AUDITOR'], {
+        AUDITOR: ['resource.standards', 'project.list'],
+      }),
+    ).toEqual(['resource.standards', 'project.list'])
+  })
 
-{
-  assert.deepEqual(
-    filterMenuGroupsByCodes(APP_MENU_GROUPS, ['workbench.dashboard', 'resource.standards']),
-    [
+  it('filters menu groups by allowed codes', () => {
+    expect(filterMenuGroupsByCodes(APP_MENU_GROUPS, ['workbench.dashboard', 'resource.standards'])).toEqual([
       {
         code: 'workbench',
         label: '工作台',
@@ -38,34 +36,34 @@ import type { UserInfo } from '../../types/index.ts'
         label: '资源管理',
         children: [{ code: 'resource.standards', label: '标准管理', path: '/resource/standards' }],
       },
-    ],
-  )
-}
+    ])
+  })
 
-{
-  assert.equal(resolveRouteMenuCode('/project/detail/1001'), 'project.list')
-  assert.equal(resolveRouteMenuCode('/system/roles'), 'system.roles')
-}
+  it('resolves nested routes to menu codes', () => {
+    expect(resolveRouteMenuCode('/project/detail/1001')).toBe('project.list')
+    expect(resolveRouteMenuCode('/system/roles')).toBe('system.roles')
+  })
 
-{
-  const userInfo: UserInfo = {
-    id: '2004',
-    tenantId: 1001,
-    username: 'auditor',
-    name: '审计员',
-    roles: ['AUDITOR'],
-    menuCodes: ['workbench.dashboard', 'resource.standards'],
-    permissions: [],
-    accessContext: {
-      isSuperAdmin: false,
-      scopePermissions: [],
-    },
-  }
+  it('checks path access by user menu codes', () => {
+    const userInfo: UserInfo = {
+      id: '2004',
+      tenantId: 1001,
+      username: 'auditor',
+      name: '审计员',
+      roles: ['AUDITOR'],
+      menuCodes: ['workbench.dashboard', 'resource.standards'],
+      permissions: [],
+      accessContext: {
+        isSuperAdmin: false,
+        scopePermissions: [],
+      },
+    }
 
-  assert.equal(canAccessPath('/resource/standards', userInfo), true)
-  assert.equal(canAccessPath('/project/create', userInfo), false)
-}
+    expect(canAccessPath('/resource/standards', userInfo)).toBe(true)
+    expect(canAccessPath('/project/create', userInfo)).toBe(false)
+  })
 
-{
-  assert.equal(resolveFirstAccessiblePath(['resource.standards']), '/resource/standards')
-}
+  it('uses the first accessible menu path', () => {
+    expect(resolveFirstAccessiblePath(['resource.standards'])).toBe('/resource/standards')
+  })
+})

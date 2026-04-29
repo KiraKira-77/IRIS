@@ -89,6 +89,17 @@
                   />
                 </el-form-item>
               </el-col>
+              <el-col :span="8">
+                <el-form-item label="结束日期">
+                  <el-date-picker
+                    v-model="form.endDate"
+                    type="date"
+                    placeholder="选择结束日期"
+                    style="width: 100%"
+                    value-format="YYYY-MM-DD"
+                  />
+                </el-form-item>
+              </el-col>
             </el-row>
 
             <el-form-item label="项目描述">
@@ -237,15 +248,11 @@ import {
   ArrowRight,
   Promotion,
 } from '@element-plus/icons-vue'
-import { checklistApi, planApi, resourceScopeApi, systemUserApi } from '@/api'
+import { checklistApi, planApi, projectApi, systemUserApi } from '@/api'
 import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
-import {
-  filterPlanAssigneeUsers,
-  resolvePlanAssigneeScopeIds,
-} from '@/features/plans/plan-assignee-options'
 import { normalizePlanPage } from '@/features/plans/plan-data'
-import { mockProjects } from '@/mock'
-import type { ControlChecklist, ControlPlan, ResourceScopeMember, SystemUser } from '@/types'
+import { buildProjectUpsertPayload } from '@/features/projects/project-data'
+import type { ControlChecklist, ControlPlan, SystemUser, TeamMember } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -265,11 +272,12 @@ const form = ref({
   source: 'manual' as 'plan' | 'manual',
   planId: '',
   startDate: '',
+  endDate: '',
   description: '',
   checklistIds: [] as string[],
 })
 
-const teamMembers = ref<{ personnelId: string; personnelName: string; role: string }[]>([])
+const teamMembers = ref<Array<Omit<TeamMember, 'id' | 'avatar'>>>([])
 
 const basicRules: FormRules = {
   name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
@@ -283,13 +291,8 @@ const basicRules: FormRules = {
 const availablePlans = ref<ControlPlan[]>([])
 const checklistOptions = ref<ControlChecklist[]>([])
 const users = ref<SystemUser[]>([])
-const planScopeMembers = ref<ResourceScopeMember[]>([])
 const personnelOptions = computed(() => {
-  if (form.value.source !== 'plan' || !linkedPlan.value) {
-    return users.value.filter((user) => user.status === 1)
-  }
-
-  return filterPlanAssigneeUsers(users.value, planScopeMembers.value)
+  return users.value.filter((user) => user.status === 1)
 })
 
 const generatedTaskCount = computed(() => {
@@ -318,17 +321,6 @@ const loadPersonnelOptions = async () => {
   users.value = await systemUserApi.list()
 }
 
-const loadLinkedPlanScopeMembers = async (plan: ControlPlan) => {
-  const scopeIds = resolvePlanAssigneeScopeIds(
-    plan.ownerScopeId,
-    plan.grants?.map((grant) => grant.scopeId) || [],
-  )
-  planScopeMembers.value = (
-    await Promise.all(scopeIds.map((scopeId) => resourceScopeApi.listMembers(scopeId)))
-  ).flat()
-  pruneUnavailableTeamMembers()
-}
-
 const pruneUnavailableTeamMembers = () => {
   const allowedUserIds = new Set(personnelOptions.value.map((user) => user.id))
   teamMembers.value = teamMembers.value.filter(
@@ -340,7 +332,7 @@ const onPlanChange = async (planId: string) => {
   const plan = availablePlans.value.find((p) => p.id === planId) || (await planApi.detail(planId))
   if (plan) {
     linkedPlan.value = plan
-    await loadLinkedPlanScopeMembers(plan)
+    pruneUnavailableTeamMembers()
     form.value.name = `${plan.name} - 执行项目`
     // Auto-select checklists from plan items
     const clIds = new Set<string>()
@@ -356,6 +348,8 @@ const onPersonnelChange = (idx: number, personnelId: string) => {
   const member = teamMembers.value[idx]
   if (p && member) {
     member.personnelName = p.username
+    member.employeeNo = p.account
+    member.department = ''
   }
 }
 
@@ -397,71 +391,42 @@ const nextStep = async () => {
 // ==================
 // Submit
 // ==================
-const handleSubmit = () => {
+const handleSubmit = async () => {
   if (form.value.checklistIds.length === 0) {
     ElMessage.warning('请至少选择一个检查清单')
     return
   }
-  if (teamMembers.value.length === 0) {
-    ElMessage.warning('请至少添加一名团队成员')
+  const validMembers = teamMembers.value.filter((member) => member.personnelId)
+  if (validMembers.length === 0) {
+    ElMessage.warning('请至少添加一名项目成员')
+    return
+  }
+  if (!validMembers.some((member) => member.role === 'leader')) {
+    ElMessage.warning('请设置一名项目负责人')
     return
   }
 
-  const newId = `proj-${Date.now()}`
-  const tasks = form.value.checklistIds.flatMap((clId) => {
-    const cl = checklistOptions.value.find((c) => c.id === clId)
-    if (!cl) return []
-    return cl.items.map((item, i) => ({
-      id: `t-${Date.now()}-${clId}-${i}`,
-      projectId: newId,
-      checklistId: clId,
-      checklistItemId: item.id,
-      checkContent: item.content,
-      checkCriterion: item.criterion || '',
-      status: 'pending' as const,
-      attachments: [],
-      logs: [
-        {
-          id: `log-${Date.now()}-${i}`,
-          action: '创建任务',
-          operator: 'admin',
-          operatorName: '系统',
-          createdAt: new Date().toISOString().replace('T', ' ').slice(0, 16),
-        },
-      ],
-      createdAt: form.value.startDate,
-      updatedAt: form.value.startDate,
-    }))
-  })
+  const plan = linkedPlan.value || availablePlans.value.find((item) => item.id === form.value.planId)
+  try {
+    const created = await projectApi.create(
+      buildProjectUpsertPayload({
+        name: form.value.name,
+        source: form.value.source,
+        planId: form.value.planId,
+        planName: plan?.name,
+        description: form.value.description,
+        startDate: form.value.startDate,
+        endDate: form.value.endDate,
+        checklistIds: form.value.checklistIds,
+        members: validMembers,
+      }),
+    )
 
-  const team = teamMembers.value
-    .filter((m) => m.personnelId)
-    .map((m, i) => ({
-      id: `tm-${Date.now()}-${i}`,
-      personnelId: m.personnelId,
-      personnelName: m.personnelName,
-      role: m.role as any,
-    }))
-
-  mockProjects.push({
-    id: newId,
-    code: `PRJ-2026-${String(mockProjects.length + 1).padStart(3, '0')}`,
-    name: form.value.name,
-    source: form.value.source,
-    planId: form.value.source === 'plan' ? form.value.planId : undefined,
-    status: 'preparing',
-    description: form.value.description || undefined,
-    startDate: form.value.startDate,
-    team,
-    checklistIds: [...form.value.checklistIds],
-    tasks,
-    createdBy: 'admin',
-    createdAt: today(),
-    updatedAt: today(),
-  })
-
-  ElMessage.success('项目已创建')
-  router.push('/project/list')
+    ElMessage.success('项目已创建')
+    router.push(`/project/detail/${created.id}`)
+  } catch {
+    // request interceptor shows the error
+  }
 }
 </script>
 

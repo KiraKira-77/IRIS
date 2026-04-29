@@ -395,28 +395,43 @@ export interface PlanChange {
 // 项目管理
 // ===========================
 export type ProjectSource = 'plan' | 'manual'
-export type ProjectStatus = 'preparing' | 'in_progress' | 'closing' | 'completed' | 'archived'
+export type ProjectStatus = 'not_started' | 'in_progress' | 'completed' | 'archived'
 export interface Project {
   id: string
   code: string
   name: string
   source: ProjectSource
   planId?: string
+  planName?: string
   status: ProjectStatus
   description?: string
   startDate: string
   endDate?: string
-  team: TeamMember[]
+  leaderId?: string
+  leaderName?: string
+  members?: TeamMember[]
+  team?: TeamMember[]
   checklistIds: string[] // 关联的检查清单ID列表
+  archiveStatus?: string
+  archiveStartedAt?: string
+  archiveCompletedAt?: string
+  archiveError?: string
+  taskCount?: number
+  passedTaskCount?: number
+  nonconformingTaskCount?: number
+  progress?: number
   tasks: CheckTask[]
-  createdBy: string
+  actions?: string[]
+  createdBy?: string
   createdAt: string
   updatedAt: string
 }
 export interface TeamMember {
-  id: string
+  id?: string
   personnelId: string
   personnelName: string
+  employeeNo?: string
+  department?: string
   role: 'leader' | 'auditor' | 'reviewer' | 'member'
   avatar?: string
 }
@@ -428,27 +443,72 @@ export type TaskStatus =
   | 'submitted'
   | 'reviewing'
   | 'approved'
+  | 'passed'
+  | 'nonconforming'
   | 'rejected'
   | 'rectifying'
 export interface CheckTask {
   id: string
   projectId: string
   checklistId: string // 所属清单ID
+  checklistName?: string
   checklistItemId: string
   checkContent: string
   checkCriterion: string
+  controlFrequency?: string
+  evaluationType?: string
+  taskName?: string
+  taskDescription?: string
   assigneeId?: string // 负责人（一人一条任务）
   assigneeName?: string
+  contactId?: string
+  contactName?: string
   reviewerId?: string
   reviewerName?: string
+  issuedAt?: string
+  completedAt?: string
   workOrderId?: string // 外部工单系统的工单ID
   workOrderStatus?: string // 外部工单状态码
+  workOrderCount?: number
+  passedWorkOrderCount?: number
+  nonconformingWorkOrderCount?: number
+  workOrders?: ProjectTaskWorkOrder[]
+  actions?: string[]
   status: TaskStatus
-  attachments: Attachment[]
+  attachments?: Attachment[]
   reviewComment?: string
-  logs: OperationLog[]
-  createdAt: string
-  updatedAt: string
+  logs?: OperationLog[]
+  createdAt?: string
+  updatedAt?: string
+}
+export interface ProjectTaskWorkOrder {
+  id: string
+  projectId: string
+  taskId: string
+  omsWorkOrderId?: string
+  handlerId?: string
+  handlerName?: string
+  issuedAt?: string
+  completedAt?: string
+  omsStatus?: string
+  omsStatusName?: string
+  irisReviewStatus?: string
+  irisReviewOpinion?: string
+  reviewable?: boolean
+}
+export interface ProjectUpsertPayload {
+  code?: string
+  name: string
+  source: ProjectSource
+  planId?: string
+  planName?: string
+  description?: string
+  startDate: string
+  endDate?: string
+  leaderId: string
+  leaderName: string
+  checklistIds: string[]
+  members: Array<Omit<TeamMember, 'id' | 'avatar'>>
 }
 export type TaskAction =
   | 'start'

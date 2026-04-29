@@ -16,7 +16,7 @@ import type {
   PlanUpsertPayload,
   PlanChange,
   Project,
-  CheckTask,
+  ProjectUpsertPayload,
   RectificationOrder,
   RoleRecord,
   RoleUpsertPayload,
@@ -95,23 +95,22 @@ export const planApi = {
 export const projectApi = {
   list: (params: PageQuery) => request.get<PageResult<Project>>('/v1/projects', params),
   detail: (id: string) => request.get<Project>(`/v1/projects/${id}`),
-  create: (data: Partial<Project>) => request.post<Project>('/v1/projects', data),
-  update: (id: string, data: Partial<Project>) => request.put<Project>(`/v1/projects/${id}`, data),
-  close: (id: string) => request.post(`/v1/projects/${id}/close`),
-  archive: (id: string) => request.post(`/v1/projects/${id}/archive`),
+  create: (data: ProjectUpsertPayload) => request.post<Project>('/v1/projects', data),
+  start: (id: string) => request.post<Project>(`/v1/projects/${id}/start`),
+  complete: (id: string) => request.post<Project>(`/v1/projects/${id}/complete`),
+  delete: (id: string) => request.delete(`/v1/projects/${id}`),
 }
 
 export const taskApi = {
-  list: (projectId: string, params?: PageQuery) =>
-    request.get<PageResult<CheckTask>>(`/v1/projects/${projectId}/tasks`, params),
-  detail: (id: string) => request.get<CheckTask>(`/v1/tasks/${id}`),
-  start: (id: string) => request.post(`/v1/tasks/${id}/start`),
-  dispatch: (id: string, assigneeId: string) =>
-    request.post(`/v1/tasks/${id}/dispatch`, { assigneeId }),
-  upload: (id: string, file: File) => request.upload(`/v1/tasks/${id}/upload`, file),
-  submit: (id: string) => request.post(`/v1/tasks/${id}/submit`),
-  review: (id: string, data: { action: 'approve' | 'reject' | 'rectify'; comment?: string }) =>
-    request.post(`/v1/tasks/${id}/review`, data),
+  listWorkOrders: (projectId: string, taskId: string) =>
+    request.get(`/v1/projects/${projectId}/tasks/${taskId}/work-orders`),
+  createWorkOrders: (
+    projectId: string,
+    taskId: string,
+    data: { title?: string; description?: string; handlers: Array<{ handlerId: string; handlerName: string }> },
+  ) => request.post(`/v1/projects/${projectId}/tasks/${taskId}/work-orders`, data),
+  refreshWorkOrder: (projectId: string, taskId: string, workOrderId: string) =>
+    request.post(`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/refresh`),
 }
 
 export const rectificationApi = {

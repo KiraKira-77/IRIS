@@ -66,8 +66,8 @@ describe('plan related pages data sources', () => {
   it('filters plan-scoped assignees through maintenance and shared scope members', () => {
     expect(planCreateSource).toContain('filterPlanAssigneeUsers')
     expect(planCreateSource).toContain('resourceScopeApi.listMembers')
-    expect(projectCreateSource).toContain('filterPlanAssigneeUsers')
-    expect(projectCreateSource).toContain('resourceScopeApi.listMembers')
+    expect(projectCreateSource).not.toContain('filterPlanAssigneeUsers')
+    expect(projectCreateSource).not.toContain('resourceScopeApi.listMembers')
   })
 
   it('does not show a fixed draft status in the plan create header', () => {
