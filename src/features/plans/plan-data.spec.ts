@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { ControlPlan, PlanUpsertPayload } from '@/types'
 import {
   PLAN_SUBMIT_STATUS,
+  buildControlPlanTree,
+  canEditControlPlan,
   createPlanUpsertPayload,
   normalizePlanPage,
   resolvePlanPeriodDateRange,
@@ -64,6 +66,30 @@ describe('plan-data', () => {
 
   it('uses approved as the direct submit status while plan approval is disabled', () => {
     expect(PLAN_SUBMIT_STATUS).toBe('approved')
+  })
+
+  it('allows draft and approved plans to be edited', () => {
+    expect(canEditControlPlan(createPlan({ status: 'draft' }))).toBe(true)
+    expect(canEditControlPlan(createPlan({ status: 'approved' }))).toBe(true)
+    expect(canEditControlPlan(createPlan({ status: 'in_progress' }))).toBe(false)
+    expect(canEditControlPlan(createPlan({ status: 'completed' }))).toBe(false)
+    expect(canEditControlPlan(createPlan({ status: 'archived' }))).toBe(false)
+  })
+
+  it('builds parent-child plan tree with children under their own parent', () => {
+    const plans = [
+      createPlan({ id: 'child-b-1', parentId: 'parent-b', cycle: 'monthly', period: 'M1' }),
+      createPlan({ id: 'parent-b', cycle: 'yearly', period: '全年', createdAt: '2026-01-02T00:00:00' }),
+      createPlan({ id: 'child-a-2', parentId: 'parent-a', cycle: 'monthly', period: 'M2' }),
+      createPlan({ id: 'child-a-1', parentId: 'parent-a', cycle: 'monthly', period: 'M1' }),
+      createPlan({ id: 'parent-a', cycle: 'yearly', period: '全年', createdAt: '2026-01-01T00:00:00' }),
+    ]
+
+    const tree = buildControlPlanTree(plans)
+
+    expect(tree.map((plan) => plan.id)).toEqual(['parent-a', 'parent-b'])
+    expect(tree[0]!.children.map((plan) => plan.id)).toEqual(['child-a-1', 'child-a-2'])
+    expect(tree[1]!.children.map((plan) => plan.id)).toEqual(['child-b-1'])
   })
 
   it('resolves monthly plan period dates', () => {

@@ -33,6 +33,10 @@ export function createPlanUpsertPayload(payload: PlanUpsertPayload): PlanUpsertP
   }
 }
 
+export function canEditControlPlan(plan: Pick<ControlPlan, 'status'>): boolean {
+  return plan.status === 'draft' || plan.status === 'approved'
+}
+
 const padDatePart = (value: number) => String(value).padStart(2, '0')
 
 const formatDate = (year: number, month: number, day: number) =>
@@ -97,4 +101,13 @@ export function sortControlPlansByPeriod(plans: ControlPlan[]): ControlPlan[] {
       left.id.localeCompare(right.id)
     )
   })
+}
+
+export function buildControlPlanTree(plans: ControlPlan[]): Array<ControlPlan & { children: ControlPlan[] }> {
+  const roots = sortControlPlansByPeriod(plans.filter((plan) => !plan.parentId))
+
+  return roots.map((root) => ({
+    ...root,
+    children: sortControlPlansByPeriod(plans.filter((plan) => plan.parentId === root.id)),
+  }))
 }

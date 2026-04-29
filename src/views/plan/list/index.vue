@@ -94,7 +94,7 @@
         size="large"
         row-key="id"
         :tree-props="{ children: 'children', hasChildren: 'hasChildren' }"
-        default-expand-all
+        :row-class-name="planRowClassName"
       >
         <el-table-column prop="name" label="计划名称" min-width="320" show-overflow-tooltip>
           <template #default="{ row }">
@@ -150,7 +150,7 @@
                 >新建子计划</el-button
               >
               <el-button
-                v-if="row.status === 'draft'"
+                v-if="canEditControlPlan(row)"
                 link
                 type="primary"
                 size="small"
@@ -186,7 +186,11 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { planApi } from '@/api'
-import { normalizePlanPage, sortControlPlansByPeriod } from '@/features/plans/plan-data'
+import {
+  buildControlPlanTree,
+  canEditControlPlan,
+  normalizePlanPage,
+} from '@/features/plans/plan-data'
 import type { ControlPlan } from '@/types'
 
 const router = useRouter()
@@ -212,12 +216,7 @@ const loadPlans = async () => {
 }
 
 const treeData = computed(() => {
-  const roots = allPlans.value.filter((p) => !p.parentId)
-  return roots
-    .map((root) => {
-      const children = sortControlPlansByPeriod(allPlans.value.filter((p) => p.parentId === root.id))
-      return { ...root, children }
-    })
+  return buildControlPlanTree(allPlans.value)
     .filter((root) => {
       const matchSelf = matchesFilter(root)
       const matchChildren = root.children.some((c) => matchesFilter(c))
@@ -234,6 +233,9 @@ const treeData = computed(() => {
       return root
     })
 })
+
+const planRowClassName = ({ row }: { row: ControlPlan }) =>
+  row.parentId ? 'child-plan-row' : 'parent-plan-row'
 
 const visiblePlans = computed(() =>
   treeData.value.flatMap((plan) => [plan, ...(plan.children || [])]),
@@ -547,6 +549,19 @@ const statusLabel = (val: string) => {
 :deep(.table-shell .el-table th.el-table__cell) {
   font-weight: 680;
   color: oklch(38% 0.035 248);
+}
+
+:deep(.table-shell .el-table__row.parent-plan-row) {
+  background: oklch(99% 0.005 248);
+}
+
+:deep(.table-shell .el-table__row.child-plan-row) {
+  background: oklch(98% 0.009 248);
+}
+
+:deep(.table-shell .el-table__row.child-plan-row .plan-title-button span) {
+  font-weight: 560;
+  color: oklch(36% 0.035 248);
 }
 
 @media (max-width: 1180px) {

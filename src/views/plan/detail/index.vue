@@ -24,6 +24,13 @@
         </el-tag>
       </div>
       <div class="header-right">
+        <el-button
+          v-if="plan && canEditControlPlan(plan)"
+          type="primary"
+          @click="router.push(`/plan/create?id=${plan.id}`)"
+        >
+          编辑
+        </el-button>
         <el-tag :type="statusType(plan?.status)" effect="dark" size="large">{{
           statusLabel(plan?.status)
         }}</el-tag>
@@ -173,6 +180,22 @@
             </template>
           </el-table-column>
           <el-table-column prop="updatedAt" label="更新时间" width="120" />
+          <el-table-column label="操作" width="120" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" size="small" @click="router.push(`/plan/detail/${row.id}`)">
+                查看
+              </el-button>
+              <el-button
+                v-if="canEditControlPlan(row)"
+                link
+                type="primary"
+                size="small"
+                @click="router.push(`/plan/create?id=${row.id}`)"
+              >
+                编辑
+              </el-button>
+            </template>
+          </el-table-column>
         </el-table>
 
         <el-empty v-else description="暂无子计划" :image-size="80">
@@ -197,7 +220,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { Back, Document, List, FolderOpened, Plus } from '@element-plus/icons-vue'
 import { checklistApi, planApi, resourceScopeApi, systemUserApi } from '@/api'
 import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
-import { normalizePlanPage, sortControlPlansByPeriod } from '@/features/plans/plan-data'
+import {
+  canEditControlPlan,
+  normalizePlanPage,
+  sortControlPlansByPeriod,
+} from '@/features/plans/plan-data'
 import type { ControlChecklist, ControlPlan, ResourceScope, SystemUser } from '@/types'
 
 const route = useRoute()

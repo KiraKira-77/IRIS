@@ -117,7 +117,14 @@ describe('plan related pages data sources', () => {
   })
 
   it('sorts child plans by plan period in list and detail pages', () => {
-    expect(planListSource).toContain('sortControlPlansByPeriod')
+    expect(planListSource).toContain('buildControlPlanTree')
     expect(planDetailSource).toContain('sortControlPlansByPeriod')
+  })
+
+  it('keeps plan list as a collapsed parent-child tree and allows draft or approved edits', () => {
+    expect(planListSource).toContain('buildControlPlanTree')
+    expect(planListSource).toContain('canEditControlPlan(row)')
+    expect(planListSource).not.toContain('default-expand-all')
+    expect(planDetailSource).toContain('canEditControlPlan')
   })
 })
