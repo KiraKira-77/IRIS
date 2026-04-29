@@ -87,6 +87,13 @@ export function resolvePlanPeriodDateRange(
   return [formatDate(year, startMonth, 1), formatDate(year, endMonth, endDay)]
 }
 
+export function resolveControlPlanDateRange(
+  plan: Pick<ControlPlan, 'year' | 'cycle' | 'period'>,
+): { start: string; end: string } {
+  const [start, end] = resolvePlanPeriodDateRange(plan.year, plan.cycle, plan.period)
+  return { start, end }
+}
+
 export function sortControlPlansByPeriod(plans: ControlPlan[]): ControlPlan[] {
   return [...plans].sort((left, right) => {
     const [leftStart, leftEnd] = resolvePlanPeriodDateRange(left.year, left.cycle, left.period)

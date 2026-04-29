@@ -121,6 +121,12 @@ describe('plan related pages data sources', () => {
     expect(planDetailSource).toContain('sortControlPlansByPeriod')
   })
 
+  it('uses plan period dates and parent-child ordering in the plan timeline page', () => {
+    expect(planOverviewSource).toContain('resolveControlPlanDateRange')
+    expect(planOverviewSource).toContain('buildControlPlanTree')
+    expect(planOverviewSource).not.toContain('const starts = plan.items.map')
+  })
+
   it('keeps plan list as a collapsed parent-child tree and allows draft or approved edits', () => {
     expect(planListSource).toContain('buildControlPlanTree')
     expect(planListSource).toContain('canEditControlPlan(row)')

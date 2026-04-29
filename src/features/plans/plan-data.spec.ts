@@ -7,6 +7,7 @@ import {
   createPlanUpsertPayload,
   normalizePlanPage,
   resolvePlanPeriodDateRange,
+  resolveControlPlanDateRange,
   sortControlPlansByPeriod,
 } from './plan-data'
 
@@ -126,6 +127,30 @@ describe('plan-data', () => {
       '2028-02-01',
       '2028-02-29',
     ])
+  })
+
+  it('resolves a control plan timeline from its own period instead of item dates', () => {
+    const plan = createPlan({
+      cycle: 'monthly',
+      period: 'M1',
+      items: [
+        {
+          id: 'item-1',
+          planId: 'plan-1',
+          sequence: 1,
+          targetScope: 'scope',
+          checklistIds: ['checklist-1'],
+          assignee: 'user-1',
+          plannedStartDate: '2026-01-01',
+          plannedEndDate: '2026-12-31',
+        },
+      ],
+    })
+
+    expect(resolveControlPlanDateRange(plan)).toEqual({
+      start: '2026-01-01',
+      end: '2026-01-31',
+    })
   })
 
   it('sorts child plans by year and period instead of creation order', () => {

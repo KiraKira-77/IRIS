@@ -47,7 +47,7 @@
         </div>
       </template>
 
-      <div class="gantt-container" v-if="filteredPlans.length">
+      <div class="gantt-container" v-if="yearPlans.length">
         <!-- Month Headers -->
         <div class="gantt-header">
           <div class="gantt-label-col">计划 / 检查项</div>
@@ -61,9 +61,9 @@
         <!-- Today Line Marker -->
         <div class="gantt-body" ref="ganttBody">
           <!-- Plans -->
-          <template v-for="plan in filteredPlans" :key="plan.id">
+          <template v-for="plan in timelinePlans" :key="plan.id">
             <!-- Plan Row -->
-            <div class="gantt-row plan-row">
+            <div class="gantt-row plan-row" :class="{ 'child-plan-row': plan.parentId }">
               <div class="gantt-label-col">
                 <div class="plan-label">
                   <el-tag
@@ -81,9 +81,20 @@
                     style="margin-right: 4px"
                     >年度</el-tag
                   >
+                  <el-tag v-else size="small" effect="plain" round>子计划</el-tag>
                   <span class="plan-name" @click="router.push(`/plan/detail/${plan.id}`)">
                     {{ plan.name }}
                   </span>
+                  <el-button
+                    v-if="!plan.parentId && childPlanCount(plan)"
+                    class="child-toggle"
+                    link
+                    type="primary"
+                    size="small"
+                    @click.stop="toggleChildPlans(plan)"
+                  >
+                    {{ isPlanExpanded(plan) ? '收起' : `展开 ${childPlanCount(plan)}` }}
+                  </el-button>
                 </div>
               </div>
               <div class="gantt-timeline-col">
@@ -104,7 +115,12 @@
             </div>
 
             <!-- Item Rows -->
-            <div v-for="item in plan.items" :key="item.id" class="gantt-row item-row">
+            <div
+              v-for="item in plan.items"
+              :key="item.id"
+              class="gantt-row item-row"
+              :class="{ 'child-item-row': plan.parentId }"
+            >
               <div class="gantt-label-col">
                 <div class="item-label">
                   <span class="item-scope">{{ item.targetScope }}</span>
@@ -147,7 +163,7 @@
           <span>计划汇总</span>
         </div>
       </template>
-      <el-table :data="filteredPlans" border stripe size="default" style="width: 100%">
+      <el-table :data="summaryPlans" border stripe size="default" style="width: 100%">
         <el-table-column prop="code" label="计划编号" width="140">
           <template #default="{ row }">
             <el-tag effect="plain" type="info" size="small" class="font-mono">{{
@@ -157,9 +173,12 @@
         </el-table-column>
         <el-table-column prop="name" label="计划名称" min-width="240">
           <template #default="{ row }">
-            <el-link type="primary" @click="router.push(`/plan/detail/${row.id}`)">{{
-              row.name
-            }}</el-link>
+            <div class="summary-plan-name" :class="{ child: row.parentId }">
+              <el-tag v-if="row.parentId" size="small" effect="plain" round>子计划</el-tag>
+              <el-link type="primary" @click="router.push(`/plan/detail/${row.id}`)">{{
+                row.name
+              }}</el-link>
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="属期" width="100">
@@ -192,13 +211,18 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { DataLine, Grid, Calendar, CircleCheck, Clock } from '@element-plus/icons-vue'
 import { planApi, systemUserApi } from '@/api'
-import { normalizePlanPage } from '@/features/plans/plan-data'
+import {
+  buildControlPlanTree,
+  normalizePlanPage,
+  resolveControlPlanDateRange,
+} from '@/features/plans/plan-data'
 import type { ControlPlan, SystemUser } from '@/types'
 
 const router = useRouter()
 const selectedYear = ref('2026')
 const plans = ref<ControlPlan[]>([])
 const users = ref<SystemUser[]>([])
+const expandedPlanIds = ref<string[]>([])
 
 onMounted(() => {
   void Promise.all([loadPlans(), loadUsers()])
@@ -215,17 +239,46 @@ const loadPlans = async () => {
     }),
   )
   plans.value = page.list
+  expandedPlanIds.value = expandedPlanIds.value.filter((id) =>
+    page.list.some((plan) => plan.id === id),
+  )
 }
 
 const loadUsers = async () => {
   users.value = await systemUserApi.list()
 }
 
-const filteredPlans = computed(() => plans.value.filter((p) => String(p.year) === selectedYear.value))
+type PlanTreeRow = ControlPlan & { children?: ControlPlan[] }
+
+const yearPlans = computed(() => plans.value.filter((p) => String(p.year) === selectedYear.value))
+
+const planTree = computed(() => buildControlPlanTree(yearPlans.value))
+
+const summaryPlans = computed(() =>
+  planTree.value.flatMap((plan) => [plan, ...(plan.children || [])]),
+)
+
+const timelinePlans = computed(() =>
+  planTree.value.flatMap((plan) =>
+    isPlanExpanded(plan) ? [plan, ...(plan.children || [])] : [plan],
+  ),
+)
+
+const isPlanExpanded = (plan: PlanTreeRow) => expandedPlanIds.value.includes(plan.id)
+
+const childPlanCount = (plan: PlanTreeRow) => plan.children?.length || 0
+
+const toggleChildPlans = (plan: PlanTreeRow) => {
+  if (isPlanExpanded(plan)) {
+    expandedPlanIds.value = expandedPlanIds.value.filter((id) => id !== plan.id)
+    return
+  }
+  expandedPlanIds.value = [...expandedPlanIds.value, plan.id]
+}
 
 // Stats
 const statCards = computed(() => {
-  const plans = filteredPlans.value
+  const plans = yearPlans.value
   const totalItems = plans.reduce((sum, p) => sum + p.items.length, 0)
   const inProgress = plans.filter((p) => p.status === 'in_progress').length
   const completed = plans.filter((p) => p.status === 'completed').length
@@ -280,10 +333,7 @@ const todayPosition = computed(() => {
 })
 
 const planDateRange = (plan: ControlPlan) => {
-  if (!plan.items.length) return { start: '', end: '' }
-  const starts = plan.items.map((i) => i.plannedStartDate).sort()
-  const ends = plan.items.map((i) => i.plannedEndDate).sort()
-  return { start: starts[0] || '', end: ends[ends.length - 1] || '' }
+  return resolveControlPlanDateRange(plan)
 }
 
 const barStyle = (range: { start: string; end: string }) => {
@@ -515,6 +565,15 @@ const barStyle = (range: { start: string; end: string }) => {
   .gantt-timeline-col {
     height: 48px;
   }
+
+  &.child-plan-row {
+    background: #ffffff;
+
+    .gantt-label-col {
+      padding-left: 28px;
+      font-weight: 500;
+    }
+  }
 }
 
 .plan-label {
@@ -524,6 +583,11 @@ const barStyle = (range: { start: string; end: string }) => {
   width: 100%;
 
   .status-tag {
+    flex-shrink: 0;
+  }
+
+  .child-toggle {
+    margin-left: auto;
     flex-shrink: 0;
   }
 
@@ -560,6 +624,23 @@ const barStyle = (range: { start: string; end: string }) => {
   .item-assignee {
     font-size: 11px;
     color: $iris-text-muted;
+  }
+}
+
+.child-item-row {
+  .item-label {
+    padding-left: 28px;
+  }
+}
+
+.summary-plan-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+
+  &.child {
+    padding-left: 18px;
   }
 }
 
