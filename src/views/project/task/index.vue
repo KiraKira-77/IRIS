@@ -21,65 +21,57 @@
 
       <div class="task-layout">
         <main class="task-main">
-          <section class="section-block">
+          <section class="section-block inspection-summary">
             <div class="section-heading">
               <span class="heading-mark"></span>
-              <h3>检查要求</h3>
+              <h3>检查项信息</h3>
             </div>
-            <div class="info-item primary-item">
-              <label>检查项</label>
-              <p>{{ task.checkContent }}</p>
-            </div>
-            <div class="info-item primary-item">
-              <label>判断标准</label>
-              <p>{{ task.checkCriterion }}</p>
-            </div>
-            <div class="info-grid">
-              <div class="info-item">
-                <label>检查清单</label>
-                <p>{{ task.checklistName || getChecklistName(task.checklistId) }}</p>
-              </div>
-              <div class="info-item">
-                <label>控制频率</label>
-                <p>{{ task.controlFrequency || '—' }}</p>
-              </div>
-              <div class="info-item">
-                <label>评估类</label>
-                <p>{{ task.evaluationType || '—' }}</p>
-              </div>
-            </div>
-          </section>
 
-          <section class="section-block">
-            <div class="section-heading">
-              <span class="heading-mark"></span>
-              <h3>检查项分配</h3>
-            </div>
-            <div class="info-grid">
-              <div class="info-item">
-                <label>检查项名称</label>
-                <p>{{ task.taskName || task.checkContent }}</p>
+            <div class="summary-content">
+              <div class="summary-row">
+                <label>检查项</label>
+                <p>{{ task.checkContent }}</p>
               </div>
-              <div class="info-item">
+              <div class="summary-row">
+                <label>判断标准</label>
+                <p>{{ task.checkCriterion }}</p>
+              </div>
+            </div>
+
+            <div class="compact-meta-grid">
+              <div class="meta-item">
+                <label>检查清单</label>
+                <span>{{ task.checklistName || getChecklistName(task.checklistId) }}</span>
+              </div>
+              <div class="meta-item">
+                <label>控制频率</label>
+                <span>{{ controlFrequencyLabel(task.controlFrequency) }}</span>
+              </div>
+              <div class="meta-item">
+                <label>评估类</label>
+                <span>{{ evaluationTypeLabel(task.evaluationType) }}</span>
+              </div>
+              <div class="meta-item">
                 <label>检查项负责人</label>
-                <p>{{ task.assigneeName || '待分配' }}</p>
+                <span>{{ task.assigneeName || '待分配' }}</span>
               </div>
-              <div class="info-item">
+              <div class="meta-item">
                 <label>对接人</label>
-                <p>{{ task.contactName || '—' }}</p>
+                <span>{{ task.contactName || '—' }}</span>
               </div>
-              <div class="info-item">
+              <div class="meta-item">
                 <label>下达时间</label>
-                <p>{{ task.issuedAt || '—' }}</p>
+                <span>{{ task.issuedAt || '—' }}</span>
               </div>
-              <div class="info-item">
+              <div class="meta-item">
                 <label>完成时间</label>
-                <p>{{ task.completedAt || '—' }}</p>
+                <span>{{ task.completedAt || '—' }}</span>
               </div>
             </div>
-            <div class="info-item description-item">
+
+            <div v-if="task.taskDescription" class="summary-description">
               <label>检查项说明</label>
-              <p>{{ task.taskDescription || task.checkCriterion }}</p>
+              <p>{{ task.taskDescription }}</p>
             </div>
           </section>
 
@@ -203,7 +195,12 @@ import { useRoute, useRouter } from 'vue-router'
 import { Back } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { checklistApi, projectApi, taskApi } from '@/api'
-import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
+import {
+  CONTROL_FREQUENCY_OPTIONS,
+  EVALUATION_TYPE_OPTIONS,
+  normalizeChecklistPageFromApi,
+  optionLabel,
+} from '@/features/checklists/checklist-data'
 import {
   getAssignableProjectMembers,
   getProjectMembers,
@@ -372,6 +369,12 @@ const handleCreateWorkOrders = async () => {
 const getChecklistName = (id: string) =>
   checklistOptions.value.find((item) => item.id === id)?.name || id
 
+const controlFrequencyLabel = (value?: string) =>
+  value ? optionLabel(CONTROL_FREQUENCY_OPTIONS, value) : '—'
+
+const evaluationTypeLabel = (value?: string) =>
+  value ? optionLabel(EVALUATION_TYPE_OPTIONS, value) : '—'
+
 const backToProject = () => {
   if (projectId.value) {
     router.push(`/project/detail/${projectId.value}`)
@@ -479,7 +482,7 @@ const workOrderStatusType = (status?: string) => {
 
 .section-block,
 .side-panel {
-  padding: 18px;
+  padding: 16px;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -493,7 +496,7 @@ const workOrderStatusType = (status?: string) => {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 
   h3 {
     margin: 0;
@@ -504,6 +507,92 @@ const workOrderStatusType = (status?: string) => {
 
   &.compact {
     margin-bottom: 14px;
+  }
+}
+
+.inspection-summary {
+  padding-bottom: 14px;
+}
+
+.summary-content {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.summary-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+
+  label {
+    font-size: 13px;
+    font-weight: 600;
+    color: $iris-text-muted;
+  }
+
+  p {
+    margin: 0;
+    color: $iris-text-primary;
+    line-height: 1.55;
+  }
+}
+
+.compact-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.meta-item {
+  min-width: 0;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  label,
+  span {
+    display: block;
+  }
+
+  label {
+    margin-bottom: 3px;
+    font-size: 12px;
+    color: $iris-text-muted;
+  }
+
+  span {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    color: $iris-text-primary;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.summary-description {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 12px 0;
+
+  label {
+    font-size: 13px;
+    font-weight: 600;
+    color: $iris-text-muted;
+  }
+
+  p {
+    margin: 0;
+    color: $iris-text-secondary;
+    line-height: 1.55;
   }
 }
 
@@ -647,6 +736,15 @@ const workOrderStatusType = (status?: string) => {
 
   .info-grid {
     grid-template-columns: 1fr;
+  }
+
+  .summary-row,
+  .summary-description {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

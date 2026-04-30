@@ -125,6 +125,9 @@ describe('project management data sources', () => {
     expect(projectDetailSource).not.toContain('workOrderDialogVisible')
 
     expect(projectTaskSource).toContain("route.query.action === 'handle'")
+    expect(projectTaskSource).toContain('inspection-summary')
+    expect(projectTaskSource).toContain('controlFrequencyLabel(task.controlFrequency)')
+    expect(projectTaskSource).toContain('evaluationTypeLabel(task.evaluationType)')
     expect(projectTaskSource).toContain('work-order-panel')
     expect(projectTaskSource).toContain('canHandleInspectionItem')
     expect(projectDetailSource).toContain('currentUserIdentityValues')
@@ -142,7 +145,7 @@ describe('project management data sources', () => {
   it('renames project task wording to inspection item wording', () => {
     expect(projectDetailSource).toContain('检查项')
     expect(projectTaskSource).toContain('检查项详情')
-    expect(projectTaskSource).toContain('检查项分配')
+    expect(projectTaskSource).toContain('检查项信息')
     expect(projectTaskSource).not.toContain('核查任务')
     expect(projectTaskSource).not.toContain('任务详情')
     expect(projectTaskSource).not.toContain('任务分配')
