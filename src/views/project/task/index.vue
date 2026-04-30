@@ -180,17 +180,54 @@
               </div>
 
               <el-form v-if="workOrderMode === 'oms'" label-position="top" class="handle-form">
-                <el-form-item label="工单标题">
-                  <el-input v-model="workOrderForm.title" maxlength="80" show-word-limit />
+                <el-form-item label="任务名称">
+                  <el-input v-model="workOrderForm.taskName" maxlength="80" show-word-limit />
                 </el-form-item>
-                <el-form-item label="工单说明">
+                <el-form-item label="任务描述">
                   <el-input
-                    v-model="workOrderForm.description"
+                    v-model="workOrderForm.taskDescription"
                     type="textarea"
                     :rows="4"
                     maxlength="300"
                     show-word-limit
                   />
+                </el-form-item>
+                <el-form-item label="对接人">
+                  <el-input v-model="workOrderForm.contactName" maxlength="40" />
+                </el-form-item>
+                <el-form-item label="下达时间">
+                  <el-date-picker
+                    v-model="workOrderForm.issuedAt"
+                    type="datetime"
+                    format="YYYY-MM-DD HH:mm:ss"
+                    value-format="YYYY-MM-DD HH:mm:ss"
+                    placeholder="选择下达时间"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+                <el-form-item label="完成时间">
+                  <el-date-picker
+                    v-model="workOrderForm.completedAt"
+                    type="datetime"
+                    format="YYYY-MM-DD HH:mm:ss"
+                    value-format="YYYY-MM-DD HH:mm:ss"
+                    placeholder="选择完成时间"
+                    style="width: 100%"
+                  />
+                </el-form-item>
+                <el-form-item label="审核结果">
+                  <el-select
+                    v-model="workOrderForm.auditResult"
+                    placeholder="选择审核结果"
+                    style="width: 100%"
+                  >
+                    <el-option
+                      v-for="item in auditResultOptions"
+                      :key="item.value"
+                      :label="item.label"
+                      :value="item.value"
+                    />
+                  </el-select>
                 </el-form-item>
                 <el-form-item label="工单处理人">
                   <el-select
@@ -217,7 +254,7 @@
                   type="primary"
                   class="submit-btn"
                   :loading="workOrderSubmitting"
-                  :disabled="workOrderHandlers.length === 0"
+                  :disabled="!workOrderForm.taskName.trim() || workOrderHandlers.length === 0"
                   @click="handleCreateWorkOrders"
                 >
                   生成 OMS 工单
@@ -478,8 +515,12 @@ const workOrderMode = ref<WorkOrderProvider>('oms')
 const localWorkOrderCreated = ref(false)
 const localWorkOrderId = ref('')
 const workOrderForm = ref({
-  title: '',
-  description: '',
+  taskName: '',
+  taskDescription: '',
+  contactName: '',
+  issuedAt: '',
+  completedAt: '',
+  auditResult: '',
   handlerIds: [] as string[],
 })
 const localWorkOrderForm = ref({
@@ -770,8 +811,12 @@ const resetWorkOrderForm = () => {
       normalizeIdentityValue(member.personnelName) === normalizeIdentityValue(currentTask.assigneeName),
   )
   workOrderForm.value = {
-    title: currentTask.taskName || currentTask.checkContent,
-    description: currentTask.taskDescription || currentTask.checkCriterion,
+    taskName: currentTask.taskName || currentTask.checkContent,
+    taskDescription: currentTask.taskDescription || currentTask.checkCriterion,
+    contactName: currentTask.contactName || '',
+    issuedAt: normalizeDateTimeText(currentTask.issuedAt),
+    completedAt: normalizeDateTimeText(currentTask.completedAt),
+    auditResult: '',
     handlerIds: assignee ? [assignee.personnelId] : [],
   }
   localWorkOrderForm.value = {
@@ -790,8 +835,14 @@ const handleCreateWorkOrders = async () => {
   workOrderSubmitting.value = true
   try {
     await taskApi.createWorkOrders(project.value.id, task.value.id, {
-      title: workOrderForm.value.title.trim() || undefined,
-      description: workOrderForm.value.description.trim() || undefined,
+      title: workOrderForm.value.taskName.trim() || undefined,
+      description: workOrderForm.value.taskDescription.trim() || undefined,
+      taskName: workOrderForm.value.taskName.trim() || undefined,
+      taskDescription: workOrderForm.value.taskDescription.trim() || undefined,
+      contactName: workOrderForm.value.contactName.trim() || undefined,
+      issuedAt: workOrderForm.value.issuedAt || undefined,
+      completedAt: workOrderForm.value.completedAt || undefined,
+      auditResult: workOrderForm.value.auditResult || undefined,
       handlers: workOrderHandlers.value,
     })
     ElMessage.success('工单已生成')
