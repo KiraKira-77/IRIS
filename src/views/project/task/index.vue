@@ -284,7 +284,7 @@
                     <div class="mini-heading">工作日志</div>
                     <div v-if="localWorkOrderLogs.length > 0" class="local-log-list">
                       <div v-for="log in localWorkOrderLogs" :key="log.id" class="local-log-item">
-                        <strong>{{ localResultLabel(log.result) }}</strong>
+                        <strong>工作日志</strong>
                         <span>{{ log.content }}</span>
                         <small>{{ log.attachments.length }} 个附件</small>
                       </div>
@@ -292,12 +292,6 @@
                     <el-empty v-else description="暂无工作日志" :image-size="56" />
 
                     <el-form label-position="top" class="handle-form log-form">
-                      <el-form-item label="处理结果">
-                        <el-radio-group v-model="localWorkOrderLogForm.result">
-                          <el-radio-button value="passed">通过</el-radio-button>
-                          <el-radio-button value="nonconforming">不符合项</el-radio-button>
-                        </el-radio-group>
-                      </el-form-item>
                       <el-form-item label="日志内容">
                         <el-input
                           v-model="localWorkOrderLogForm.content"
@@ -340,7 +334,7 @@
                 <el-form-item label="当前状态">
                   <el-input v-model="manualWorkOrderForm.statusName" maxlength="40" />
                 </el-form-item>
-                <el-form-item label="处理结论">
+                <el-form-item label="外部处理说明">
                   <el-input
                     v-model="manualWorkOrderForm.resultSummary"
                     type="textarea"
@@ -353,6 +347,36 @@
                   更新归档预览
                 </el-button>
               </el-form>
+
+              <div class="inspection-conclusion-section">
+                <div class="mini-heading">检查项结论</div>
+                <el-form label-position="top" class="handle-form conclusion-form">
+                  <el-form-item label="整体结论">
+                    <el-radio-group v-model="inspectionConclusionForm.result">
+                      <el-radio-button value="passed">通过</el-radio-button>
+                      <el-radio-button value="nonconforming">不符合项</el-radio-button>
+                    </el-radio-group>
+                  </el-form-item>
+                  <el-form-item label="结论说明">
+                    <el-input
+                      v-model="inspectionConclusionForm.opinion"
+                      type="textarea"
+                      :rows="3"
+                      maxlength="500"
+                      show-word-limit
+                    />
+                  </el-form-item>
+                  <el-button
+                    type="primary"
+                    plain
+                    class="submit-btn"
+                    :disabled="!inspectionConclusionForm.result"
+                    @click="handleConfirmInspectionConclusion"
+                  >
+                    确认检查项结论
+                  </el-button>
+                </el-form>
+              </div>
             </template>
           </section>
         </aside>
@@ -418,18 +442,20 @@ const localWorkOrderForm = ref({
   handlerIds: [] as string[],
 })
 const localWorkOrderLogForm = ref({
-  result: 'passed',
   content: '',
   attachments: [] as UploadUserFile[],
 })
 const localWorkOrderLogs = ref<
   Array<{
     id: string
-    result: string
     content: string
     attachments: UploadUserFile[]
   }>
 >([])
+const inspectionConclusionForm = ref({
+  result: '',
+  opinion: '',
+})
 const manualWorkOrderForm = ref({
   externalWorkOrderId: '',
   externalUrl: '',
@@ -554,7 +580,7 @@ const archiveSnapshotPreview = computed(() => {
     { label: '检查项', value: task.value?.taskName || task.value?.checkContent || '—' },
     { label: '处理人', value: snapshotHandlerText.value },
     { label: '工单数量', value: orderCountText },
-    { label: '处理结果', value: snapshotResultText.value },
+    { label: '检查项结论', value: snapshotResultText.value },
     { label: '附件来源', value: snapshotAttachmentText.value },
   ]
 })
@@ -582,6 +608,10 @@ const archiveSnapshotLogPreview = computed(() => {
         description: '处理人在本地工单内提交日志和附件。',
       },
       {
+        title: '确认检查项结论',
+        description: '检查项负责人结合工单执行情况确认通过或不符合项。',
+      },
+      {
         title: '生成统一快照',
         description: '归档读取同一套快照结构。',
       },
@@ -590,7 +620,7 @@ const archiveSnapshotLogPreview = computed(() => {
   return [
     {
       title: '登记外部信息',
-      description: '录入工单号、链接、状态和处理结论。',
+      description: '录入工单号、链接、状态和外部处理说明。',
     },
     {
       title: '生成统一快照',
@@ -612,15 +642,16 @@ const snapshotHandlerText = computed(() => {
   return task.value?.assigneeName || currentProjectMember.value?.personnelName || '待确认'
 })
 const snapshotResultText = computed(() => {
+  if (inspectionConclusionForm.value.result) {
+    return localResultLabel(inspectionConclusionForm.value.result)
+  }
   if (workOrderMode.value === 'oms') {
-    return workOrders.value.length > 0 ? '以 OMS 同步结果为准' : '待生成工单'
+    return workOrders.value.length > 0 ? '待确认检查项结论' : '待生成工单'
   }
   if (workOrderMode.value === 'local') {
-    const latestLog = localWorkOrderLogs.value[localWorkOrderLogs.value.length - 1]
-    if (latestLog) return localResultLabel(latestLog.result)
-    return localWorkOrderCreated.value ? '待填写工作日志' : '待创建工单'
+    return localWorkOrderCreated.value ? '待确认检查项结论' : '待创建工单'
   }
-  return manualWorkOrderForm.value.statusName.trim() || '待登记'
+  return manualWorkOrderForm.value.statusName.trim() ? '待确认检查项结论' : '待登记'
 })
 const snapshotAttachmentText = computed(() => {
   if (workOrderMode.value === 'oms') return 'OMS 日志附件'
@@ -717,16 +748,19 @@ const handleAddLocalWorkOrderLog = () => {
   if (!content) return
   localWorkOrderLogs.value.push({
     id: `LOCAL-LOG-${Date.now()}`,
-    result: localWorkOrderLogForm.value.result,
     content,
     attachments: [...localWorkOrderLogForm.value.attachments],
   })
   localWorkOrderLogForm.value = {
-    result: localWorkOrderLogForm.value.result,
     content: '',
     attachments: [],
   }
   ElMessage.success('工作日志已加入归档预览')
+}
+
+const handleConfirmInspectionConclusion = () => {
+  if (!inspectionConclusionForm.value.result) return
+  ElMessage.success('检查项结论已确认')
 }
 
 const handleManualWorkOrderPreview = () => {
@@ -1196,9 +1230,16 @@ const workOrderStatusType = (status?: string) => {
 
 .local-work-order,
 .local-work-order-created,
-.local-log-section {
+.local-log-section,
+.inspection-conclusion-section {
   display: grid;
   gap: 14px;
+}
+
+.inspection-conclusion-section {
+  padding-top: 14px;
+  margin-top: 14px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .local-work-order-card {
