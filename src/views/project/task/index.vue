@@ -230,17 +230,54 @@
                   label-position="top"
                   class="handle-form"
                 >
-                  <el-form-item label="工单标题">
-                    <el-input v-model="localWorkOrderForm.title" maxlength="80" show-word-limit />
+                  <el-form-item label="任务名称">
+                    <el-input v-model="localWorkOrderForm.taskName" maxlength="80" show-word-limit />
                   </el-form-item>
-                  <el-form-item label="工单说明">
+                  <el-form-item label="任务描述">
                     <el-input
-                      v-model="localWorkOrderForm.description"
+                      v-model="localWorkOrderForm.taskDescription"
                       type="textarea"
                       :rows="3"
                       maxlength="300"
                       show-word-limit
                     />
+                  </el-form-item>
+                  <el-form-item label="对接人">
+                    <el-input v-model="localWorkOrderForm.contactName" maxlength="40" />
+                  </el-form-item>
+                  <el-form-item label="下达时间">
+                    <el-date-picker
+                      v-model="localWorkOrderForm.issuedAt"
+                      type="datetime"
+                      format="YYYY-MM-DD HH:mm:ss"
+                      value-format="YYYY-MM-DD HH:mm:ss"
+                      placeholder="选择下达时间"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                  <el-form-item label="完成时间">
+                    <el-date-picker
+                      v-model="localWorkOrderForm.completedAt"
+                      type="datetime"
+                      format="YYYY-MM-DD HH:mm:ss"
+                      value-format="YYYY-MM-DD HH:mm:ss"
+                      placeholder="选择完成时间"
+                      style="width: 100%"
+                    />
+                  </el-form-item>
+                  <el-form-item label="审核结果">
+                    <el-select
+                      v-model="localWorkOrderForm.auditResult"
+                      placeholder="选择审核结果"
+                      style="width: 100%"
+                    >
+                      <el-option
+                        v-for="item in auditResultOptions"
+                        :key="item.value"
+                        :label="item.label"
+                        :value="item.value"
+                      />
+                    </el-select>
                   </el-form-item>
                   <el-form-item label="工单处理人">
                     <el-select
@@ -266,7 +303,7 @@
                   <el-button
                     type="primary"
                     class="submit-btn"
-                    :disabled="localWorkOrderHandlers.length === 0"
+                    :disabled="!localWorkOrderForm.taskName.trim() || localWorkOrderHandlers.length === 0"
                     @click="handleCreateLocalWorkOrder"
                   >
                     创建本地工单
@@ -277,11 +314,20 @@
                   <div class="local-work-order-card">
                     <label>本地工单</label>
                     <strong>{{ localWorkOrderId }}</strong>
-                    <span>{{ localWorkOrderForm.title }}</span>
+                    <div class="local-work-order-detail-grid">
+                      <div
+                        v-for="item in localWorkOrderDetailRows"
+                        :key="item.label"
+                        class="local-work-order-detail"
+                      >
+                        <label>{{ item.label }}</label>
+                        <span>{{ item.value }}</span>
+                      </div>
+                    </div>
                   </div>
 
                   <div class="local-log-section">
-                    <div class="mini-heading">工作日志</div>
+                    <div class="mini-heading">详情</div>
                     <div v-if="localWorkOrderLogs.length > 0" class="local-log-list">
                       <div v-for="log in localWorkOrderLogs" :key="log.id" class="local-log-item">
                         <strong>工作日志</strong>
@@ -437,8 +483,12 @@ const workOrderForm = ref({
   handlerIds: [] as string[],
 })
 const localWorkOrderForm = ref({
-  title: '',
-  description: '',
+  taskName: '',
+  taskDescription: '',
+  contactName: '',
+  issuedAt: '',
+  completedAt: '',
+  auditResult: '',
   handlerIds: [] as string[],
 })
 const localWorkOrderLogForm = ref({
@@ -462,6 +512,11 @@ const manualWorkOrderForm = ref({
   statusName: '',
   resultSummary: '',
 })
+const auditResultOptions = [
+  { label: '待审核', value: 'pending' },
+  { label: '审核通过', value: 'passed' },
+  { label: '审核不通过', value: 'rejected' },
+]
 
 onMounted(async () => {
   await userStore.ensureUserInfoLoaded()
@@ -555,6 +610,14 @@ const localWorkOrderHandlers = computed(() =>
       handlerName: member.personnelName,
     })),
 )
+const localWorkOrderDetailRows = computed(() => [
+  { label: '任务名称', value: localWorkOrderForm.value.taskName || '—' },
+  { label: '任务描述', value: localWorkOrderForm.value.taskDescription || '—' },
+  { label: '对接人', value: localWorkOrderForm.value.contactName || '—' },
+  { label: '下达时间', value: localWorkOrderForm.value.issuedAt || '—' },
+  { label: '完成时间', value: localWorkOrderForm.value.completedAt || '—' },
+  { label: '审核结果', value: auditResultLabel(localWorkOrderForm.value.auditResult) },
+])
 const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
   if (!localWorkOrderCreated.value) return workOrders.value
   return [
@@ -712,8 +775,12 @@ const resetWorkOrderForm = () => {
     handlerIds: assignee ? [assignee.personnelId] : [],
   }
   localWorkOrderForm.value = {
-    title: currentTask.taskName || currentTask.checkContent,
-    description: currentTask.taskDescription || currentTask.checkCriterion,
+    taskName: currentTask.taskName || currentTask.checkContent,
+    taskDescription: currentTask.taskDescription || currentTask.checkCriterion,
+    contactName: currentTask.contactName || '',
+    issuedAt: normalizeDateTimeText(currentTask.issuedAt),
+    completedAt: normalizeDateTimeText(currentTask.completedAt),
+    auditResult: '',
     handlerIds: assignee ? [assignee.personnelId] : [],
   }
 }
@@ -796,6 +863,12 @@ const roleLabel = (role: string) => {
   }
   return map[role] || role
 }
+
+const auditResultLabel = (result: string) => {
+  return auditResultOptions.find((item) => item.value === result)?.label || '待审核'
+}
+
+const normalizeDateTimeText = (value?: string | null) => String(value || '').replace('T', ' ')
 
 const localResultLabel = (result: string) => {
   const map: Record<string, string> = {
@@ -1266,6 +1339,39 @@ const workOrderStatusType = (status?: string) => {
   }
 }
 
+.local-work-order-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.local-work-order-detail {
+  min-width: 0;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  label,
+  span {
+    display: block;
+  }
+
+  label {
+    margin-bottom: 3px;
+    font-size: 12px;
+    color: $iris-text-muted;
+  }
+
+  span {
+    overflow: hidden;
+    color: $iris-text-primary;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
 .mini-heading {
   font-size: 13px;
   font-weight: 700;
@@ -1352,6 +1458,10 @@ const workOrderStatusType = (status?: string) => {
 
   .compact-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .local-work-order-detail-grid {
+    grid-template-columns: 1fr;
   }
 
   .archive-summary,

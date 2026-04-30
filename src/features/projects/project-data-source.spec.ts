@@ -165,6 +165,14 @@ describe('project management data sources', () => {
     expect(projectTaskSource).toContain('workOrderProviderIcon')
     expect(projectTaskSource).toContain('创建本地工单')
     expect(projectTaskSource).toContain('工作日志')
+    expect(projectTaskSource).toContain('localWorkOrderDetailRows')
+    expect(projectTaskSource).toContain('任务名称')
+    expect(projectTaskSource).toContain('任务描述')
+    expect(projectTaskSource).toContain('对接人')
+    expect(projectTaskSource).toContain('下达时间')
+    expect(projectTaskSource).toContain('完成时间')
+    expect(projectTaskSource).toContain('审核结果')
+    expect(projectTaskSource).toContain('详情')
     expect(projectTaskSource).not.toContain('localWorkOrderLogForm.result')
     expect(projectTaskSource).not.toContain('localResultLabel(log.result)')
     expect(projectTaskSource).toContain('manualWorkOrderForm')
@@ -182,8 +190,6 @@ describe('project management data sources', () => {
     expect(projectTaskSource).not.toContain('核查任务')
     expect(projectTaskSource).not.toContain('任务详情')
     expect(projectTaskSource).not.toContain('任务分配')
-    expect(projectTaskSource).not.toContain('任务名称')
-    expect(projectTaskSource).not.toContain('任务描述')
   })
 
   it('does not expose project tags, maintenance domain, or shared domain', () => {
