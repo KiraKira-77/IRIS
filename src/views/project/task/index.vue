@@ -4,7 +4,7 @@
       <div class="page-header">
         <div class="left">
           <el-button link :icon="Back" @click="backToProject">返回项目</el-button>
-          <h2 class="page-title">任务详情</h2>
+          <h2 class="page-title">检查项详情</h2>
           <el-tag effect="plain" class="font-mono">{{ task.id }}</el-tag>
         </div>
         <div class="right">
@@ -45,14 +45,14 @@
           <el-divider />
 
           <div class="section-block">
-            <h3 class="section-title">任务分配</h3>
+            <h3 class="section-title">检查项分配</h3>
             <div class="info-grid">
               <div class="info-item">
-                <label>任务名称</label>
+                <label>检查项名称</label>
                 <p>{{ task.taskName || task.checkContent }}</p>
               </div>
               <div class="info-item">
-                <label>负责人</label>
+                <label>检查项负责人</label>
                 <p>{{ task.assigneeName || '待分配' }}</p>
               </div>
               <div class="info-item">
@@ -69,7 +69,7 @@
               </div>
             </div>
             <div class="info-item description-item">
-              <label>任务描述</label>
+              <label>检查项说明</label>
               <p>{{ task.taskDescription || task.checkCriterion }}</p>
             </div>
           </div>
@@ -80,7 +80,7 @@
             <h3 class="panel-title">检查单流程</h3>
             <div class="flow-list">
               <div class="flow-item">
-                <span>任务生成</span>
+                <span>检查项生成</span>
                 <strong>已生成</strong>
               </div>
               <div class="flow-item">

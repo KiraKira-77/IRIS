@@ -26,14 +26,14 @@
         </div>
         <div class="actions" v-if="project">
           <el-button
-            v-if="project.status === 'not_started'"
+            v-if="canManageProject && project.status === 'not_started'"
             type="success"
             @click="handleStartProject"
           >
             启动项目
           </el-button>
           <el-button
-            v-if="project.status === 'in_progress' && allTasksDone"
+            v-if="canManageProject && project.status === 'in_progress' && allTasksDone"
             type="primary"
             @click="handleCompleteProject"
           >
@@ -85,7 +85,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane label="核查任务" name="tasks">
+        <el-tab-pane label="检查项" name="tasks">
           <div class="task-toolbar">
             <el-radio-group v-model="taskFilter">
               <el-radio-button value="">全部 ({{ project.tasks.length }})</el-radio-button>
@@ -109,7 +109,23 @@
             </el-table-column>
             <el-table-column label="负责人" width="130">
               <template #default="{ row }">
-                <span v-if="row.assigneeName">{{ row.assigneeName }}</span>
+                <el-select
+                  v-if="canManageProject"
+                  :model-value="row.assigneeId || ''"
+                  size="small"
+                  placeholder="分配负责人"
+                  style="width: 120px"
+                  :loading="assigningTaskId === row.id"
+                  @change="(assigneeId: string) => handleAssignTask(row, assigneeId)"
+                >
+                  <el-option
+                    v-for="member in assignableMembers"
+                    :key="member.personnelId"
+                    :label="member.personnelName"
+                    :value="member.personnelId"
+                  />
+                </el-select>
+                <span v-else-if="row.assigneeName">{{ row.assigneeName }}</span>
                 <el-tag v-else size="small" type="info" effect="light">待分配</el-tag>
               </template>
             </el-table-column>
@@ -170,6 +186,7 @@ import { Back } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi } from '@/api'
 import {
+  getAssignableProjectMembers,
   getProjectMembers,
   normalizeProject,
   projectProgress,
@@ -180,17 +197,21 @@ import {
   taskStatusLabel,
   taskStatusType,
 } from '@/features/projects/project-data'
-import type { Project } from '@/types'
+import { useUserStore } from '@/stores'
+import type { CheckTask, Project } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 const project = ref<Project>()
 const activeTab = ref('tasks')
 const taskFilter = ref('')
+const assigningTaskId = ref('')
 const avatarColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
 
-onMounted(() => {
+onMounted(async () => {
+  await userStore.ensureUserInfoLoaded()
   loadProject()
 })
 
@@ -204,6 +225,11 @@ const loadProject = async () => {
 }
 
 const members = computed(() => (project.value ? getProjectMembers(project.value) : []))
+const assignableMembers = computed(() => getAssignableProjectMembers(members.value))
+const currentUserId = computed(() => (userStore.userInfo?.id ? String(userStore.userInfo.id) : ''))
+const canManageProject = computed(() => {
+  return !!project.value?.leaderId && String(project.value.leaderId) === currentUserId.value
+})
 
 const leaderName = computed(() => {
   const leader = members.value.find((member) => member.role === 'leader')
@@ -228,7 +254,7 @@ const taskStats = computed(() => {
   const tasks = project.value?.tasks || []
   const count = (statuses: string[]) => tasks.filter((task) => statuses.includes(task.status)).length
   return [
-    { label: '总任务', value: tasks.length, color: '#4f46e5' },
+    { label: '总检查项', value: tasks.length, color: '#4f46e5' },
     { label: '待办', value: count(['pending']), color: '#94a3b8' },
     { label: '进行中', value: count(['in_progress', 'dispatched']), color: '#0ea5e9' },
     { label: '通过', value: count(['passed', 'approved']), color: '#10b981' },
@@ -264,11 +290,35 @@ const handleCompleteProject = async () => {
   }
 }
 
+const handleAssignTask = async (task: CheckTask, assigneeId: string) => {
+  if (!project.value || !assigneeId) return
+  const assignee = assignableMembers.value.find((member) => member.personnelId === assigneeId)
+  if (!assignee) return
+  assigningTaskId.value = task.id
+  try {
+    project.value = normalizeProject(
+      await projectApi.assignTasks(project.value.id, {
+        taskIds: [task.id],
+        assigneeId: assignee.personnelId,
+        assigneeName: assignee.personnelName,
+        contactId: task.contactId,
+        contactName: task.contactName,
+      }),
+    )
+    ElMessage.success('检查项负责人已更新')
+  } catch {
+    await loadProject()
+  } finally {
+    assigningTaskId.value = ''
+  }
+}
+
 const roleType = (role: string) => {
   const map: Record<string, string> = {
     leader: 'danger',
     auditor: 'warning',
-    reviewer: 'primary',
+    observer: 'info',
+    reviewer: 'info',
     member: 'info',
   }
   return (map[role] || 'info') as any
@@ -276,10 +326,11 @@ const roleType = (role: string) => {
 
 const roleLabel = (role: string) => {
   const map: Record<string, string> = {
-    leader: '负责人',
-    auditor: '审核人',
-    reviewer: '评审人',
-    member: '检查员',
+    leader: '项目负责人',
+    auditor: '项目审计人员',
+    observer: '观察员',
+    reviewer: '观察员',
+    member: '观察员',
   }
   return map[role] || role
 }

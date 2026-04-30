@@ -98,6 +98,16 @@ export const projectApi = {
   create: (data: ProjectUpsertPayload) => request.post<Project>('/v1/projects', data),
   start: (id: string) => request.post<Project>(`/v1/projects/${id}/start`),
   complete: (id: string) => request.post<Project>(`/v1/projects/${id}/complete`),
+  assignTasks: (
+    id: string,
+    data: {
+      taskIds: string[]
+      assigneeId: string
+      assigneeName: string
+      contactId?: string
+      contactName?: string
+    },
+  ) => request.post<Project>(`/v1/projects/${id}/tasks/assign`, data),
   delete: (id: string) => request.delete(`/v1/projects/${id}`),
 }
 

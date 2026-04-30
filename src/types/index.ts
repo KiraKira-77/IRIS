@@ -432,7 +432,7 @@ export interface TeamMember {
   personnelName: string
   employeeNo?: string
   department?: string
-  role: 'leader' | 'auditor' | 'reviewer' | 'member'
+  role: 'leader' | 'auditor' | 'observer' | 'reviewer' | 'member'
   avatar?: string
 }
 export type TaskStatus =
@@ -459,7 +459,7 @@ export interface CheckTask {
   evaluationType?: string
   taskName?: string
   taskDescription?: string
-  assigneeId?: string // 负责人（一人一条任务）
+  assigneeId?: string // 检查项负责人（一人一条检查项）
   assigneeName?: string
   contactId?: string
   contactName?: string

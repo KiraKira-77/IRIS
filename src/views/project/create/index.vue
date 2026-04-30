@@ -123,7 +123,7 @@
               <el-icon class="title-icon"><List /></el-icon>
               <span>检查清单</span>
               <el-tag effect="light" round size="small" class="count-tag"
-                >已选 {{ form.checklistIds.length }} 个清单，{{ generatedTaskCount }} 条任务</el-tag
+                >已选 {{ form.checklistIds.length }} 个清单，{{ generatedTaskCount }} 个检查项</el-tag
               >
             </div>
           </template>
@@ -190,9 +190,8 @@
               <el-col :span="8">
                 <el-select v-model="m.role" style="width: 100%" placeholder="角色">
                   <el-option label="项目负责人" value="leader" />
-                  <el-option label="审核人" value="auditor" />
-                  <el-option label="评审人" value="reviewer" />
-                  <el-option label="检查员" value="member" />
+                  <el-option label="项目审计人员" value="auditor" />
+                  <el-option label="观察员" value="observer" />
                 </el-select>
               </el-col>
               <el-col :span="6">
@@ -206,7 +205,7 @@
               type="primary"
               plain
               :icon="Plus"
-              @click="teamMembers.push({ personnelId: '', personnelName: '', role: 'member' })"
+              @click="teamMembers.push({ personnelId: '', personnelName: '', role: 'observer' })"
               style="margin-top: 12px"
             >
               添加成员

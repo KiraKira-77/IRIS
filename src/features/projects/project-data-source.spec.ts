@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildProjectUpsertPayload,
   filterProjectMemberUsers,
+  getAssignableProjectMembers,
   normalizeProjectPage,
   projectChecklistCount,
   projectProgress,
@@ -72,6 +73,40 @@ describe('project management data sources', () => {
       ]).map((item) => item.id),
     ).toEqual(['4'])
     expect(projectCreateSource).toContain('filterProjectMemberUsers')
+  })
+
+  it('uses project leader, auditor, and observer as the only project team roles', () => {
+    expect(projectCreateSource).toContain('label="项目负责人" value="leader"')
+    expect(projectCreateSource).toContain('label="项目审计人员" value="auditor"')
+    expect(projectCreateSource).toContain('label="观察员" value="observer"')
+    expect(projectCreateSource).not.toContain('label="审核人"')
+    expect(projectCreateSource).not.toContain('label="评审人"')
+    expect(projectCreateSource).not.toContain('label="检查员"')
+    expect(typeSource).toContain("'observer'")
+  })
+
+  it('only allows project leaders and auditors to be assigned to inspection items', () => {
+    const members = [
+      { personnelId: '2001', personnelName: '负责人', role: 'leader' },
+      { personnelId: '2002', personnelName: '审计人员', role: 'auditor' },
+      { personnelId: '2003', personnelName: '观察员', role: 'observer' },
+    ] as const
+
+    expect(getAssignableProjectMembers(members).map((member) => member.personnelId)).toEqual([
+      '2001',
+      '2002',
+    ])
+  })
+
+  it('renames project task wording to inspection item wording', () => {
+    expect(projectDetailSource).toContain('检查项')
+    expect(projectTaskSource).toContain('检查项详情')
+    expect(projectTaskSource).toContain('检查项分配')
+    expect(projectTaskSource).not.toContain('核查任务')
+    expect(projectTaskSource).not.toContain('任务详情')
+    expect(projectTaskSource).not.toContain('任务分配')
+    expect(projectTaskSource).not.toContain('任务名称')
+    expect(projectTaskSource).not.toContain('任务描述')
   })
 
   it('does not expose project tags, maintenance domain, or shared domain', () => {

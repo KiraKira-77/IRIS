@@ -48,6 +48,10 @@ export function filterProjectMemberUsers(users: SystemUser[]): SystemUser[] {
   return users.filter((user) => user.status === 1 && !isSuperAdminUser(user))
 }
 
+export function getAssignableProjectMembers<T extends Pick<TeamMember, 'role'>>(members: readonly T[]): T[] {
+  return members.filter((member) => member.role === 'leader' || member.role === 'auditor')
+}
+
 export function projectChecklistCount(project: Pick<Project, 'checklistIds'>): number {
   return project.checklistIds?.length || 0
 }
