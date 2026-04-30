@@ -46,7 +46,7 @@ export const APP_MENU_GROUPS: AppMenuGroup[] = [
     label: '项目管理',
     children: [
       { code: 'project.list', label: '项目列表', path: '/project/list' },
-      { code: 'project.create', label: '项目启动', path: '/project/create' },
+      { code: 'project.create', label: '项目创建', path: '/project/create' },
     ],
   },
   {

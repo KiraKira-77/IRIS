@@ -138,7 +138,7 @@
                 查看
               </el-button>
               <el-button
-                v-if="canEditProject(row)"
+                v-if="row.status !== 'archived'"
                 link
                 type="primary"
                 size="small"
@@ -147,7 +147,7 @@
                 编辑
               </el-button>
               <el-button
-                v-if="row.status === 'not_started' && canStartProject(row)"
+                v-if="row.status === 'not_started'"
                 link
                 type="success"
                 size="small"
@@ -190,7 +190,6 @@ import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi } from '@/api'
-import { useUserStore } from '@/stores/modules/user'
 import {
   normalizeProjectPage,
   projectChecklistCount,
@@ -203,7 +202,6 @@ import {
 import type { Project } from '@/types'
 
 const router = useRouter()
-const userStore = useUserStore()
 const loading = ref(false)
 const tableData = ref<Project[]>([])
 const searchForm = reactive({
@@ -224,8 +222,7 @@ const projectStats = computed(() => ({
   completed: tableData.value.filter((item) => item.status === 'completed').length,
 }))
 
-onMounted(async () => {
-  await userStore.ensureUserInfoLoaded()
+onMounted(() => {
   loadProjects()
 })
 
@@ -276,14 +273,6 @@ const handlePageChange = () => {
 
 const handleRowClick = (row: Project) => {
   router.push(`/project/detail/${row.id}`)
-}
-
-const canStartProject = (row: Project) => {
-  return !!row.leaderId && String(row.leaderId) === String(userStore.userInfo?.id || '')
-}
-
-const canEditProject = (row: Project) => {
-  return row.status !== 'archived' && !!row.leaderId && String(row.leaderId) === String(userStore.userInfo?.id || '')
 }
 
 const handleStartProject = async (row: Project) => {

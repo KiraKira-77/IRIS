@@ -66,4 +66,11 @@ describe('menu access', () => {
   it('uses the first accessible menu path', () => {
     expect(resolveFirstAccessiblePath(['resource.standards'])).toBe('/resource/standards')
   })
+
+  it('labels project creation as project creation instead of project start', () => {
+    const projectGroup = APP_MENU_GROUPS.find((group) => group.code === 'project')
+    const createMenu = projectGroup?.children.find((item) => item.code === 'project.create')
+
+    expect(createMenu?.label).toBe('项目创建')
+  })
 })

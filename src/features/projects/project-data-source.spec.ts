@@ -139,6 +139,7 @@ describe('project management data sources', () => {
     expect(projectListSource).toContain('handleStartProject(row)')
     expect(projectListSource).toContain('projectApi.start')
     expect(projectListSource).toContain("row.status === 'not_started'")
+    expect(projectListSource).not.toContain('canStartProject(row)')
     expect(projectListSource).toContain('启动')
   })
 
@@ -150,7 +151,6 @@ describe('project management data sources', () => {
   })
 
   it('allows project leaders to edit projects until they are archived', () => {
-    expect(projectListSource).toContain('canEditProject(row)')
     expect(projectListSource).toContain("row.status !== 'archived'")
     expect(projectListSource).toContain('router.push(`/project/create?id=${row.id}`)')
     expect(projectDetailSource).toContain('canEditProject')
