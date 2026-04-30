@@ -91,9 +91,23 @@
                   <strong>{{ order.omsWorkOrderId || order.externalWorkOrderId || order.id }}</strong>
                   <span>{{ order.handlerName || '—' }}</span>
                 </div>
-                <el-tag size="small" effect="dark" :type="workOrderStatusType(order.omsStatus)">
-                  {{ order.omsStatusName || order.omsStatus || '未知' }}
-                </el-tag>
+                <div class="work-order-side">
+                  <el-tag
+                    size="small"
+                    effect="light"
+                    round
+                    class="provider-badge"
+                    :type="workOrderProviderTagType(workOrderProviderOf(order))"
+                  >
+                    <el-icon>
+                      <component :is="workOrderProviderIcon(workOrderProviderOf(order))" />
+                    </el-icon>
+                    {{ workOrderProviderLabel(workOrderProviderOf(order)) }}
+                  </el-tag>
+                  <el-tag size="small" effect="dark" :type="workOrderStatusType(order.omsStatus)">
+                    {{ order.omsStatusName || order.omsStatus || '未知' }}
+                  </el-tag>
+                </div>
               </div>
             </div>
           </section>
@@ -352,7 +366,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back } from '@element-plus/icons-vue'
+import { Back, Connection, House, Link } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { UploadUserFile } from 'element-plus'
 import { checklistApi, projectApi, taskApi } from '@/api'
@@ -757,6 +771,31 @@ const localResultLabel = (result: string) => {
   return map[result] || result
 }
 
+const workOrderProviderOf = (order: ProjectTaskWorkOrder): WorkOrderProvider => {
+  if (order.provider) return order.provider
+  if (order.omsWorkOrderId) return 'oms'
+  if (order.externalWorkOrderId) return 'manual'
+  return 'local'
+}
+
+const workOrderProviderIcon = (provider: WorkOrderProvider) => {
+  const map = {
+    oms: Connection,
+    local: House,
+    manual: Link,
+  }
+  return map[provider]
+}
+
+const workOrderProviderTagType = (provider: WorkOrderProvider) => {
+  const map = {
+    oms: 'primary',
+    local: 'success',
+    manual: 'warning',
+  }
+  return map[provider] as 'primary' | 'success' | 'warning'
+}
+
 const workOrderStatusType = (status?: string) => {
   const map: Record<string, string> = {
     '0': 'info',
@@ -1042,6 +1081,23 @@ const workOrderStatusType = (status?: string) => {
     margin-top: 2px;
     font-size: 12px;
     color: $iris-text-muted;
+  }
+}
+
+.work-order-side {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.provider-badge {
+  font-weight: 600;
+
+  :deep(.el-tag__content) {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
   }
 }
 
