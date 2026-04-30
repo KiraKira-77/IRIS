@@ -11,6 +11,7 @@ import {
   projectChecklistCount,
   projectProgress,
   projectStatusLabel,
+  workOrderProviderLabel,
 } from './project-data'
 import type { PageResult, Project, SystemUser } from '@/types'
 
@@ -141,6 +142,22 @@ describe('project management data sources', () => {
     expect(projectTaskSource).toContain('handlers: workOrderHandlers.value')
     expect(projectTaskSource).toContain("project.value.status === 'in_progress'")
     expect(projectDetailSource).toContain('currentUserIdentityValues.value.has(normalizeIdentityValue(task.assigneeId))')
+  })
+
+  it('shows configurable work order providers and a unified archive snapshot preview', () => {
+    expect(workOrderProviderLabel('oms')).toBe('OMS 工单')
+    expect(workOrderProviderLabel('local')).toBe('本地工单')
+    expect(workOrderProviderLabel('manual')).toBe('手工登记')
+
+    expect(projectTaskSource).toContain('workOrderMode')
+    expect(projectTaskSource).toContain('workOrderModeOptions')
+    expect(projectTaskSource).toContain('localWorkOrderForm')
+    expect(projectTaskSource).toContain('manualWorkOrderForm')
+    expect(projectTaskSource).toContain('archiveSnapshotPreview')
+    expect(projectTaskSource).toContain('归档快照预览')
+    expect(projectTaskSource).toContain("workOrderMode === 'oms'")
+    expect(projectTaskSource).toContain("workOrderMode === 'local'")
+    expect(projectTaskSource).toContain("workOrderMode === 'manual'")
   })
 
   it('renames project task wording to inspection item wording', () => {

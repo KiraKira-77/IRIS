@@ -435,6 +435,7 @@ export interface TeamMember {
   role: 'leader' | 'auditor' | 'observer' | 'reviewer' | 'member'
   avatar?: string
 }
+export type WorkOrderProvider = 'oms' | 'local' | 'manual'
 export type TaskStatus =
   | 'pending'
   | 'in_progress'
@@ -485,7 +486,9 @@ export interface ProjectTaskWorkOrder {
   id: string
   projectId: string
   taskId: string
+  provider?: WorkOrderProvider
   omsWorkOrderId?: string
+  externalWorkOrderId?: string
   handlerId?: string
   handlerEmployeeNo?: string
   handlerName?: string

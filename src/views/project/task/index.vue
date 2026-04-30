@@ -97,6 +97,25 @@
               </div>
             </div>
           </section>
+
+          <section class="section-block archive-preview-section">
+            <div class="section-heading">
+              <span class="heading-mark"></span>
+              <h3>归档快照预览</h3>
+            </div>
+            <div class="archive-summary">
+              <div v-for="item in archiveSnapshotPreview" :key="item.label" class="archive-item">
+                <label>{{ item.label }}</label>
+                <span>{{ item.value }}</span>
+              </div>
+            </div>
+            <div class="archive-flow">
+              <div v-for="item in archiveSnapshotLogPreview" :key="item.title" class="archive-flow-item">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.description }}</span>
+              </div>
+            </div>
+          </section>
         </main>
 
         <aside class="task-side">
@@ -136,50 +155,116 @@
               class="handle-alert"
             />
 
-            <el-form v-else label-position="top" class="handle-form">
-              <el-form-item label="工单标题">
-                <el-input v-model="workOrderForm.title" maxlength="80" show-word-limit />
-              </el-form-item>
-              <el-form-item label="工单说明">
-                <el-input
-                  v-model="workOrderForm.description"
-                  type="textarea"
-                  :rows="4"
-                  maxlength="300"
-                  show-word-limit
+            <template v-else>
+              <div class="provider-switch">
+                <el-segmented
+                  v-model="workOrderMode"
+                  :options="workOrderModeOptions"
+                  block
                 />
-              </el-form-item>
-              <el-form-item label="工单处理人">
-                <el-select
-                  v-model="workOrderForm.handlerIds"
-                  placeholder="选择处理人"
-                  style="width: 100%"
-                  multiple
-                  filterable
-                  collapse-tags
-                  collapse-tags-tooltip
-                >
-                  <el-option
-                    v-for="member in assignableMembers"
-                    :key="member.personnelId"
-                    :label="`${member.personnelName} (${member.employeeNo})`"
-                    :value="member.personnelId"
+                <p>{{ activeWorkOrderModeDescription }}</p>
+              </div>
+
+              <el-form v-if="workOrderMode === 'oms'" label-position="top" class="handle-form">
+                <el-form-item label="工单标题">
+                  <el-input v-model="workOrderForm.title" maxlength="80" show-word-limit />
+                </el-form-item>
+                <el-form-item label="工单说明">
+                  <el-input
+                    v-model="workOrderForm.description"
+                    type="textarea"
+                    :rows="4"
+                    maxlength="300"
+                    show-word-limit
+                  />
+                </el-form-item>
+                <el-form-item label="工单处理人">
+                  <el-select
+                    v-model="workOrderForm.handlerIds"
+                    placeholder="选择处理人"
+                    style="width: 100%"
+                    multiple
+                    filterable
+                    collapse-tags
+                    collapse-tags-tooltip
                   >
-                    <span>{{ member.personnelName }}</span>
-                    <span class="option-meta">{{ member.employeeNo }} · {{ roleLabel(member.role) }}</span>
-                  </el-option>
-                </el-select>
-              </el-form-item>
-              <el-button
-                type="primary"
-                class="submit-btn"
-                :loading="workOrderSubmitting"
-                :disabled="workOrderHandlers.length === 0"
-                @click="handleCreateWorkOrders"
-              >
-                生成工单
-              </el-button>
-            </el-form>
+                    <el-option
+                      v-for="member in assignableMembers"
+                      :key="member.personnelId"
+                      :label="`${member.personnelName} (${member.employeeNo})`"
+                      :value="member.personnelId"
+                    >
+                      <span>{{ member.personnelName }}</span>
+                      <span class="option-meta">{{ member.employeeNo }} · {{ roleLabel(member.role) }}</span>
+                    </el-option>
+                  </el-select>
+                </el-form-item>
+                <el-button
+                  type="primary"
+                  class="submit-btn"
+                  :loading="workOrderSubmitting"
+                  :disabled="workOrderHandlers.length === 0"
+                  @click="handleCreateWorkOrders"
+                >
+                  生成 OMS 工单
+                </el-button>
+              </el-form>
+
+              <el-form v-else-if="workOrderMode === 'local'" label-position="top" class="handle-form">
+                <el-form-item label="办理结果">
+                  <el-radio-group v-model="localWorkOrderForm.result">
+                    <el-radio-button value="passed">通过</el-radio-button>
+                    <el-radio-button value="nonconforming">不符合项</el-radio-button>
+                  </el-radio-group>
+                </el-form-item>
+                <el-form-item label="办理说明">
+                  <el-input
+                    v-model="localWorkOrderForm.summary"
+                    type="textarea"
+                    :rows="4"
+                    maxlength="500"
+                    show-word-limit
+                  />
+                </el-form-item>
+                <el-form-item label="附件">
+                  <el-upload
+                    v-model:file-list="localWorkOrderForm.attachments"
+                    action="#"
+                    :auto-upload="false"
+                    multiple
+                  >
+                    <el-button>选择附件</el-button>
+                  </el-upload>
+                </el-form-item>
+                <el-button type="primary" class="submit-btn" @click="handleLocalWorkOrderPreview">
+                  更新归档预览
+                </el-button>
+              </el-form>
+
+              <el-form v-else-if="workOrderMode === 'manual'" label-position="top" class="handle-form">
+                <el-form-item label="外部工单号">
+                  <el-input v-model="manualWorkOrderForm.externalWorkOrderId" maxlength="80" />
+                </el-form-item>
+                <el-form-item label="外部链接">
+                  <el-input v-model="manualWorkOrderForm.externalUrl" maxlength="200" />
+                </el-form-item>
+                <el-form-item label="当前状态">
+                  <el-input v-model="manualWorkOrderForm.statusName" maxlength="40" />
+                </el-form-item>
+                <el-form-item label="处理结论">
+                  <el-input
+                    v-model="manualWorkOrderForm.resultSummary"
+                    type="textarea"
+                    :rows="4"
+                    maxlength="500"
+                    show-word-limit
+                  />
+                </el-form-item>
+                <el-button type="primary" class="submit-btn" @click="handleManualWorkOrderPreview">
+                  更新归档预览
+                </el-button>
+              </el-form>
+            </template>
           </section>
         </aside>
       </div>
@@ -194,6 +279,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import type { UploadUserFile } from 'element-plus'
 import { checklistApi, projectApi, taskApi } from '@/api'
 import {
   CONTROL_FREQUENCY_OPTIONS,
@@ -208,9 +294,17 @@ import {
   normalizeProjectPage,
   taskStatusLabel,
   taskStatusType,
+  WORK_ORDER_PROVIDER_OPTIONS,
+  workOrderProviderLabel,
 } from '@/features/projects/project-data'
 import { useUserStore } from '@/stores'
-import type { CheckTask, ControlChecklist, Project, ProjectTaskWorkOrder } from '@/types'
+import type {
+  CheckTask,
+  ControlChecklist,
+  Project,
+  ProjectTaskWorkOrder,
+  WorkOrderProvider,
+} from '@/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -221,10 +315,22 @@ const project = ref<Project>()
 const checklistOptions = ref<ControlChecklist[]>([])
 const workOrders = ref<ProjectTaskWorkOrder[]>([])
 const workOrderSubmitting = ref(false)
+const workOrderMode = ref<WorkOrderProvider>('oms')
 const workOrderForm = ref({
   title: '',
   description: '',
   handlerIds: [] as string[],
+})
+const localWorkOrderForm = ref({
+  result: 'passed',
+  summary: '',
+  attachments: [] as UploadUserFile[],
+})
+const manualWorkOrderForm = ref({
+  externalWorkOrderId: '',
+  externalUrl: '',
+  statusName: '',
+  resultSummary: '',
 })
 
 onMounted(async () => {
@@ -236,6 +342,15 @@ onMounted(async () => {
 
 const projectId = computed(() => (route.query.projectId as string | undefined) || project.value?.id || '')
 const handleModeRequested = computed(() => route.query.action === 'handle')
+const workOrderModeOptions = WORK_ORDER_PROVIDER_OPTIONS.map((item) => ({
+  label: item.label,
+  value: item.value,
+}))
+const activeWorkOrderModeDescription = computed(
+  () =>
+    WORK_ORDER_PROVIDER_OPTIONS.find((item) => item.value === workOrderMode.value)?.description ||
+    '',
+)
 const members = computed(() => (project.value ? getProjectMembers(project.value) : []))
 const assignableMembers = computed(() =>
   getAssignableProjectMembers(members.value).filter((member) => !!normalizeIdentityValue(member.employeeNo)),
@@ -301,6 +416,81 @@ const workOrderHandlers = computed(() =>
       handlerName: member.personnelName,
     })),
 )
+const archiveSnapshotPreview = computed(() => {
+  const providerLabel = workOrderProviderLabel(workOrderMode.value)
+  const orderCountText =
+    workOrderMode.value === 'oms' ? `${workOrders.value.length} 个 OMS 工单` : previewOrderCountText.value
+  return [
+    { label: '来源系统', value: providerLabel },
+    { label: '检查项', value: task.value?.taskName || task.value?.checkContent || '—' },
+    { label: '处理人', value: snapshotHandlerText.value },
+    { label: '工单数量', value: orderCountText },
+    { label: '处理结果', value: snapshotResultText.value },
+    { label: '附件来源', value: snapshotAttachmentText.value },
+  ]
+})
+const archiveSnapshotLogPreview = computed(() => {
+  if (workOrderMode.value === 'oms') {
+    return [
+      {
+        title: '同步外部工单',
+        description: '从 OMS 拉取状态、日志和附件。',
+      },
+      {
+        title: '生成统一快照',
+        description: '归档时固化为项目生命周期档案。',
+      },
+    ]
+  }
+  if (workOrderMode.value === 'local') {
+    return [
+      {
+        title: '本地办理',
+        description: 'IRIS 保存办理说明、日志和附件。',
+      },
+      {
+        title: '生成统一快照',
+        description: '归档读取同一套快照结构。',
+      },
+    ]
+  }
+  return [
+    {
+      title: '登记外部信息',
+      description: '录入工单号、链接、状态和处理结论。',
+    },
+    {
+      title: '生成统一快照',
+      description: '归档时与本地、OMS 工单保持同一口径。',
+    },
+  ]
+})
+const previewOrderCountText = computed(() => {
+  if (workOrderMode.value === 'local') return localWorkOrderForm.value.summary.trim() ? '1 个本地工单' : '待办理'
+  return manualWorkOrderForm.value.externalWorkOrderId.trim() ? '1 个外部工单' : '待登记'
+})
+const snapshotHandlerText = computed(() => {
+  if (workOrderMode.value === 'oms') {
+    return workOrderHandlers.value.map((handler) => handler.handlerName).join('、') || '待选择'
+  }
+  return task.value?.assigneeName || currentProjectMember.value?.personnelName || '待确认'
+})
+const snapshotResultText = computed(() => {
+  if (workOrderMode.value === 'oms') {
+    return workOrders.value.length > 0 ? '以 OMS 同步结果为准' : '待生成工单'
+  }
+  if (workOrderMode.value === 'local') {
+    return localResultLabel(localWorkOrderForm.value.result)
+  }
+  return manualWorkOrderForm.value.statusName.trim() || '待登记'
+})
+const snapshotAttachmentText = computed(() => {
+  if (workOrderMode.value === 'oms') return 'OMS 日志附件'
+  if (workOrderMode.value === 'local') {
+    return `${localWorkOrderForm.value.attachments.length} 个本地附件`
+  }
+  return manualWorkOrderForm.value.externalUrl.trim() ? '外部链接' : '待登记'
+})
 
 const loadChecklistOptions = async () => {
   const page = normalizeChecklistPageFromApi(await checklistApi.list({ page: 1, pageSize: 100 }))
@@ -372,6 +562,14 @@ const handleCreateWorkOrders = async () => {
   }
 }
 
+const handleLocalWorkOrderPreview = () => {
+  ElMessage.info('已更新本地工单归档预览，接口接入后保存办理记录')
+}
+
+const handleManualWorkOrderPreview = () => {
+  ElMessage.info('已更新手工登记归档预览，接口接入后保存外部工单信息')
+}
+
 const getChecklistName = (id: string) =>
   checklistOptions.value.find((item) => item.id === id)?.name || id
 
@@ -400,6 +598,14 @@ const roleLabel = (role: string) => {
     member: '观察员',
   }
   return map[role] || role
+}
+
+const localResultLabel = (result: string) => {
+  const map: Record<string, string> = {
+    passed: '通过',
+    nonconforming: '不符合项',
+  }
+  return map[result] || result
 }
 
 const workOrderStatusType = (status?: string) => {
@@ -690,6 +896,73 @@ const workOrderStatusType = (status?: string) => {
   }
 }
 
+.archive-preview-section {
+  background: #fbfcff;
+}
+
+.archive-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.archive-item {
+  min-width: 0;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  label,
+  span {
+    display: block;
+  }
+
+  label {
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: $iris-text-muted;
+  }
+
+  span {
+    overflow: hidden;
+    font-size: 13px;
+    font-weight: 600;
+    color: $iris-text-primary;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.archive-flow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.archive-flow-item {
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    margin-bottom: 4px;
+    color: $iris-text-primary;
+  }
+
+  span {
+    color: $iris-text-secondary;
+    line-height: 1.5;
+  }
+}
+
 .work-order-panel {
   background: #f9fbff;
 
@@ -701,6 +974,19 @@ const workOrderStatusType = (status?: string) => {
 
 .handle-alert {
   margin-top: 4px;
+}
+
+.provider-switch {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+
+  p {
+    margin: 0;
+    font-size: 12px;
+    color: $iris-text-secondary;
+    line-height: 1.5;
+  }
 }
 
 .handle-form {
@@ -751,6 +1037,11 @@ const workOrderStatusType = (status?: string) => {
 
   .compact-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .archive-summary,
+  .archive-flow {
+    grid-template-columns: 1fr;
   }
 }
 </style>
