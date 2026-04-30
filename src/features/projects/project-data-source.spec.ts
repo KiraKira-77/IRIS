@@ -150,6 +150,14 @@ describe('project management data sources', () => {
     expect(projectListSource).not.toContain('>项目启动</el-button>')
   })
 
+  it('shows associated plans as a parent-child tree in project creation', () => {
+    expect(projectCreateSource).toContain('el-tree-select')
+    expect(projectCreateSource).toContain('planTreeOptions')
+    expect(projectCreateSource).toContain('buildControlPlanTree')
+    expect(projectCreateSource).toContain(':check-strictly="true"')
+    expect(projectCreateSource).not.toContain('v-for="p in availablePlans"')
+  })
+
   it('allows project leaders to edit projects until they are archived', () => {
     expect(projectListSource).toContain("row.status !== 'archived'")
     expect(projectListSource).toContain('router.push(`/project/create?id=${row.id}`)')

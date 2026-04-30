@@ -63,19 +63,17 @@
               </el-col>
               <el-col :span="8" v-if="form.source === 'plan'">
                 <el-form-item label="关联计划" prop="planId">
-                  <el-select
+                  <el-tree-select
                     v-model="form.planId"
+                    :data="planTreeOptions"
+                    :props="{ label: 'label', value: 'value', children: 'children', disabled: 'disabled' }"
+                    :check-strictly="true"
                     placeholder="选择关联的计划"
                     style="width: 100%"
+                    filterable
+                    default-expand-all
                     @change="onPlanChange"
-                  >
-                    <el-option
-                      v-for="p in availablePlans"
-                      :key="p.id"
-                      :label="p.name"
-                      :value="p.id"
-                    />
-                  </el-select>
+                  />
                 </el-form-item>
               </el-col>
               <el-col :span="8">
@@ -249,7 +247,7 @@ import {
 } from '@element-plus/icons-vue'
 import { checklistApi, planApi, projectApi, systemUserApi } from '@/api'
 import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
-import { normalizePlanPage } from '@/features/plans/plan-data'
+import { buildControlPlanTree, normalizePlanPage } from '@/features/plans/plan-data'
 import {
   buildProjectUpsertPayload,
   filterProjectMemberUsers,
@@ -301,9 +299,40 @@ const basicRules: FormRules = {
 const availablePlans = ref<ControlPlan[]>([])
 const checklistOptions = ref<ControlChecklist[]>([])
 const users = ref<SystemUser[]>([])
+type PlanTreeOption = {
+  label: string
+  value: string
+  disabled?: boolean
+  children?: PlanTreeOption[]
+}
+
 const personnelOptions = computed(() => {
   return filterProjectMemberUsers(users.value)
 })
+
+const canAssociatePlan = (plan: ControlPlan) => ['approved', 'in_progress'].includes(plan.status)
+
+const planTreeOptions = computed<PlanTreeOption[]>(() =>
+  buildControlPlanTree(availablePlans.value)
+    .map((plan) => buildPlanTreeOption(plan))
+    .filter((option): option is PlanTreeOption => Boolean(option)),
+)
+
+const buildPlanTreeOption = (plan: ControlPlan): PlanTreeOption | null => {
+  const children = (plan.children || [])
+    .map((child) => buildPlanTreeOption(child))
+    .filter((option): option is PlanTreeOption => Boolean(option))
+  const selectable = canAssociatePlan(plan)
+
+  if (!selectable && children.length === 0) return null
+
+  return {
+    label: plan.parentId ? plan.name : `${plan.name}（主计划）`,
+    value: plan.id,
+    disabled: !selectable || children.length > 0,
+    children: children.length ? children : undefined,
+  }
+}
 
 const generatedTaskCount = computed(() => {
   return form.value.checklistIds.reduce((sum, clId) => {
@@ -317,7 +346,7 @@ const generatedTaskCount = computed(() => {
 // ==================
 const loadAvailablePlans = async () => {
   const page = normalizePlanPage(await planApi.list({ page: 1, pageSize: 100 }))
-  availablePlans.value = page.list.filter((p) => ['approved', 'in_progress'].includes(p.status))
+  availablePlans.value = page.list
 }
 
 const loadChecklistOptions = async () => {
