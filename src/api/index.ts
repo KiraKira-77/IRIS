@@ -124,9 +124,6 @@ export const taskApi = {
       description?: string
       taskName?: string
       taskDescription?: string
-      contactId?: string
-      contactName?: string
-      contactEmployeeNo?: string
       issuedAt?: string
       handlers: Array<{ handlerId: string; handlerEmployeeNo: string; handlerName: string }>
     },

@@ -56,10 +56,6 @@
                 <span>{{ task.assigneeName || '待分配' }}</span>
               </div>
               <div class="meta-item">
-                <label>对接人</label>
-                <span>{{ task.contactName || '—' }}</span>
-              </div>
-              <div class="meta-item">
                 <label>下达时间</label>
                 <span>{{ normalizeDateText(task.issuedAt) || '—' }}</span>
               </div>
@@ -249,24 +245,6 @@
                     show-word-limit
                   />
                 </el-form-item>
-                <el-form-item label="对接人">
-                  <el-select
-                    v-model="workOrderForm.contactId"
-                    placeholder="选择对接人"
-                    style="width: 100%"
-                    filterable
-                  >
-                    <el-option
-                      v-for="user in contactUserOptions"
-                      :key="user.id"
-                      :label="systemUserLabel(user)"
-                      :value="user.id"
-                    >
-                      <span>{{ user.username }}</span>
-                      <span class="option-meta">{{ user.account }}</span>
-                    </el-option>
-                  </el-select>
-                </el-form-item>
                 <el-form-item label="下达时间">
                   <el-date-picker
                     v-model="workOrderForm.issuedAt"
@@ -277,10 +255,10 @@
                     style="width: 100%"
                   />
                 </el-form-item>
-                <el-form-item label="工单处理人">
+                <el-form-item label="工单负责人">
                   <el-select
                     v-model="workOrderForm.handlerId"
-                    placeholder="选择处理人"
+                    placeholder="选择工单负责人"
                     style="width: 100%"
                     filterable
                   >
@@ -324,24 +302,6 @@
                       show-word-limit
                     />
                   </el-form-item>
-                  <el-form-item label="对接人">
-                    <el-select
-                      v-model="localWorkOrderForm.contactId"
-                      placeholder="选择对接人"
-                      style="width: 100%"
-                      filterable
-                    >
-                      <el-option
-                        v-for="user in contactUserOptions"
-                        :key="user.id"
-                        :label="systemUserLabel(user)"
-                        :value="user.id"
-                      >
-                        <span>{{ user.username }}</span>
-                        <span class="option-meta">{{ user.account }}</span>
-                      </el-option>
-                    </el-select>
-                  </el-form-item>
                   <el-form-item label="下达时间">
                     <el-date-picker
                       v-model="localWorkOrderForm.issuedAt"
@@ -352,10 +312,10 @@
                       style="width: 100%"
                     />
                   </el-form-item>
-                  <el-form-item label="工单处理人">
+                  <el-form-item label="工单负责人">
                     <el-select
                       v-model="localWorkOrderForm.handlerId"
-                      placeholder="选择处理人"
+                      placeholder="选择工单负责人"
                       style="width: 100%"
                       filterable
                     >
@@ -574,7 +534,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Back, Connection, Delete as DeleteIcon, House, Link, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { UploadUserFile } from 'element-plus'
-import { checklistApi, projectApi, systemUserApi, taskApi } from '@/api'
+import { checklistApi, projectApi, taskApi } from '@/api'
 import {
   CONTROL_FREQUENCY_OPTIONS,
   EVALUATION_TYPE_OPTIONS,
@@ -582,7 +542,6 @@ import {
   optionLabel,
 } from '@/features/checklists/checklist-data'
 import {
-  filterProjectMemberUsers,
   getAssignableProjectMembers,
   getProjectMembers,
   normalizeProject,
@@ -598,7 +557,6 @@ import type {
   ControlChecklist,
   Project,
   ProjectTaskWorkOrder,
-  SystemUser,
   WorkOrderProvider,
 } from '@/types'
 
@@ -609,7 +567,6 @@ const loading = ref(false)
 const task = ref<CheckTask>()
 const project = ref<Project>()
 const checklistOptions = ref<ControlChecklist[]>([])
-const systemUsers = ref<SystemUser[]>([])
 const workOrders = ref<ProjectTaskWorkOrder[]>([])
 const workOrderSubmitting = ref(false)
 const workOrderDeletingIds = ref(new Set<string>())
@@ -620,14 +577,12 @@ const localWorkOrderCompletedAt = ref('')
 const workOrderForm = ref({
   taskName: '',
   taskDescription: '',
-  contactId: '',
   issuedAt: '',
   handlerId: '',
 })
 const localWorkOrderForm = ref({
   taskName: '',
   taskDescription: '',
-  contactId: '',
   issuedAt: '',
   handlerId: '',
 })
@@ -666,7 +621,7 @@ const auditResultOptions = [
 
 onMounted(async () => {
   await userStore.ensureUserInfoLoaded()
-  await Promise.all([loadChecklistOptions(), loadSystemUsers(), loadTask()])
+  await Promise.all([loadChecklistOptions(), loadTask()])
   resetWorkOrderForm()
   await loadWorkOrders()
 })
@@ -685,13 +640,6 @@ const activeWorkOrderModeDescription = computed(
 const members = computed(() => (project.value ? getProjectMembers(project.value) : []))
 const assignableMembers = computed(() =>
   getAssignableProjectMembers(members.value).filter((member) => !!normalizeIdentityValue(member.employeeNo)),
-)
-const contactUserOptions = computed(() => filterProjectMemberUsers(systemUsers.value))
-const selectedWorkOrderContact = computed(() =>
-  contactUserOptions.value.find((user) => String(user.id) === String(workOrderForm.value.contactId)),
-)
-const selectedLocalWorkOrderContact = computed(() =>
-  contactUserOptions.value.find((user) => String(user.id) === String(localWorkOrderForm.value.contactId)),
 )
 const currentUserIdentityValues = computed(() => {
   const user = userStore.userInfo
@@ -767,7 +715,7 @@ const firstLocalWorkOrderHandler = computed(() => localWorkOrderHandlers.value[0
 const localWorkOrderDetailRows = computed(() => [
   { label: '任务名称', value: localWorkOrderForm.value.taskName || '—' },
   { label: '任务描述', value: localWorkOrderForm.value.taskDescription || '—' },
-  { label: '对接人', value: selectedLocalWorkOrderContact.value ? systemUserLabel(selectedLocalWorkOrderContact.value) : '—' },
+  { label: '工单负责人', value: personText(firstLocalWorkOrderHandler.value?.handlerName, firstLocalWorkOrderHandler.value?.handlerEmployeeNo) },
   { label: '下达时间', value: localWorkOrderForm.value.issuedAt || '—' },
   { label: '完成时间', value: localWorkOrderCompletedAt.value || '待完成' },
   { label: '审核结果', value: auditResultLabel(workOrderReviewResults.value[localWorkOrderId.value]?.result || 'pending') },
@@ -784,9 +732,6 @@ const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
       externalWorkOrderId: localWorkOrderId.value,
       taskName: localWorkOrderForm.value.taskName,
       taskDescription: localWorkOrderForm.value.taskDescription,
-      contactId: selectedLocalWorkOrderContact.value?.id,
-      contactName: selectedLocalWorkOrderContact.value?.username,
-      contactEmployeeNo: selectedLocalWorkOrderContact.value?.account,
       handlerId: firstLocalWorkOrderHandler.value?.handlerId,
       handlerEmployeeNo: firstLocalWorkOrderHandler.value?.handlerEmployeeNo,
       handlerName: firstLocalWorkOrderHandler.value?.handlerName,
@@ -816,16 +761,14 @@ const personText = (name?: string, employeeNo?: string) => {
 }
 const workOrderRecordRows = (order: ProjectTaskWorkOrder) => [
   { label: '任务描述', value: order.taskDescription || task.value?.taskDescription || '—' },
-  { label: '对接人', value: personText(order.contactName, order.contactEmployeeNo) },
-  { label: '处理人', value: personText(order.handlerName, order.handlerEmployeeNo) },
+  { label: '工单负责人', value: personText(order.handlerName, order.handlerEmployeeNo) },
   { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
   { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
 ]
 const workOrderDetailRows = (order: ProjectTaskWorkOrder) => [
   { label: '任务名称', value: workOrderDisplayTitle(order) },
   { label: '任务描述', value: order.taskDescription || task.value?.taskDescription || '—' },
-  { label: '对接人', value: personText(order.contactName, order.contactEmployeeNo) },
-  { label: '处理人', value: personText(order.handlerName, order.handlerEmployeeNo) },
+  { label: '工单负责人', value: personText(order.handlerName, order.handlerEmployeeNo) },
   { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
   { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
   { label: '工单状态', value: workOrderStatusLabel(order) },
@@ -848,7 +791,7 @@ const archiveSnapshotPreview = computed(() => {
   return [
     { label: '来源系统', value: providerLabel },
     { label: '检查项', value: task.value?.taskName || task.value?.checkContent || '—' },
-    { label: '处理人', value: snapshotHandlerText.value },
+    { label: '工单负责人', value: snapshotHandlerText.value },
     { label: '工单数量', value: orderCountText },
     { label: '检查项结论', value: snapshotResultText.value },
     { label: '附件来源', value: snapshotAttachmentText.value },
@@ -871,11 +814,11 @@ const archiveSnapshotLogPreview = computed(() => {
     return [
       {
         title: '创建本地工单',
-        description: 'IRIS 生成本地工单并确定处理人。',
+        description: 'IRIS 生成本地工单并确定工单负责人。',
       },
       {
         title: '填写工作日志',
-        description: '处理人在本地工单内提交日志和附件。',
+        description: '工单负责人在本地工单内提交日志和附件。',
       },
       {
         title: '工单审核',
@@ -927,10 +870,6 @@ const loadChecklistOptions = async () => {
   checklistOptions.value = page.list
 }
 
-const loadSystemUsers = async () => {
-  systemUsers.value = await systemUserApi.list()
-}
-
 const loadTask = async () => {
   loading.value = true
   try {
@@ -971,22 +910,15 @@ const resetWorkOrderForm = () => {
       normalizeIdentityValue(member.personnelId) === normalizeIdentityValue(currentTask.assigneeId) ||
       normalizeIdentityValue(member.personnelName) === normalizeIdentityValue(currentTask.assigneeName),
   )
-  const contact = contactUserOptions.value.find(
-    (user) =>
-      normalizeIdentityValue(user.id) === normalizeIdentityValue(currentTask.contactId) ||
-      normalizeIdentityValue(user.username) === normalizeIdentityValue(currentTask.contactName),
-  )
   workOrderForm.value = {
     taskName: currentTask.taskName || currentTask.checkContent,
     taskDescription: currentTask.taskDescription || currentTask.checkCriterion,
-    contactId: contact?.id || '',
     issuedAt: normalizeDateText(currentTask.issuedAt),
     handlerId: assignee?.personnelId || '',
   }
   localWorkOrderForm.value = {
     taskName: currentTask.taskName || currentTask.checkContent,
     taskDescription: currentTask.taskDescription || currentTask.checkCriterion,
-    contactId: contact?.id || '',
     issuedAt: normalizeDateText(currentTask.issuedAt),
     handlerId: assignee?.personnelId || '',
   }
@@ -1002,9 +934,6 @@ const handleCreateWorkOrders = async () => {
       description: workOrderForm.value.taskDescription.trim() || undefined,
       taskName: workOrderForm.value.taskName.trim() || undefined,
       taskDescription: workOrderForm.value.taskDescription.trim() || undefined,
-      contactId: selectedWorkOrderContact.value?.id,
-      contactName: selectedWorkOrderContact.value?.username,
-      contactEmployeeNo: selectedWorkOrderContact.value?.account,
       issuedAt: workOrderForm.value.issuedAt || undefined,
       handlers: workOrderHandlers.value,
     })
@@ -1309,8 +1238,6 @@ const currentDateTimeText = () => {
   const pad = (value: number) => String(value).padStart(2, '0')
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
 }
-
-const systemUserLabel = (user: SystemUser) => `${user.username} (${user.account})`
 
 const workOrderProviderOf = (order: ProjectTaskWorkOrder): WorkOrderProvider => {
   if (order.provider) return order.provider
