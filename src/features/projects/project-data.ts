@@ -1,4 +1,5 @@
-import type { PageResult, Project, ProjectStatus, ProjectUpsertPayload, TeamMember } from '@/types'
+import { isSuperAdminUser } from '@/features/plans/plan-assignee-options'
+import type { PageResult, Project, ProjectStatus, ProjectUpsertPayload, SystemUser, TeamMember } from '@/types'
 
 interface BackendPage<T> {
   records?: T[]
@@ -41,6 +42,10 @@ export function normalizeProject(project: Project): Project {
 
 export function getProjectMembers(project: Pick<Project, 'members' | 'team'>): TeamMember[] {
   return project.members || project.team || []
+}
+
+export function filterProjectMemberUsers(users: SystemUser[]): SystemUser[] {
+  return users.filter((user) => user.status === 1 && !isSuperAdminUser(user))
 }
 
 export function projectChecklistCount(project: Pick<Project, 'checklistIds'>): number {

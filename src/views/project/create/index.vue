@@ -251,7 +251,7 @@ import {
 import { checklistApi, planApi, projectApi, systemUserApi } from '@/api'
 import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
 import { normalizePlanPage } from '@/features/plans/plan-data'
-import { buildProjectUpsertPayload } from '@/features/projects/project-data'
+import { buildProjectUpsertPayload, filterProjectMemberUsers } from '@/features/projects/project-data'
 import type { ControlChecklist, ControlPlan, SystemUser, TeamMember } from '@/types'
 
 const router = useRouter()
@@ -292,7 +292,7 @@ const availablePlans = ref<ControlPlan[]>([])
 const checklistOptions = ref<ControlChecklist[]>([])
 const users = ref<SystemUser[]>([])
 const personnelOptions = computed(() => {
-  return users.value.filter((user) => user.status === 1)
+  return filterProjectMemberUsers(users.value)
 })
 
 const generatedTaskCount = computed(() => {

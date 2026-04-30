@@ -5,12 +5,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildProjectUpsertPayload,
+  filterProjectMemberUsers,
   normalizeProjectPage,
   projectChecklistCount,
   projectProgress,
   projectStatusLabel,
 } from './project-data'
-import type { PageResult, Project } from '@/types'
+import type { PageResult, Project, SystemUser } from '@/types'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const projectListSource = readFileSync(join(here, '../../views/project/list/index.vue'), 'utf8')
@@ -48,6 +49,29 @@ describe('project management data sources', () => {
     expect(projectListSource).not.toContain('value="preparing"')
     expect(projectDetailSource).not.toContain("status === 'preparing'")
     expect(projectStatusLabel('not_started')).toBe('待启动')
+  })
+
+  it('filters super administrators out of project member options', () => {
+    const user = (id: string, account: string, roleCodes: string[] = []): SystemUser => ({
+      id,
+      tenantId: '1001',
+      account,
+      username: `用户${id}`,
+      status: 1,
+      roleIds: [],
+      roleCodes,
+    })
+
+    expect(
+      filterProjectMemberUsers([
+        user('1', 'admin'),
+        user('2', 'platform', ['PLATFORM_ADMIN']),
+        user('3', 'root', ['SUPER_ADMIN']),
+        user('4', 'auditor', ['AUDITOR']),
+        { ...user('5', 'disabled', ['AUDITOR']), status: 0 },
+      ]).map((item) => item.id),
+    ).toEqual(['4'])
+    expect(projectCreateSource).toContain('filterProjectMemberUsers')
   })
 
   it('does not expose project tags, maintenance domain, or shared domain', () => {
