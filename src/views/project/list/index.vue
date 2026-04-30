@@ -276,149 +276,268 @@ const handleDelete = async (row: Project) => {
 @use '@/styles/variables.scss' as *;
 
 .project-hero {
-  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: 24px;
-  align-items: center;
-  padding: 24px 28px;
-  margin-bottom: 20px;
-  overflow: hidden;
-  background: linear-gradient(135deg, #fff, #eef6ff);
-  border: 1px solid #dbeafe;
-  border-radius: 8px;
+  grid-template-columns: minmax(280px, 1fr) minmax(420px, 0.9fr) auto;
+  gap: 20px;
+  align-items: stretch;
+  margin-bottom: 18px;
+}
+
+.hero-copy,
+.hero-panel,
+.project-toolbar,
+.table-shell,
+.pagination-wrapper {
+  background: oklch(99% 0.005 248);
+  border: 1px solid oklch(91% 0.016 248);
+  box-shadow: 0 10px 28px oklch(55% 0.035 248 / 8%);
 }
 
 .hero-copy {
-  .hero-kicker {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 13px;
-    font-weight: 700;
-    color: $iris-primary;
-  }
+  min-height: 142px;
+  padding: 24px 28px;
+  border-radius: 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
 
-  .page-title {
-    margin: 0 0 6px;
-    font-size: 24px;
-    font-weight: 700;
-    color: $iris-text-primary;
-  }
+.hero-kicker {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: oklch(50% 0.1 250);
+}
 
-  .page-subtitle {
-    margin: 0;
-    color: $iris-text-secondary;
-  }
+.page-title {
+  margin: 0;
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 760;
+  color: oklch(24% 0.035 248);
+}
+
+.page-subtitle {
+  max-width: 52ch;
+  margin-top: 10px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: oklch(48% 0.03 248);
 }
 
 .hero-panel {
+  border-radius: 18px;
+  padding: 16px;
   display: grid;
-  grid-template-columns: repeat(4, minmax(82px, 1fr));
-  gap: 12px;
+  grid-template-columns: 1.35fr 1fr 1fr;
+  gap: 10px;
 }
 
 .hero-stat {
-  min-width: 82px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.78);
-  border: 1px solid rgba(148, 163, 184, 0.24);
-  border-radius: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: oklch(97.5% 0.01 248);
+  border: 1px solid oklch(92% 0.014 248);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
 
-  .stat-label,
-  .stat-note {
-    display: block;
-    font-size: 12px;
-    color: $iris-text-muted;
-  }
+.hero-stat-main {
+  grid-row: span 2;
+  background: oklch(95% 0.035 250);
+  border-color: oklch(85% 0.06 250);
+}
 
-  strong {
-    display: block;
-    margin: 4px 0;
-    font-size: 22px;
-    color: $iris-text-primary;
+.stat-label,
+.stat-note,
+.table-count {
+  font-size: 12px;
+  color: oklch(50% 0.028 248);
+}
+
+.hero-stat strong {
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 760;
+  color: oklch(28% 0.05 248);
+}
+
+.hero-stat-main strong {
+  font-size: 38px;
+  color: oklch(41% 0.14 250);
+}
+
+.hero-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.project-toolbar {
+  margin-bottom: 18px;
+  padding: 16px 18px 0;
+  border-radius: 14px;
+
+  :deep(.el-form) {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 10px;
   }
 }
 
-.project-toolbar,
 .table-shell {
-  padding: 20px 24px;
-  margin-bottom: 18px;
-  background: #fff;
-  border: 1px solid $iris-border-light;
-  border-radius: 8px;
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .keyword-input {
-  width: 240px;
-}
-
-.date-range {
   width: 260px;
 }
 
+.date-range {
+  width: 280px;
+}
+
 .status-select {
-  width: 140px;
+  width: 132px;
 }
 
 .table-heading {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  margin-bottom: 16px;
+  gap: 16px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid oklch(92% 0.014 248);
 
   h3 {
-    margin: 0 0 4px;
+    margin: 0;
     font-size: 16px;
-    color: $iris-text-primary;
+    font-weight: 720;
+    color: oklch(26% 0.035 248);
   }
 
-  p,
-  .table-count {
-    margin: 0;
+  p {
+    margin-top: 5px;
     font-size: 13px;
-    color: $iris-text-muted;
+    color: oklch(52% 0.028 248);
   }
 }
 
 .project-title-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  font: inherit;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 4px;
   padding: 0;
   text-align: left;
   cursor: pointer;
-  background: transparent;
-  border: 0;
 
   span {
-    font-weight: 600;
-    color: $iris-text-primary;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: oklch(35% 0.1 250);
+    font-weight: 680;
+    white-space: nowrap;
   }
 
   small {
-    font-family: monospace;
-    color: $iris-text-muted;
+    font-size: 12px;
+    color: oklch(56% 0.026 248);
+  }
+
+  &:hover span {
+    color: oklch(42% 0.15 250);
+  }
+
+  &:focus-visible {
+    border-radius: 6px;
+    outline: 2px solid oklch(68% 0.13 250);
+    outline-offset: 3px;
   }
 }
 
 .row-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 2px;
+  flex-wrap: wrap;
 }
 
 .pagination-wrapper {
+  margin-top: 16px;
   display: flex;
   justify-content: flex-end;
-  padding: 4px 0 16px;
+  padding: 14px 18px;
+  border-radius: 14px;
 }
 
-@media (max-width: 1120px) {
+:deep(.table-shell .el-table) {
+  border-radius: 0;
+  box-shadow: none;
+}
+
+:deep(.table-shell .el-table th.el-table__cell) {
+  background: oklch(97% 0.01 248);
+}
+
+@media (max-width: 1180px) {
   .project-hero {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-actions {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .project-hero {
+    gap: 12px;
+  }
+
+  .hero-copy,
+  .hero-panel,
+  .project-toolbar,
+  .table-shell,
+  .pagination-wrapper {
+    border-radius: 12px;
+  }
+
+  .hero-copy {
+    min-height: auto;
+    padding: 18px;
   }
 
   .hero-panel {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
+  }
+
+  .hero-stat-main {
+    grid-row: auto;
+  }
+
+  .page-title {
+    font-size: 23px;
+  }
+
+  .keyword-input,
+  .date-range,
+  .status-select {
+    width: 100%;
+  }
+
+  .table-heading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

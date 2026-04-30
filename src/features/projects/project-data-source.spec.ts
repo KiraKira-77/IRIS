@@ -31,6 +31,15 @@ describe('project management data sources', () => {
     expect(projectDetailSource).not.toContain('mockProjects')
   })
 
+  it('keeps the project list aligned with the standards management page structure', () => {
+    expect(projectListSource).toContain('project-hero')
+    expect(projectListSource).toContain('project-toolbar')
+    expect(projectListSource).toContain('table-shell')
+    expect(projectListSource).toContain('row-actions')
+    expect(projectListSource).toContain('background: oklch')
+    expect(projectListSource).not.toContain('linear-gradient')
+  })
+
   it('uses backend project lifecycle states', () => {
     expect(typeSource).toContain("'not_started'")
     expect(typeSource).not.toContain("| 'preparing'")
