@@ -501,6 +501,14 @@ export interface ProjectTaskWorkOrder {
   completedAt?: string
   omsStatus?: string
   omsStatusName?: string
+  omsResultSummary?: string
+  omsDetailPayload?: string
+  omsLogPayload?: string
+  omsAttachmentPayload?: string
+  syncStatus?: string
+  lastSyncedAt?: string
+  syncError?: string
+  idempotencyKey?: string
   irisReviewStatus?: string
   irisReviewOpinion?: string
   reviewable?: boolean

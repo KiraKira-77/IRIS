@@ -125,11 +125,14 @@
                     {{ workOrderProviderLabel(workOrderProviderOf(order)) }}
                   </el-tag>
                   <el-tag size="small" effect="dark" :type="workOrderStatusType(order.omsStatus)">
-                    {{ order.omsStatusName || order.omsStatus || '未知' }}
+                    {{ workOrderStatusLabel(order) }}
                   </el-tag>
                   <el-tag size="small" effect="plain" :type="auditResultTagType(workOrderReviewResultOf(order))">
                     {{ auditResultLabel(workOrderReviewResultOf(order)) }}
                   </el-tag>
+                  <el-button link type="primary" :icon="View" @click="openWorkOrderDetail(order)">
+                    详情/日志
+                  </el-button>
                   <el-button link type="primary" @click="toggleWorkOrderReview(order)">
                     {{ workOrderReviewForm.workOrderId === order.id ? '收起' : '审核' }}
                   </el-button>
@@ -498,6 +501,67 @@
           </div>
         </div>
       </el-drawer>
+      <el-drawer
+        v-model="workOrderDetailVisible"
+        title="工单详情"
+        size="520px"
+        append-to-body
+      >
+        <div v-if="selectedWorkOrder" class="work-order-detail">
+          <div class="detail-title-row">
+            <div>
+              <strong>{{ workOrderDisplayTitle(selectedWorkOrder) }}</strong>
+              <span>{{ workOrderDisplayCode(selectedWorkOrder) }}</span>
+            </div>
+            <el-tag
+              size="small"
+              effect="light"
+              round
+              :type="workOrderProviderTagType(workOrderProviderOf(selectedWorkOrder))"
+            >
+              {{ workOrderProviderLabel(workOrderProviderOf(selectedWorkOrder)) }}
+            </el-tag>
+          </div>
+
+          <div class="detail-grid">
+            <div v-for="item in workOrderDetailRows(selectedWorkOrder)" :key="item.label" class="detail-item">
+              <label>{{ item.label }}</label>
+              <span>{{ item.value }}</span>
+            </div>
+          </div>
+
+          <div class="detail-section-title">
+            <h4>工单日志</h4>
+            <el-button
+              v-if="workOrderProviderOf(selectedWorkOrder) === 'oms'"
+              link
+              type="primary"
+              :loading="workOrderDetailRefreshing"
+              @click="refreshSelectedWorkOrder"
+            >
+              刷新 OMS 日志
+            </el-button>
+          </div>
+          <el-empty
+            v-if="selectedWorkOrderLogRows.length === 0"
+            description="暂无工单日志"
+            :image-size="72"
+          />
+          <div v-else class="work-order-log-list">
+            <div v-for="log in selectedWorkOrderLogRows" :key="log.id" class="work-order-log-item">
+              <div class="log-meta">
+                <strong>{{ log.action }}</strong>
+                <span>{{ log.occurredAt }}</span>
+              </div>
+              <p>{{ log.content }}</p>
+              <div class="log-footer">
+                <span>{{ log.operator }}</span>
+                <span v-if="log.attachments">{{ log.attachments }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </el-drawer>
     </section>
 
     <el-empty v-else-if="!loading" description="未找到该检查项" :image-size="120" />
@@ -584,6 +648,9 @@ const workOrderReviewForm = ref({
   opinion: '',
 })
 const workOrderReviewResults = ref<Record<string, { result: string; opinion: string }>>({})
+const workOrderDetailVisible = ref(false)
+const selectedWorkOrder = ref<ProjectTaskWorkOrder>()
+const workOrderDetailRefreshing = ref(false)
 const archivePreviewVisible = ref(false)
 const manualWorkOrderForm = ref({
   externalWorkOrderId: '',
@@ -732,6 +799,9 @@ const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
     },
   ]
 })
+const selectedWorkOrderLogRows = computed(() =>
+  selectedWorkOrder.value ? workOrderLogRows(selectedWorkOrder.value) : [],
+)
 const workOrderDisplayCode = (order: ProjectTaskWorkOrder) =>
   order.omsWorkOrderId || order.externalWorkOrderId || order.id
 const workOrderDisplayTitle = (order: ProjectTaskWorkOrder) =>
@@ -750,6 +820,18 @@ const workOrderRecordRows = (order: ProjectTaskWorkOrder) => [
   { label: '处理人', value: personText(order.handlerName, order.handlerEmployeeNo) },
   { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
   { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
+]
+const workOrderDetailRows = (order: ProjectTaskWorkOrder) => [
+  { label: '任务名称', value: workOrderDisplayTitle(order) },
+  { label: '任务描述', value: order.taskDescription || task.value?.taskDescription || '—' },
+  { label: '对接人', value: personText(order.contactName, order.contactEmployeeNo) },
+  { label: '处理人', value: personText(order.handlerName, order.handlerEmployeeNo) },
+  { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
+  { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
+  { label: '工单状态', value: workOrderStatusLabel(order) },
+  { label: '审核结果', value: auditResultLabel(workOrderReviewResultOf(order)) },
+  { label: '同步状态', value: syncStatusLabel(order.syncStatus, order.syncError) },
+  { label: '最近同步', value: normalizeDateTimeText(order.lastSyncedAt) || '—' },
 ]
 const inspectionAuditResultText = computed(() => {
   const orders = visibleWorkOrders.value
@@ -997,6 +1079,35 @@ const handleConfirmWorkOrderReview = () => {
   ElMessage.success('工单审核结果已确认')
 }
 
+const openWorkOrderDetail = async (order: ProjectTaskWorkOrder) => {
+  selectedWorkOrder.value = order
+  workOrderDetailVisible.value = true
+  if (workOrderProviderOf(order) === 'oms') {
+    await refreshWorkOrderDetail(order)
+  }
+}
+
+const refreshSelectedWorkOrder = async () => {
+  if (!selectedWorkOrder.value) return
+  await refreshWorkOrderDetail(selectedWorkOrder.value)
+}
+
+const refreshWorkOrderDetail = async (order: ProjectTaskWorkOrder) => {
+  if (!task.value || !projectId.value || workOrderProviderOf(order) !== 'oms') return
+  workOrderDetailRefreshing.value = true
+  try {
+    const refreshed = (await taskApi.refreshWorkOrder(
+      projectId.value,
+      task.value.id,
+      order.id,
+    )) as ProjectTaskWorkOrder
+    workOrders.value = workOrders.value.map((item) => (item.id === refreshed.id ? refreshed : item))
+    selectedWorkOrder.value = refreshed
+  } finally {
+    workOrderDetailRefreshing.value = false
+  }
+}
+
 const handleDeleteWorkOrder = async (order: ProjectTaskWorkOrder) => {
   if (!task.value || !projectId.value) return
   if (order.id === localWorkOrderId.value) {
@@ -1006,6 +1117,10 @@ const handleDeleteWorkOrder = async (order: ProjectTaskWorkOrder) => {
     localWorkOrderLogs.value = []
     delete workOrderReviewResults.value[order.id]
     closeWorkOrderReview()
+    if (selectedWorkOrder.value?.id === order.id) {
+      workOrderDetailVisible.value = false
+      selectedWorkOrder.value = undefined
+    }
     ElMessage.success('工单已删除')
     return
   }
@@ -1016,6 +1131,10 @@ const handleDeleteWorkOrder = async (order: ProjectTaskWorkOrder) => {
     delete workOrderReviewResults.value[order.id]
     if (workOrderReviewForm.value.workOrderId === order.id) {
       closeWorkOrderReview()
+    }
+    if (selectedWorkOrder.value?.id === order.id) {
+      workOrderDetailVisible.value = false
+      selectedWorkOrder.value = undefined
     }
     ElMessage.success('工单已删除')
   } finally {
@@ -1076,6 +1195,105 @@ const workOrderReviewResultOf = (order: ProjectTaskWorkOrder) => {
   return workOrderReviewResults.value[order.id]?.result || order.irisReviewStatus || 'pending'
 }
 
+const workOrderStatusLabel = (order: ProjectTaskWorkOrder) => {
+  const raw = order.omsStatusName || order.omsStatus
+  const normalized = String(raw || '').trim().toLowerCase()
+  const map: Record<string, string> = {
+    created: '已创建',
+    create: '已创建',
+    new: '已创建',
+    pending: '待处理',
+    processing: '处理中',
+    in_progress: '处理中',
+    running: '处理中',
+    complete: '已完成',
+    completed: '已完成',
+    closed: '已关闭',
+    cancelled: '已取消',
+    canceled: '已取消',
+    failed: '同步失败',
+    '0': '待处理',
+    '5': '待处理',
+    '10': '处理中',
+    '13': '处理中',
+    '15': '处理中',
+    '20': '已完成',
+    '25': '已完成',
+    '30': '已关闭',
+    '40': '异常',
+  }
+  return map[normalized] || raw || '未知'
+}
+
+const syncStatusLabel = (status?: string, error?: string) => {
+  if (error) return `同步失败：${error}`
+  const map: Record<string, string> = {
+    synced: '已同步',
+    failed: '同步失败',
+    not_synced: '未同步',
+  }
+  return map[status || ''] || status || '—'
+}
+
+const workOrderLogRows = (order: ProjectTaskWorkOrder) => {
+  if (order.id === localWorkOrderId.value) {
+    return localWorkOrderLogs.value.map((log, index) => ({
+      id: log.id,
+      occurredAt: `第 ${index + 1} 条`,
+      operator: personText(order.handlerName, order.handlerEmployeeNo),
+      action: '工作日志',
+      content: log.content,
+      attachments:
+        log.attachments.length > 0
+          ? `附件：${log.attachments.map((file) => file.name).join('、')}`
+          : '',
+    }))
+  }
+  const parsedLogs = parseJsonArray(order.omsLogPayload)
+  return parsedLogs.map((log, index) => {
+    const row = log as Record<string, unknown>
+    return {
+      id: String(row.id || row.logId || `${order.id}-${index}`),
+      occurredAt: normalizeDateTimeText(String(row.occurredAt || row.time || row.createdAt || '')),
+      operator: String(row.operator || row.operatorName || row.userName || 'OMS'),
+      action: workOrderLogActionLabel(String(row.action || row.actionName || '日志')),
+      content: String(row.content || row.message || row.description || '—'),
+      attachments: '',
+    }
+  })
+}
+
+const parseJsonArray = (payload?: string): unknown[] => {
+  if (!payload) return []
+  try {
+    const parsed = JSON.parse(payload) as unknown
+    if (Array.isArray(parsed)) return parsed
+    if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { logs?: unknown[] }).logs)) {
+      return (parsed as { logs: unknown[] }).logs
+    }
+    if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { data?: unknown[] }).data)) {
+      return (parsed as { data: unknown[] }).data
+    }
+    return []
+  } catch {
+    return []
+  }
+}
+
+const workOrderLogActionLabel = (action: string) => {
+  const normalized = action.trim().toLowerCase()
+  const map: Record<string, string> = {
+    create: '创建工单',
+    created: '创建工单',
+    submit: '提交',
+    complete: '完成工单',
+    completed: '完成工单',
+    close: '关闭工单',
+    comment: '工作日志',
+  }
+  return map[normalized] || action || '日志'
+}
+
 const normalizeDateText = (value?: string | null) => {
   const normalized = String(value || '').replace('T', ' ')
   return normalized ? normalized.slice(0, 10) : ''
@@ -1121,6 +1339,16 @@ const workOrderProviderTagType = (provider: WorkOrderProvider) => {
 
 const workOrderStatusType = (status?: string) => {
   const map: Record<string, string> = {
+    created: 'primary',
+    pending: 'info',
+    processing: 'primary',
+    in_progress: 'primary',
+    complete: 'success',
+    completed: 'success',
+    closed: 'success',
+    cancelled: 'info',
+    canceled: 'info',
+    failed: 'danger',
     '0': 'info',
     '5': 'info',
     '10': 'primary',
@@ -1131,7 +1359,7 @@ const workOrderStatusType = (status?: string) => {
     '30': 'success',
     '40': 'danger',
   }
-  return (map[status || ''] || 'info') as any
+  return (map[String(status || '').toLowerCase()] || 'info') as any
 }
 </script>
 
@@ -1536,6 +1764,112 @@ const workOrderStatusType = (status?: string) => {
     color: $iris-text-secondary;
     line-height: 1.5;
   }
+}
+
+.work-order-detail {
+  display: grid;
+  gap: 16px;
+}
+
+.detail-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e2e8f0;
+
+  strong,
+  span {
+    display: block;
+  }
+
+  strong {
+    color: $iris-text-primary;
+  }
+
+  span {
+    margin-top: 4px;
+    font-size: 12px;
+    color: $iris-text-muted;
+  }
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.detail-item {
+  min-width: 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  label,
+  span {
+    display: block;
+  }
+
+  label {
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: $iris-text-muted;
+  }
+
+  span {
+    overflow: hidden;
+    font-size: 13px;
+    color: $iris-text-primary;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.detail-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  h4 {
+    margin: 0;
+    color: $iris-text-primary;
+  }
+}
+
+.work-order-log-list {
+  display: grid;
+  gap: 10px;
+}
+
+.work-order-log-item {
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  p {
+    margin: 8px 0;
+    color: $iris-text-primary;
+    line-height: 1.6;
+  }
+}
+
+.log-meta,
+.log-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 12px;
+  color: $iris-text-muted;
+}
+
+.log-meta strong {
+  color: $iris-text-primary;
 }
 
 .work-order-panel {
