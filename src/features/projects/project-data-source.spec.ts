@@ -116,7 +116,10 @@ describe('project management data sources', () => {
 
   it('handles inspection items from a dialog that can create multiple work orders', () => {
     expect(projectDetailSource).toContain('办理')
+    expect(projectDetailSource).toContain('canSeeInspectionItemHandleAction(row)')
     expect(projectDetailSource).toContain('canHandleInspectionItem(row)')
+    expect(projectDetailSource).toContain(':disabled="!canHandleInspectionItem(row)"')
+    expect(projectDetailSource).toContain('inspectionItemHandleTip(row)')
     expect(projectDetailSource).toContain('openWorkOrderDialog(row)')
     expect(projectDetailSource).toContain('workOrderDialogVisible')
     expect(projectDetailSource).toContain('workOrderForm.handlerIds')

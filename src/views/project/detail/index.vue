@@ -163,7 +163,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="140" fixed="right">
+            <el-table-column label="操作" width="150" fixed="right">
               <template #default="{ row }">
                 <el-button
                   link
@@ -173,15 +173,24 @@
                 >
                   查看
                 </el-button>
-                <el-button
-                  v-if="canHandleInspectionItem(row)"
-                  link
-                  type="primary"
-                  size="small"
-                  @click="openWorkOrderDialog(row)"
+                <el-tooltip
+                  v-if="canSeeInspectionItemHandleAction(row)"
+                  :content="inspectionItemHandleTip(row)"
+                  :disabled="canHandleInspectionItem(row)"
+                  placement="top"
                 >
-                  办理
-                </el-button>
+                  <span class="inline-action-wrap">
+                    <el-button
+                      link
+                      type="primary"
+                      size="small"
+                      :disabled="!canHandleInspectionItem(row)"
+                      @click="openWorkOrderDialog(row)"
+                    >
+                      办理
+                    </el-button>
+                  </span>
+                </el-tooltip>
               </template>
             </el-table-column>
           </el-table>
@@ -475,6 +484,19 @@ const canHandleInspectionItem = (task: CheckTask) => {
   )
 }
 
+const canSeeInspectionItemHandleAction = (task: CheckTask) => {
+  return !!task.assigneeId && (canManageProject.value || currentUserId.value === String(task.assigneeId))
+}
+
+const inspectionItemHandleTip = (task: CheckTask) => {
+  if (!project.value) return ''
+  if (project.value.status === 'not_started') return '项目启动后才能办理'
+  if (project.value.status === 'completed') return '项目已完成，不能办理'
+  if (project.value.status === 'archived') return '项目已归档，不能办理'
+  if (finishedTaskStatuses.includes(task.status)) return '检查项已完成，不能重复办理'
+  return '当前状态不能办理'
+}
+
 const openWorkOrderDialog = (task: CheckTask) => {
   currentWorkOrderTask.value = task
   const defaultHandlerIds = task.assigneeId
@@ -702,6 +724,10 @@ const roleLabel = (role: string) => {
 .assignee-select {
   width: 160px;
   max-width: 100%;
+}
+
+.inline-action-wrap {
+  display: inline-flex;
 }
 
 .strong-text {
