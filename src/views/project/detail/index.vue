@@ -102,8 +102,23 @@
               <el-radio-button value="passed">通过</el-radio-button>
               <el-radio-button value="nonconforming">不符合项</el-radio-button>
             </el-radio-group>
+            <el-button
+              v-if="canAssignInspectionItems"
+              type="primary"
+              :disabled="selectedTaskIds.length === 0"
+              @click="openBatchAssignDialog"
+            >
+              批量分配负责人
+            </el-button>
           </div>
-          <el-table :data="filteredTasks" style="width: 100%" size="large">
+          <el-table
+            :data="filteredTasks"
+            row-key="id"
+            style="width: 100%"
+            size="large"
+            @selection-change="handleTaskSelectionChange"
+          >
+            <el-table-column v-if="canAssignInspectionItems" type="selection" width="48" />
             <el-table-column type="index" label="#" width="50" />
             <el-table-column prop="checkContent" label="检查项" min-width="260" show-overflow-tooltip>
               <template #default="{ row }">
@@ -118,7 +133,7 @@
             <el-table-column label="负责人" width="130">
               <template #default="{ row }">
                 <el-select
-                  v-if="canManageProject"
+                  v-if="canAssignInspectionItems"
                   :model-value="row.assigneeId || ''"
                   size="small"
                   placeholder="分配负责人"
@@ -184,6 +199,40 @@
     </section>
 
     <el-empty v-else-if="!loading" description="未找到该项目" :image-size="120" />
+
+    <el-dialog
+      v-if="project"
+      v-model="batchAssignDialogVisible"
+      title="批量分配负责人"
+      width="420px"
+    >
+      <el-form label-position="top">
+        <el-form-item label="已选检查项">
+          <span>{{ selectedTaskIds.length }} 个</span>
+        </el-form-item>
+        <el-form-item label="检查项负责人">
+          <el-select v-model="batchAssigneeId" placeholder="选择负责人" style="width: 100%" filterable>
+            <el-option
+              v-for="member in assignableMembers"
+              :key="member.personnelId"
+              :label="member.personnelName"
+              :value="member.personnelId"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="batchAssignDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="batchAssigning"
+          :disabled="!batchAssigneeId || selectedTaskIds.length === 0"
+          @click="handleBatchAssignTasks"
+        >
+          确认分配
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -216,6 +265,10 @@ const project = ref<Project>()
 const activeTab = ref('tasks')
 const taskFilter = ref('')
 const assigningTaskId = ref('')
+const selectedTaskIds = ref<string[]>([])
+const batchAssignDialogVisible = ref(false)
+const batchAssigneeId = ref('')
+const batchAssigning = ref(false)
 const avatarColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
 
 onMounted(async () => {
@@ -241,6 +294,13 @@ const canManageProject = computed(() => {
 const canEditProject = computed(() => {
   return !!project.value && project.value.status !== 'archived' && canManageProject.value
 })
+const canAssignInspectionItems = computed(() => {
+  return (
+    !!project.value &&
+    ['not_started', 'in_progress'].includes(project.value.status) &&
+    assignableMembers.value.length > 0
+  )
+})
 
 const leaderName = computed(() => {
   const leader = members.value.find((member) => member.role === 'leader')
@@ -260,6 +320,10 @@ const filteredTasks = computed(() => {
   if (!taskFilter.value) return project.value.tasks
   return project.value.tasks.filter((task) => task.status === taskFilter.value)
 })
+
+const handleTaskSelectionChange = (selection: CheckTask[]) => {
+  selectedTaskIds.value = selection.map((task) => task.id)
+}
 
 const taskStats = computed(() => {
   const tasks = project.value?.tasks || []
@@ -321,6 +385,39 @@ const handleAssignTask = async (task: CheckTask, assigneeId: string) => {
     await loadProject()
   } finally {
     assigningTaskId.value = ''
+  }
+}
+
+const openBatchAssignDialog = () => {
+  if (selectedTaskIds.value.length === 0) {
+    ElMessage.warning('请先选择检查项')
+    return
+  }
+  batchAssigneeId.value = ''
+  batchAssignDialogVisible.value = true
+}
+
+const handleBatchAssignTasks = async () => {
+  if (!project.value || selectedTaskIds.value.length === 0 || !batchAssigneeId.value) return
+  const assignee = assignableMembers.value.find((member) => member.personnelId === batchAssigneeId.value)
+  if (!assignee) return
+
+  batchAssigning.value = true
+  try {
+    project.value = normalizeProject(
+      await projectApi.assignTasks(project.value.id, {
+        taskIds: selectedTaskIds.value,
+        assigneeId: assignee.personnelId,
+        assigneeName: assignee.personnelName,
+      }),
+    )
+    selectedTaskIds.value = []
+    batchAssignDialogVisible.value = false
+    ElMessage.success('检查项负责人已批量更新')
+  } catch {
+    await loadProject()
+  } finally {
+    batchAssigning.value = false
   }
 }
 
