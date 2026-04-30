@@ -81,14 +81,14 @@
               <h3>工单记录</h3>
             </div>
             <el-empty
-              v-if="workOrders.length === 0"
+              v-if="visibleWorkOrders.length === 0"
               description="暂无工单"
               :image-size="80"
             />
             <div v-else class="work-order-list">
-              <div v-for="order in workOrders" :key="order.id" class="work-order-item">
+              <div v-for="order in visibleWorkOrders" :key="order.id" class="work-order-item">
                 <div class="work-order-main">
-                  <strong>{{ order.omsWorkOrderId || order.id }}</strong>
+                  <strong>{{ order.omsWorkOrderId || order.externalWorkOrderId || order.id }}</strong>
                   <span>{{ order.handlerName || '—' }}</span>
                 </div>
                 <el-tag size="small" effect="dark" :type="workOrderStatusType(order.omsStatus)">
@@ -131,7 +131,7 @@
               </div>
               <div class="flow-item">
                 <span>工单数量</span>
-                <strong>{{ task.workOrderCount || workOrders.length }}</strong>
+                <strong>{{ task.workOrderCount || visibleWorkOrders.length }}</strong>
               </div>
               <div class="flow-item">
                 <span>当前结果</span>
@@ -210,36 +210,111 @@
                 </el-button>
               </el-form>
 
-              <el-form v-else-if="workOrderMode === 'local'" label-position="top" class="handle-form">
-                <el-form-item label="办理结果">
-                  <el-radio-group v-model="localWorkOrderForm.result">
-                    <el-radio-button value="passed">通过</el-radio-button>
-                    <el-radio-button value="nonconforming">不符合项</el-radio-button>
-                  </el-radio-group>
-                </el-form-item>
-                <el-form-item label="办理说明">
-                  <el-input
-                    v-model="localWorkOrderForm.summary"
-                    type="textarea"
-                    :rows="4"
-                    maxlength="500"
-                    show-word-limit
-                  />
-                </el-form-item>
-                <el-form-item label="附件">
-                  <el-upload
-                    v-model:file-list="localWorkOrderForm.attachments"
-                    action="#"
-                    :auto-upload="false"
-                    multiple
+              <div v-else-if="workOrderMode === 'local'" class="local-work-order">
+                <el-form
+                  v-if="!localWorkOrderCreated"
+                  label-position="top"
+                  class="handle-form"
+                >
+                  <el-form-item label="工单标题">
+                    <el-input v-model="localWorkOrderForm.title" maxlength="80" show-word-limit />
+                  </el-form-item>
+                  <el-form-item label="工单说明">
+                    <el-input
+                      v-model="localWorkOrderForm.description"
+                      type="textarea"
+                      :rows="3"
+                      maxlength="300"
+                      show-word-limit
+                    />
+                  </el-form-item>
+                  <el-form-item label="工单处理人">
+                    <el-select
+                      v-model="localWorkOrderForm.handlerIds"
+                      placeholder="选择处理人"
+                      style="width: 100%"
+                      multiple
+                      filterable
+                      collapse-tags
+                      collapse-tags-tooltip
+                    >
+                      <el-option
+                        v-for="member in assignableMembers"
+                        :key="member.personnelId"
+                        :label="`${member.personnelName} (${member.employeeNo})`"
+                        :value="member.personnelId"
+                      >
+                        <span>{{ member.personnelName }}</span>
+                        <span class="option-meta">{{ member.employeeNo }} · {{ roleLabel(member.role) }}</span>
+                      </el-option>
+                    </el-select>
+                  </el-form-item>
+                  <el-button
+                    type="primary"
+                    class="submit-btn"
+                    :disabled="localWorkOrderHandlers.length === 0"
+                    @click="handleCreateLocalWorkOrder"
                   >
-                    <el-button>选择附件</el-button>
-                  </el-upload>
-                </el-form-item>
-                <el-button type="primary" class="submit-btn" @click="handleLocalWorkOrderPreview">
-                  更新归档预览
-                </el-button>
-              </el-form>
+                    创建本地工单
+                  </el-button>
+                </el-form>
+
+                <div v-else class="local-work-order-created">
+                  <div class="local-work-order-card">
+                    <label>本地工单</label>
+                    <strong>{{ localWorkOrderId }}</strong>
+                    <span>{{ localWorkOrderForm.title }}</span>
+                  </div>
+
+                  <div class="local-log-section">
+                    <div class="mini-heading">工作日志</div>
+                    <div v-if="localWorkOrderLogs.length > 0" class="local-log-list">
+                      <div v-for="log in localWorkOrderLogs" :key="log.id" class="local-log-item">
+                        <strong>{{ localResultLabel(log.result) }}</strong>
+                        <span>{{ log.content }}</span>
+                        <small>{{ log.attachments.length }} 个附件</small>
+                      </div>
+                    </div>
+                    <el-empty v-else description="暂无工作日志" :image-size="56" />
+
+                    <el-form label-position="top" class="handle-form log-form">
+                      <el-form-item label="处理结果">
+                        <el-radio-group v-model="localWorkOrderLogForm.result">
+                          <el-radio-button value="passed">通过</el-radio-button>
+                          <el-radio-button value="nonconforming">不符合项</el-radio-button>
+                        </el-radio-group>
+                      </el-form-item>
+                      <el-form-item label="日志内容">
+                        <el-input
+                          v-model="localWorkOrderLogForm.content"
+                          type="textarea"
+                          :rows="4"
+                          maxlength="500"
+                          show-word-limit
+                        />
+                      </el-form-item>
+                      <el-form-item label="附件">
+                        <el-upload
+                          v-model:file-list="localWorkOrderLogForm.attachments"
+                          action="#"
+                          :auto-upload="false"
+                          multiple
+                        >
+                          <el-button>选择附件</el-button>
+                        </el-upload>
+                      </el-form-item>
+                      <el-button
+                        type="primary"
+                        class="submit-btn"
+                        :disabled="!localWorkOrderLogForm.content.trim()"
+                        @click="handleAddLocalWorkOrderLog"
+                      >
+                        提交工作日志
+                      </el-button>
+                    </el-form>
+                  </div>
+                </div>
+              </div>
 
               <el-form v-else-if="workOrderMode === 'manual'" label-position="top" class="handle-form">
                 <el-form-item label="外部工单号">
@@ -316,16 +391,31 @@ const checklistOptions = ref<ControlChecklist[]>([])
 const workOrders = ref<ProjectTaskWorkOrder[]>([])
 const workOrderSubmitting = ref(false)
 const workOrderMode = ref<WorkOrderProvider>('oms')
+const localWorkOrderCreated = ref(false)
+const localWorkOrderId = ref('')
 const workOrderForm = ref({
   title: '',
   description: '',
   handlerIds: [] as string[],
 })
 const localWorkOrderForm = ref({
+  title: '',
+  description: '',
+  handlerIds: [] as string[],
+})
+const localWorkOrderLogForm = ref({
   result: 'passed',
-  summary: '',
+  content: '',
   attachments: [] as UploadUserFile[],
 })
+const localWorkOrderLogs = ref<
+  Array<{
+    id: string
+    result: string
+    content: string
+    attachments: UploadUserFile[]
+  }>
+>([])
 const manualWorkOrderForm = ref({
   externalWorkOrderId: '',
   externalUrl: '',
@@ -416,6 +506,31 @@ const workOrderHandlers = computed(() =>
       handlerName: member.personnelName,
     })),
 )
+const localWorkOrderHandlers = computed(() =>
+  assignableMembers.value
+    .filter((member) => localWorkOrderForm.value.handlerIds.includes(member.personnelId))
+    .map((member) => ({
+      handlerId: member.personnelId,
+      handlerEmployeeNo: normalizeIdentityValue(member.employeeNo),
+      handlerName: member.personnelName,
+    })),
+)
+const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
+  if (!localWorkOrderCreated.value) return workOrders.value
+  return [
+    ...workOrders.value,
+    {
+      id: localWorkOrderId.value,
+      projectId: project.value?.id || '',
+      taskId: task.value?.id || '',
+      provider: 'local',
+      externalWorkOrderId: localWorkOrderId.value,
+      handlerName: localWorkOrderHandlers.value.map((handler) => handler.handlerName).join('、'),
+      omsStatus: localWorkOrderLogs.value.length > 0 ? '20' : '10',
+      omsStatusName: localWorkOrderLogs.value.length > 0 ? '已记录日志' : '待填写日志',
+    },
+  ]
+})
 const archiveSnapshotPreview = computed(() => {
   const providerLabel = workOrderProviderLabel(workOrderMode.value)
   const orderCountText =
@@ -445,8 +560,12 @@ const archiveSnapshotLogPreview = computed(() => {
   if (workOrderMode.value === 'local') {
     return [
       {
-        title: '本地办理',
-        description: 'IRIS 保存办理说明、日志和附件。',
+        title: '创建本地工单',
+        description: 'IRIS 生成本地工单并确定处理人。',
+      },
+      {
+        title: '填写工作日志',
+        description: '处理人在本地工单内提交日志和附件。',
       },
       {
         title: '生成统一快照',
@@ -466,12 +585,15 @@ const archiveSnapshotLogPreview = computed(() => {
   ]
 })
 const previewOrderCountText = computed(() => {
-  if (workOrderMode.value === 'local') return localWorkOrderForm.value.summary.trim() ? '1 个本地工单' : '待办理'
+  if (workOrderMode.value === 'local') return localWorkOrderCreated.value ? '1 个本地工单' : '待创建'
   return manualWorkOrderForm.value.externalWorkOrderId.trim() ? '1 个外部工单' : '待登记'
 })
 const snapshotHandlerText = computed(() => {
   if (workOrderMode.value === 'oms') {
     return workOrderHandlers.value.map((handler) => handler.handlerName).join('、') || '待选择'
+  }
+  if (workOrderMode.value === 'local') {
+    return localWorkOrderHandlers.value.map((handler) => handler.handlerName).join('、') || '待选择'
   }
   return task.value?.assigneeName || currentProjectMember.value?.personnelName || '待确认'
 })
@@ -480,14 +602,16 @@ const snapshotResultText = computed(() => {
     return workOrders.value.length > 0 ? '以 OMS 同步结果为准' : '待生成工单'
   }
   if (workOrderMode.value === 'local') {
-    return localResultLabel(localWorkOrderForm.value.result)
+    const latestLog = localWorkOrderLogs.value[localWorkOrderLogs.value.length - 1]
+    if (latestLog) return localResultLabel(latestLog.result)
+    return localWorkOrderCreated.value ? '待填写工作日志' : '待创建工单'
   }
   return manualWorkOrderForm.value.statusName.trim() || '待登记'
 })
 const snapshotAttachmentText = computed(() => {
   if (workOrderMode.value === 'oms') return 'OMS 日志附件'
   if (workOrderMode.value === 'local') {
-    return `${localWorkOrderForm.value.attachments.length} 个本地附件`
+    return `${localWorkOrderLogs.value.reduce((sum, log) => sum + log.attachments.length, 0)} 个本地附件`
   }
   return manualWorkOrderForm.value.externalUrl.trim() ? '外部链接' : '待登记'
 })
@@ -542,6 +666,11 @@ const resetWorkOrderForm = () => {
     description: currentTask.taskDescription || currentTask.checkCriterion,
     handlerIds: assignee ? [assignee.personnelId] : [],
   }
+  localWorkOrderForm.value = {
+    title: currentTask.taskName || currentTask.checkContent,
+    description: currentTask.taskDescription || currentTask.checkCriterion,
+    handlerIds: assignee ? [assignee.personnelId] : [],
+  }
 }
 
 const handleCreateWorkOrders = async () => {
@@ -562,8 +691,28 @@ const handleCreateWorkOrders = async () => {
   }
 }
 
-const handleLocalWorkOrderPreview = () => {
-  ElMessage.info('已更新本地工单归档预览，接口接入后保存办理记录')
+const handleCreateLocalWorkOrder = () => {
+  if (localWorkOrderHandlers.value.length === 0) return
+  localWorkOrderCreated.value = true
+  localWorkOrderId.value = `LOCAL-${task.value?.id || 'TASK'}`
+  ElMessage.success('本地工单已创建，继续填写工作日志')
+}
+
+const handleAddLocalWorkOrderLog = () => {
+  const content = localWorkOrderLogForm.value.content.trim()
+  if (!content) return
+  localWorkOrderLogs.value.push({
+    id: `LOCAL-LOG-${Date.now()}`,
+    result: localWorkOrderLogForm.value.result,
+    content,
+    attachments: [...localWorkOrderLogForm.value.attachments],
+  })
+  localWorkOrderLogForm.value = {
+    result: localWorkOrderLogForm.value.result,
+    content: '',
+    attachments: [],
+  }
+  ElMessage.success('工作日志已加入归档预览')
 }
 
 const handleManualWorkOrderPreview = () => {
@@ -987,6 +1136,75 @@ const workOrderStatusType = (status?: string) => {
     color: $iris-text-secondary;
     line-height: 1.5;
   }
+}
+
+.local-work-order,
+.local-work-order-created,
+.local-log-section {
+  display: grid;
+  gap: 14px;
+}
+
+.local-work-order-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+
+  label {
+    font-size: 12px;
+    color: $iris-text-muted;
+  }
+
+  strong {
+    font-family: monospace;
+    color: $iris-text-primary;
+  }
+
+  span {
+    color: $iris-text-secondary;
+    line-height: 1.5;
+  }
+}
+
+.mini-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: $iris-text-primary;
+}
+
+.local-log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.local-log-item {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  strong {
+    color: $iris-text-primary;
+  }
+
+  span {
+    color: $iris-text-secondary;
+    line-height: 1.5;
+  }
+
+  small {
+    color: $iris-text-muted;
+  }
+}
+
+.log-form {
+  padding-top: 4px;
+  border-top: 1px solid #e2e8f0;
 }
 
 .handle-form {
