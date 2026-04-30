@@ -53,7 +53,7 @@ describe('plan related pages data sources', () => {
     expect(planCreateSource).toContain('systemUserApi')
     expect(planDetailSource).toContain('systemUserApi')
     expect(planOverviewSource).toContain('systemUserApi')
-    expect(projectTaskSource).toContain('systemUserApi')
+    expect(projectTaskSource).toContain('assignableMembers')
     expect(rectificationCreateSource).toContain('systemUserApi')
     expect(projectCreateSource).not.toContain('mockPersonnel')
     expect(planCreateSource).not.toContain('mockPersonnel')

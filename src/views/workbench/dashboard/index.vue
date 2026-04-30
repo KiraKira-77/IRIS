@@ -1,230 +1,355 @@
 <template>
   <div class="page-container iris-page dashboard-page">
-    <!-- 欢迎横幅 -->
-    <div class="welcome-banner">
-      <div class="content">
-        <h2 class="title">早安，{{ userName }}</h2>
-        <p class="subtitle">今天是 2026年02月12日，星期四。系统运行正常，由您守护企业安全。</p>
-        <div class="stats-row">
-          <div class="stat-item">
-            <span class="label">待处理事项</span>
-            <span class="value">12</span>
-          </div>
-          <div class="stat-item">
-            <span class="label">本月整改率</span>
-            <span class="value">98%</span>
-          </div>
-          <div class="stat-item">
-            <span class="label">风险指数</span>
-            <span class="value safe">低</span>
-          </div>
+    <section class="dashboard-hero">
+      <div class="hero-copy">
+        <span class="hero-kicker">内控工作台</span>
+        <h2 class="page-title">{{ greeting }}，{{ userName }}</h2>
+        <p class="page-subtitle">
+          今天是 {{ dashboardData.header.todayText }}。待处理事项
+          {{ dashboardData.header.pendingCount }} 项，检查项完成率
+          {{ dashboardData.header.completionRateText }}。
+        </p>
+      </div>
+
+      <div class="hero-summary">
+        <div class="summary-item">
+          <span>待处理事项</span>
+          <strong>{{ dashboardData.header.pendingCount }}</strong>
+        </div>
+        <div class="summary-item">
+          <span>检查项完成率</span>
+          <strong>{{ dashboardData.header.completionRateText }}</strong>
+        </div>
+        <div class="summary-item">
+          <span>风险指数</span>
+          <strong>{{ dashboardData.header.riskLevel }}</strong>
         </div>
       </div>
-      <div class="decoration">
-        <!-- 简单的 CSS 图形装饰 -->
-        <div class="circle c1"></div>
-        <div class="circle c2"></div>
-      </div>
-    </div>
 
-    <!-- 核心指标卡片 -->
-    <el-row :gutter="20" class="cards-row">
-      <el-col :span="6" v-for="(card, index) in cards" :key="index">
-        <div class="stat-card" :class="card.type">
-          <div class="icon-wrapper">
-            <component :is="card.icon" />
+      <div class="hero-actions">
+        <el-button :icon="Refresh" :loading="loading" @click="loadDashboard">刷新</el-button>
+      </div>
+    </section>
+
+    <el-alert
+      v-if="loadError"
+      class="dashboard-alert"
+      type="warning"
+      :title="loadError"
+      show-icon
+      :closable="false"
+    />
+
+    <el-skeleton v-if="loading && !loaded" class="dashboard-skeleton" animated>
+      <template #template>
+        <div class="skeleton-grid">
+          <el-skeleton-item v-for="item in 4" :key="item" variant="rect" />
+        </div>
+        <el-skeleton-item variant="rect" class="skeleton-main" />
+      </template>
+    </el-skeleton>
+
+    <template v-else>
+      <el-empty v-if="dashboardData.emptyText" :description="dashboardData.emptyText" />
+
+      <section class="metric-grid">
+        <div v-for="card in dashboardData.cards" :key="card.title" class="metric-card" :class="card.type">
+          <div class="metric-icon">
+            <component :is="cardIconMap[card.type]" />
           </div>
-          <div class="card-info">
-            <div class="card-label">{{ card.title }}</div>
-            <div class="card-value">
-              {{ card.value }}
-              <span class="trend" :class="card.trend > 0 ? 'up' : 'down'" v-if="card.trend">
-                <el-icon><Top v-if="card.trend > 0" /><Bottom v-else /></el-icon>
-                {{ Math.abs(card.trend) }}%
+          <div class="metric-body">
+            <span>{{ card.title }}</span>
+            <strong>{{ card.value }}</strong>
+            <small>{{ card.note }}</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="dashboard-grid">
+        <div class="panel trend-panel">
+          <div class="panel-header">
+            <div>
+              <h3>项目更新趋势</h3>
+              <p>近 7 日项目更新数量</p>
+            </div>
+          </div>
+          <div v-if="hasTrendData" ref="trendChartRef" class="chart-container"></div>
+          <el-empty v-else description="暂无趋势数据" :image-size="72" />
+        </div>
+
+        <div class="panel distribution-panel">
+          <div class="panel-header">
+            <div>
+              <h3>项目状态分布</h3>
+              <p>按当前项目状态汇总</p>
+            </div>
+          </div>
+          <div v-if="hasDistributionData" ref="distributionChartRef" class="chart-container compact"></div>
+          <el-empty v-else description="暂无分布数据" :image-size="72" />
+        </div>
+
+        <div class="panel todo-panel">
+          <div class="panel-header">
+            <div>
+              <h3>待办检查项</h3>
+              <p>优先展示需要复核、整改或办理的检查项</p>
+            </div>
+            <el-button link type="primary" @click="router.push('/project/list')">查看项目</el-button>
+          </div>
+
+          <div v-if="dashboardData.todoList.length > 0" class="todo-list">
+            <button
+              v-for="todo in dashboardData.todoList"
+              :key="todo.id"
+              class="todo-item"
+              type="button"
+              @click="openTodo(todo)"
+            >
+              <span class="priority-dot" :class="todo.priority"></span>
+              <span class="todo-main">
+                <strong>{{ todo.title }}</strong>
+                <small>{{ todo.projectName }} · {{ todo.assigneeName }} · {{ todo.dateText }}</small>
               </span>
+              <el-tag :type="todo.statusType" effect="light" size="small">
+                {{ todo.statusText }}
+              </el-tag>
+            </button>
+          </div>
+          <el-empty v-else description="暂无待办检查项" :image-size="72" />
+        </div>
+
+        <div class="panel activity-panel">
+          <div class="panel-header">
+            <div>
+              <h3>最近动态</h3>
+              <p>按项目和计划更新时间排序</p>
             </div>
           </div>
-        </div>
-      </el-col>
-    </el-row>
 
-    <el-row :gutter="24" class="main-content">
-      <!-- 左侧：图表分析 -->
-      <el-col :span="16">
-        <div class="iris-card chart-panel">
-          <div class="panel-header">
-            <h3>缺陷趋势分析</h3>
-            <div class="actions">
-              <el-radio-group v-model="chartRange" size="small">
-                <el-radio-button label="week">近一周</el-radio-button>
-                <el-radio-button label="month">近一月</el-radio-button>
-              </el-radio-group>
-            </div>
-          </div>
-          <div class="chart-container" ref="trendChartRef"></div>
-        </div>
-
-        <div class="iris-card task-panel">
-          <div class="panel-header">
-            <h3>待办任务</h3>
-            <el-button link type="primary">查看全部</el-button>
-          </div>
-          <el-table :data="todoList" :show-header="false" size="large" class="todo-table">
-            <el-table-column width="40">
-              <template #default>
-                <div class="status-dot"></div>
-              </template>
-            </el-table-column>
-            <el-table-column prop="title" min-width="300" />
-            <el-table-column prop="date" width="120" align="right" />
-            <el-table-column width="100" align="right">
-              <template #default>
-                <el-button size="small" round>办理</el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </el-col>
-
-      <!-- 右侧：概览与动态 -->
-      <el-col :span="8">
-        <div class="iris-card distribution-panel">
-          <div class="panel-header"><h3>缺陷分布</h3></div>
-          <div class="chart-container" ref="pieChartRef" style="height: 250px"></div>
-        </div>
-
-        <div class="iris-card activity-panel">
-          <div class="panel-header"><h3>最近动态</h3></div>
-          <div class="activity-list">
-            <div class="activity-item" v-for="(item, i) in activities" :key="i">
-              <div class="avatar">{{ item.user.charAt(0) }}</div>
-              <div class="info">
-                <p class="text">
-                  <span class="name">{{ item.user }}</span> {{ item.action }}
-                </p>
-                <p class="time">{{ item.time }}</p>
+          <div v-if="dashboardData.activities.length > 0" class="activity-list">
+            <div v-for="item in dashboardData.activities" :key="item.id" class="activity-item">
+              <div class="activity-icon">
+                <CircleCheck v-if="item.type === 'project'" />
+                <WarnTriangleFilled v-else-if="item.type === 'rectification'" />
+                <Document v-else />
+              </div>
+              <div>
+                <strong>{{ item.title }}</strong>
+                <small>{{ item.timeText }}</small>
               </div>
             </div>
           </div>
+          <el-empty v-else description="暂无动态" :image-size="72" />
         </div>
-      </el-col>
-    </el-row>
+      </section>
+    </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import * as echarts from 'echarts'
 import {
-  Monitor,
+  CircleCheck,
   Document,
-  WarnTriangleFilled,
   Finished,
-  Top,
-  Bottom,
+  Monitor,
+  Refresh,
+  WarnTriangleFilled,
 } from '@element-plus/icons-vue'
+import { checklistApi, planApi, projectApi } from '@/api'
+import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
+import { normalizePlanPage } from '@/features/plans/plan-data'
+import { normalizeProjectPage } from '@/features/projects/project-data'
+import {
+  buildWorkbenchDashboardData,
+  type WorkbenchDashboardData,
+  type WorkbenchTodoItem,
+} from '@/features/workbench/workbench-dashboard-data'
+import { mockRectifications } from '@/mock'
 import { useUserStore } from '@/stores/modules/user'
+import type { ControlChecklist, ControlPlan, Project } from '@/types'
 
+const router = useRouter()
 const userStore = useUserStore()
 const userName = computed(() => userStore.userName || '管理员')
-
-const chartRange = ref('week')
-const trendChartRef = ref()
-const pieChartRef = ref()
-
-const cards = [
-  { title: '待整改缺陷', value: '24', icon: WarnTriangleFilled, type: 'danger', trend: -5 },
-  { title: '进行中项目', value: '8', icon: Monitor, type: 'primary', trend: 12 },
-  { title: '本月已归档', value: '156', icon: Document, type: 'info', trend: 8 },
-  { title: '整改完成率', value: '92%', icon: Finished, type: 'success', trend: 2 },
-]
-
-const todoList = [
-  { title: '审批：2026年度信息系统审计计划', date: '今天 10:00' },
-  { title: '复核：核心系统账号权限整改报告', date: '今天 14:30' },
-  { title: '确认：机房物理安全检查缺陷清单', date: '昨天 16:00' },
-  { title: '分配：关于数据备份异常的调查任务', date: '2月10日' },
-]
-
-const activities = [
-  { user: '张三', action: '提交了整改报告 [REC-2026001]', time: '10分钟前' },
-  { user: '李四', action: '完成了项目 [PROJ-002] 的任务分配', time: '1小时前' },
-  { user: 'Wang', action: '发布了新通知：关于加强密码强度的规定', time: '2小时前' },
-  { user: 'Admin', action: '更新了系统规则库 V2.1', time: '昨天' },
-]
-
-onMounted(() => {
-  initCharts()
+const greeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 12) return '早安'
+  if (hour < 18) return '下午好'
+  return '晚上好'
 })
 
-const initCharts = () => {
-  if (trendChartRef.value) {
-    const chart = echarts.init(trendChartRef.value)
-    chart.setOption({
-      grid: { left: 40, right: 20, top: 40, bottom: 30 },
-      tooltip: { trigger: 'axis' },
-      xAxis: {
-        type: 'category',
-        data: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-        axisLine: { show: false },
-        axisTick: { show: false },
-        axisLabel: { color: '#94a3b8' },
-      },
-      yAxis: {
-        type: 'value',
-        splitLine: { lineStyle: { type: 'dashed', color: '#f1f5f9' } },
-      },
-      series: [
-        {
-          data: [12, 18, 14, 25, 16, 22, 19],
-          type: 'line',
-          smooth: true,
-          symbolSize: 8,
-          itemStyle: { color: '#3b82f6' },
-          areaStyle: {
-            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-              { offset: 0, color: 'rgba(59, 130, 246, 0.2)' },
-              { offset: 1, color: 'rgba(59, 130, 246, 0)' },
-            ]),
-          },
-        },
-        {
-          data: [5, 8, 4, 12, 6, 9, 7],
-          type: 'line',
-          smooth: true,
-          symbolSize: 8,
-          itemStyle: { color: '#f59e0b' },
-        },
-      ],
-    })
+const loading = ref(false)
+const loaded = ref(false)
+const loadError = ref('')
+const trendChartRef = ref<HTMLDivElement>()
+const distributionChartRef = ref<HTMLDivElement>()
+let trendChart: echarts.ECharts | null = null
+let distributionChart: echarts.ECharts | null = null
+
+const dashboardData = ref<WorkbenchDashboardData>(
+  buildWorkbenchDashboardData({ projects: [], plans: [], checklists: [] }),
+)
+
+const cardIconMap = {
+  danger: WarnTriangleFilled,
+  warning: WarnTriangleFilled,
+  primary: Monitor,
+  info: Document,
+  success: Finished,
+}
+
+const hasTrendData = computed(() =>
+  dashboardData.value.projectTrend.series.some((series) => series.data.some((value) => value > 0)),
+)
+const hasDistributionData = computed(() => dashboardData.value.distribution.length > 0)
+
+onMounted(() => {
+  loadDashboard()
+  window.addEventListener('resize', resizeCharts)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', resizeCharts)
+  trendChart?.dispose()
+  distributionChart?.dispose()
+})
+
+async function loadDashboard() {
+  loading.value = true
+  loadError.value = ''
+
+  const [projectResult, planResult, checklistResult] = await Promise.allSettled([
+    projectApi.list({ page: 1, pageSize: 100 }),
+    planApi.list({ page: 1, pageSize: 100 }),
+    checklistApi.list({ page: 1, pageSize: 100 }),
+  ])
+
+  const projects = readProjects(projectResult)
+  const plans = readPlans(planResult)
+  const checklists = readChecklists(checklistResult)
+  const failedCount = [projectResult, planResult, checklistResult].filter(
+    (result) => result.status === 'rejected',
+  ).length
+
+  if (failedCount > 0) {
+    loadError.value = failedCount === 3 ? '工作台数据加载失败' : '部分工作台数据加载失败'
   }
 
-  if (pieChartRef.value) {
-    const chart = echarts.init(pieChartRef.value)
-    chart.setOption({
-      tooltip: { trigger: 'item' },
-      legend: { bottom: 0, icon: 'circle', itemGap: 20 },
-      series: [
-        {
-          type: 'pie',
-          radius: ['40%', '70%'],
-          center: ['50%', '45%'],
-          itemStyle: {
-            borderRadius: 8,
-            borderColor: '#fff',
-            borderWidth: 2,
-          },
-          label: { show: false },
-          data: [
-            { value: 48, name: '权限管理', itemStyle: { color: '#3b82f6' } },
-            { value: 24, name: '数据安全', itemStyle: { color: '#10b981' } },
-            { value: 18, name: '系统运维', itemStyle: { color: '#f59e0b' } },
-            { value: 10, name: '其他', itemStyle: { color: '#94a3b8' } },
-          ],
-        },
-      ],
-    })
+  dashboardData.value = buildWorkbenchDashboardData({
+    projects,
+    plans,
+    checklists,
+    rectifications: mockRectifications,
+    now: new Date(),
+  })
+
+  loaded.value = true
+  loading.value = false
+  await nextTick()
+  renderCharts()
+}
+
+function readProjects(result: PromiseSettledResult<unknown>): Project[] {
+  if (result.status !== 'fulfilled') return []
+  return normalizeProjectPage(result.value as Parameters<typeof normalizeProjectPage>[0]).list
+}
+
+function readPlans(result: PromiseSettledResult<unknown>): ControlPlan[] {
+  if (result.status !== 'fulfilled') return []
+  return normalizePlanPage(result.value as Parameters<typeof normalizePlanPage>[0]).list
+}
+
+function readChecklists(result: PromiseSettledResult<unknown>): ControlChecklist[] {
+  if (result.status !== 'fulfilled') return []
+  return normalizeChecklistPageFromApi(result.value as Parameters<typeof normalizeChecklistPageFromApi>[0]).list
+}
+
+function renderCharts() {
+  renderTrendChart()
+  renderDistributionChart()
+}
+
+function renderTrendChart() {
+  if (!trendChartRef.value || !hasTrendData.value) {
+    trendChart?.dispose()
+    trendChart = null
+    return
   }
+
+  trendChart ||= echarts.init(trendChartRef.value)
+  trendChart.setOption({
+    grid: { left: 36, right: 18, top: 18, bottom: 28 },
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: dashboardData.value.projectTrend.labels,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: '#667085' },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      splitLine: { lineStyle: { type: 'dashed', color: '#e4e7ec' } },
+      axisLabel: { color: '#667085' },
+    },
+    series: dashboardData.value.projectTrend.series.map((series) => ({
+      ...series,
+      type: 'line',
+      smooth: true,
+      symbolSize: 7,
+      lineStyle: { width: 3, color: '#2563eb' },
+      itemStyle: { color: '#2563eb' },
+      areaStyle: { color: 'rgba(37, 99, 235, 0.08)' },
+    })),
+  })
+}
+
+function renderDistributionChart() {
+  if (!distributionChartRef.value || !hasDistributionData.value) {
+    distributionChart?.dispose()
+    distributionChart = null
+    return
+  }
+
+  distributionChart ||= echarts.init(distributionChartRef.value)
+  distributionChart.setOption({
+    tooltip: { trigger: 'item' },
+    legend: { bottom: 0, icon: 'circle', itemGap: 14, textStyle: { color: '#475467' } },
+    series: [
+      {
+        type: 'pie',
+        radius: ['48%', '72%'],
+        center: ['50%', '43%'],
+        label: { show: false },
+        itemStyle: {
+          borderRadius: 6,
+          borderColor: '#f8fafc',
+          borderWidth: 2,
+        },
+        data: dashboardData.value.distribution.map((item) => ({
+          value: item.value,
+          name: item.name,
+          itemStyle: { color: item.color },
+        })),
+      },
+    ],
+  })
+}
+
+function resizeCharts() {
+  trendChart?.resize()
+  distributionChart?.resize()
+}
+
+function openTodo(todo: WorkbenchTodoItem) {
+  router.push({
+    path: todo.targetPath,
+    query: todo.targetQuery,
+  })
 }
 </script>
 
@@ -232,243 +357,411 @@ const initCharts = () => {
 @use '@/styles/variables.scss' as *;
 
 .dashboard-page {
-  padding-bottom: 40px;
+  padding-bottom: 32px;
 }
 
-// 欢迎横幅
-.welcome-banner {
-  margin-bottom: 24px;
-  background: $iris-gradient-primary;
-  border-radius: 16px;
-  padding: 32px 40px;
-  color: white;
-  position: relative;
-  overflow: hidden;
-  box-shadow: $iris-shadow-lg;
-
-  .content {
-    position: relative;
-    z-index: 2;
-    .title {
-      font-size: 28px;
-      font-weight: 700;
-      margin-bottom: 8px;
-    }
-    .subtitle {
-      font-size: 14px;
-      opacity: 0.9;
-      margin-bottom: 24px;
-    }
-    .stats-row {
-      display: flex;
-      gap: 40px;
-      .stat-item {
-        display: flex;
-        flex-direction: column;
-        .label {
-          font-size: 12px;
-          opacity: 0.8;
-          margin-bottom: 4px;
-        }
-        .value {
-          font-size: 24px;
-          font-weight: 600;
-        }
-        .value.safe {
-          color: #86efac;
-        }
-      }
-    }
-  }
-
-  .decoration {
-    position: absolute;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    z-index: 1;
-    .circle {
-      position: absolute;
-      border-radius: 50%;
-      background: rgba(255, 255, 255, 0.1);
-    }
-    .c1 {
-      width: 300px;
-      height: 300px;
-      top: -100px;
-      right: -50px;
-    }
-    .c2 {
-      width: 200px;
-      height: 200px;
-      bottom: -50px;
-      right: 180px;
-    }
-  }
+.dashboard-hero {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) minmax(360px, 0.85fr) auto;
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 18px;
 }
 
-// 统计卡片
-.cards-row {
-  margin-bottom: 24px;
-  .stat-card {
-    background: #fff;
-    border-radius: 16px;
-    padding: 24px;
-    display: flex;
-    align-items: center;
-    gap: 20px;
-    box-shadow: $iris-shadow-card;
-    transition: all 0.3s ease;
-    border: 1px solid transparent;
+.hero-copy,
+.hero-summary,
+.panel,
+.metric-card {
+  background: oklch(99% 0.005 248);
+  border: 1px solid oklch(91% 0.016 248);
+  box-shadow: 0 10px 28px oklch(55% 0.035 248 / 8%);
+}
 
-    &:hover {
-      transform: translateY(-4px);
-      box-shadow: $iris-shadow-card-hover;
-    }
+.hero-copy {
+  min-height: 132px;
+  padding: 22px 26px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
 
-    .icon-wrapper {
-      width: 56px;
-      height: 56px;
-      border-radius: 14px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 24px;
-      flex-shrink: 0;
-    }
+.hero-kicker {
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 720;
+  color: oklch(46% 0.12 250);
+}
 
-    .card-info {
-      .card-label {
-        font-size: 14px;
-        color: $iris-text-secondary;
-        margin-bottom: 4px;
-      }
-      .card-value {
-        font-size: 26px;
-        font-weight: 700;
-        color: $iris-text-primary;
-        display: flex;
-        align-items: flex-end;
-        gap: 8px;
-        .trend {
-          font-size: 13px;
-          font-weight: 600;
-          padding-bottom: 4px;
-          display: flex;
-          align-items: center;
-          &.up {
-            color: $iris-success;
-          }
-          &.down {
-            color: $iris-danger;
-          }
-        }
-      }
-    }
+.page-title {
+  margin: 0;
+  font-size: 27px;
+  line-height: 1.2;
+  font-weight: 760;
+  color: oklch(24% 0.035 248);
+}
 
-    // Variants
-    &.primary {
-      .icon-wrapper {
-        background: rgba(59, 130, 246, 0.1);
-        color: $iris-primary;
-      }
-    }
-    &.success {
-      .icon-wrapper {
-        background: rgba(16, 185, 129, 0.1);
-        color: $iris-success;
-      }
-    }
-    &.danger {
-      .icon-wrapper {
-        background: rgba(239, 68, 68, 0.1);
-        color: $iris-danger;
-      }
-    }
-    &.info {
-      .icon-wrapper {
-        background: #f1f5f9;
-        color: $iris-text-secondary;
-      }
-    }
+.page-subtitle {
+  max-width: 70ch;
+  margin-top: 10px;
+  color: oklch(48% 0.03 248);
+  font-size: 14px;
+  line-height: 1.7;
+}
+
+.hero-summary {
+  border-radius: 8px;
+  padding: 18px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-content: center;
+  gap: 14px;
+}
+
+.summary-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  span {
+    font-size: 12px;
+    color: oklch(48% 0.028 248);
+  }
+
+  strong {
+    color: oklch(26% 0.05 248);
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 760;
   }
 }
 
-.chart-panel,
-.task-panel,
-.distribution-panel,
+.hero-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+}
+
+.dashboard-alert {
+  margin-bottom: 16px;
+}
+
+.dashboard-skeleton {
+  padding: 4px 0 24px;
+}
+
+.skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+
+  :deep(.el-skeleton__item) {
+    height: 104px;
+    border-radius: 8px;
+  }
+}
+
+.skeleton-main {
+  height: 360px;
+  border-radius: 8px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.metric-card {
+  min-width: 0;
+  border-radius: 8px;
+  padding: 18px;
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 30px oklch(55% 0.035 248 / 11%);
+  }
+}
+
+.metric-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex: 0 0 auto;
+}
+
+.metric-body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  span,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  span {
+    font-size: 13px;
+    color: oklch(47% 0.028 248);
+  }
+
+  strong {
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 760;
+    color: oklch(25% 0.04 248);
+  }
+
+  small {
+    font-size: 12px;
+    color: oklch(56% 0.026 248);
+  }
+}
+
+.metric-card.primary .metric-icon {
+  background: oklch(94% 0.035 250);
+  color: oklch(46% 0.16 250);
+}
+
+.metric-card.success .metric-icon {
+  background: oklch(94% 0.04 155);
+  color: oklch(46% 0.13 155);
+}
+
+.metric-card.danger .metric-icon {
+  background: oklch(95% 0.035 25);
+  color: oklch(55% 0.18 25);
+}
+
+.metric-card.warning .metric-icon {
+  background: oklch(95% 0.04 75);
+  color: oklch(56% 0.15 70);
+}
+
+.metric-card.info .metric-icon {
+  background: oklch(95% 0.018 248);
+  color: oklch(45% 0.045 248);
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.8fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.panel {
+  min-width: 0;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.todo-panel {
+  grid-column: 1;
+}
+
 .activity-panel {
-  background: white;
-  border-radius: 16px;
-  padding: 24px;
-  box-shadow: $iris-shadow-card;
-  margin-bottom: 24px;
-  border: none; // Removal typical border
+  grid-column: 2;
 }
 
 .panel-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 16px;
+
   h3 {
-    font-size: 18px;
-    font-weight: 600;
-    color: $iris-text-primary;
+    margin: 0;
+    color: oklch(25% 0.035 248);
+    font-size: 16px;
+    font-weight: 720;
+  }
+
+  p {
+    margin-top: 5px;
+    color: oklch(54% 0.026 248);
+    font-size: 12px;
+    line-height: 1.5;
   }
 }
 
 .chart-container {
-  height: 320px;
   width: 100%;
+  height: 300px;
 }
 
-.todo-table {
-  .status-dot {
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    background: $iris-primary;
-  }
-  ::v-deep(.el-table__cell) {
-    border-bottom: 1px solid #f1f5f9;
-  }
+.chart-container.compact {
+  height: 264px;
 }
 
+.todo-list,
 .activity-list {
-  .activity-item {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 20px;
-    &:last-child {
-      margin-bottom: 0;
-    }
-    .avatar {
-      width: 40px;
-      height: 40px;
-      border-radius: 10px;
-      background: #eff6ff;
-      color: $iris-primary;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .info {
-      .text {
-        font-size: 14px;
-        color: $iris-text-secondary;
-        margin-bottom: 4px;
-        .name {
-          color: $iris-text-primary;
-          font-weight: 500;
-        }
-      }
-      .time {
-        font-size: 12px;
-        color: $iris-text-muted;
-      }
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.todo-item {
+  width: 100%;
+  min-height: 58px;
+  border: 1px solid oklch(92% 0.014 248);
+  border-radius: 8px;
+  background: oklch(98.5% 0.006 248);
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    border-color 160ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 160ms cubic-bezier(0.16, 1, 0.3, 1);
+
+  &:hover {
+    border-color: oklch(78% 0.08 250);
+    background: oklch(97% 0.014 250);
+  }
+
+  &:focus-visible {
+    outline: 2px solid oklch(68% 0.13 250);
+    outline-offset: 2px;
+  }
+}
+
+.priority-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: oklch(65% 0.13 85);
+
+  &.high {
+    background: oklch(56% 0.18 25);
+  }
+
+  &.low {
+    background: oklch(58% 0.13 155);
+  }
+}
+
+.todo-main,
+.activity-item > div:last-child {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+
+  strong,
+  small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  strong {
+    color: oklch(28% 0.035 248);
+    font-size: 14px;
+    font-weight: 680;
+  }
+
+  small {
+    color: oklch(54% 0.026 248);
+    font-size: 12px;
+  }
+}
+
+.activity-item {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid oklch(93% 0.012 248);
+
+  &:last-child {
+    border-bottom: 0;
+  }
+}
+
+.activity-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: oklch(95% 0.02 248);
+  color: oklch(44% 0.12 250);
+  flex: 0 0 auto;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-hero,
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .hero-actions {
+    justify-content: flex-start;
+  }
+
+  .todo-panel,
+  .activity-panel {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 880px) {
+  .metric-grid,
+  .skeleton-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .hero-summary {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .hero-copy,
+  .hero-summary,
+  .panel,
+  .metric-card {
+    padding: 16px;
+  }
+
+  .metric-grid,
+  .skeleton-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page-title {
+    font-size: 23px;
+  }
+
+  .todo-item {
+    grid-template-columns: 10px minmax(0, 1fr);
+
+    :deep(.el-tag) {
+      grid-column: 2;
+      justify-self: flex-start;
     }
   }
 }
