@@ -114,6 +114,19 @@ describe('project management data sources', () => {
     expect(projectDetailSource).not.toContain(':disabled="selectedTaskIds.length === 0"')
   })
 
+  it('handles inspection items from a dialog that can create multiple work orders', () => {
+    expect(projectDetailSource).toContain('办理')
+    expect(projectDetailSource).toContain('canHandleInspectionItem(row)')
+    expect(projectDetailSource).toContain('openWorkOrderDialog(row)')
+    expect(projectDetailSource).toContain('workOrderDialogVisible')
+    expect(projectDetailSource).toContain('workOrderForm.handlerIds')
+    expect(projectDetailSource).toContain('multiple')
+    expect(projectDetailSource).toContain('taskApi.createWorkOrders')
+    expect(projectDetailSource).toContain('handlers: workOrderHandlers.value')
+    expect(projectDetailSource).toContain("project.value.status === 'in_progress'")
+    expect(projectDetailSource).toContain('currentUserId.value === String(task.assigneeId)')
+  })
+
   it('renames project task wording to inspection item wording', () => {
     expect(projectDetailSource).toContain('检查项')
     expect(projectTaskSource).toContain('检查项详情')

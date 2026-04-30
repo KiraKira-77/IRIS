@@ -163,7 +163,7 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="100" fixed="right">
+            <el-table-column label="操作" width="140" fixed="right">
               <template #default="{ row }">
                 <el-button
                   link
@@ -172,6 +172,15 @@
                   @click="router.push(`/project/task/${row.id}?projectId=${project?.id}`)"
                 >
                   查看
+                </el-button>
+                <el-button
+                  v-if="canHandleInspectionItem(row)"
+                  link
+                  type="primary"
+                  size="small"
+                  @click="openWorkOrderDialog(row)"
+                >
+                  办理
                 </el-button>
               </template>
             </el-table-column>
@@ -232,6 +241,61 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-if="project"
+      v-model="workOrderDialogVisible"
+      title="办理检查项"
+      width="560px"
+      destroy-on-close
+    >
+      <el-form label-position="top">
+        <el-form-item label="检查项">
+          <span class="strong-text">{{ currentWorkOrderTask?.checkContent || '—' }}</span>
+        </el-form-item>
+        <el-form-item label="工单标题">
+          <el-input v-model="workOrderForm.title" maxlength="80" show-word-limit />
+        </el-form-item>
+        <el-form-item label="工单说明">
+          <el-input
+            v-model="workOrderForm.description"
+            type="textarea"
+            :rows="3"
+            maxlength="300"
+            show-word-limit
+          />
+        </el-form-item>
+        <el-form-item label="工单处理人">
+          <el-select
+            v-model="workOrderForm.handlerIds"
+            placeholder="选择处理人"
+            style="width: 100%"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+          >
+            <el-option
+              v-for="member in assignableMembers"
+              :key="member.personnelId"
+              :label="member.personnelName"
+              :value="member.personnelId"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="workOrderDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="workOrderSubmitting"
+          :disabled="workOrderForm.handlerIds.length === 0"
+          @click="handleCreateWorkOrders"
+        >
+          生成工单
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -240,7 +304,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { projectApi } from '@/api'
+import { projectApi, taskApi } from '@/api'
 import {
   getAssignableProjectMembers,
   getProjectMembers,
@@ -268,6 +332,14 @@ const selectedTaskIds = ref<string[]>([])
 const batchAssignDialogVisible = ref(false)
 const batchAssigneeId = ref('')
 const batchAssigning = ref(false)
+const workOrderDialogVisible = ref(false)
+const currentWorkOrderTask = ref<CheckTask>()
+const workOrderSubmitting = ref(false)
+const workOrderForm = ref({
+  title: '',
+  description: '',
+  handlerIds: [] as string[],
+})
 const avatarColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
 
 onMounted(async () => {
@@ -313,6 +385,12 @@ const allTasksDone = computed(() => {
     tasks.every((task) => ['passed', 'nonconforming', 'approved'].includes(task.status))
   )
 })
+const finishedTaskStatuses = ['passed', 'nonconforming', 'approved']
+const workOrderHandlers = computed(() =>
+  assignableMembers.value
+    .filter((member) => workOrderForm.value.handlerIds.includes(member.personnelId))
+    .map((member) => ({ handlerId: member.personnelId, handlerName: member.personnelName })),
+)
 
 const filteredTasks = computed(() => {
   if (!project.value) return []
@@ -384,6 +462,48 @@ const handleAssignTask = async (task: CheckTask, assigneeId: string) => {
     await loadProject()
   } finally {
     assigningTaskId.value = ''
+  }
+}
+
+const canHandleInspectionItem = (task: CheckTask) => {
+  return (
+    !!project.value &&
+    project.value.status === 'in_progress' &&
+    !!task.assigneeId &&
+    !finishedTaskStatuses.includes(task.status) &&
+    (canManageProject.value || currentUserId.value === String(task.assigneeId))
+  )
+}
+
+const openWorkOrderDialog = (task: CheckTask) => {
+  currentWorkOrderTask.value = task
+  const defaultHandlerIds = task.assigneeId
+    ? assignableMembers.value
+        .filter((member) => member.personnelId === String(task.assigneeId))
+        .map((member) => member.personnelId)
+    : []
+  workOrderForm.value = {
+    title: task.taskName || task.checkContent,
+    description: task.taskDescription || task.checkCriterion,
+    handlerIds: defaultHandlerIds,
+  }
+  workOrderDialogVisible.value = true
+}
+
+const handleCreateWorkOrders = async () => {
+  if (!project.value || !currentWorkOrderTask.value || workOrderHandlers.value.length === 0) return
+  workOrderSubmitting.value = true
+  try {
+    await taskApi.createWorkOrders(project.value.id, currentWorkOrderTask.value.id, {
+      title: workOrderForm.value.title.trim() || undefined,
+      description: workOrderForm.value.description.trim() || undefined,
+      handlers: workOrderHandlers.value,
+    })
+    workOrderDialogVisible.value = false
+    ElMessage.success('工单已生成')
+    await loadProject()
+  } finally {
+    workOrderSubmitting.value = false
   }
 }
 
