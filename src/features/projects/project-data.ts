@@ -119,7 +119,7 @@ export function taskStatusType(status?: string): string {
 }
 
 export function projectSourceLabel(source?: string): string {
-  return source === 'plan' ? '计划生成' : '临时启动'
+  return source === 'plan' ? '计划生成' : '手动创建'
 }
 
 export function projectTimeText(project: Pick<Project, 'startDate' | 'endDate'>): string {

@@ -27,7 +27,7 @@
       </div>
       <div class="hero-actions">
         <el-button type="primary" :icon="Plus" size="large" @click="router.push('/project/create')">
-          项目启动
+          新建项目
         </el-button>
       </div>
     </section>
@@ -138,6 +138,15 @@
                 查看
               </el-button>
               <el-button
+                v-if="canEditProject(row)"
+                link
+                type="primary"
+                size="small"
+                @click.stop="router.push(`/project/create?id=${row.id}`)"
+              >
+                编辑
+              </el-button>
+              <el-button
                 v-if="row.status === 'not_started' && canStartProject(row)"
                 link
                 type="success"
@@ -215,7 +224,8 @@ const projectStats = computed(() => ({
   completed: tableData.value.filter((item) => item.status === 'completed').length,
 }))
 
-onMounted(() => {
+onMounted(async () => {
+  await userStore.ensureUserInfoLoaded()
   loadProjects()
 })
 
@@ -270,6 +280,10 @@ const handleRowClick = (row: Project) => {
 
 const canStartProject = (row: Project) => {
   return !!row.leaderId && String(row.leaderId) === String(userStore.userInfo?.id || '')
+}
+
+const canEditProject = (row: Project) => {
+  return row.status !== 'archived' && !!row.leaderId && String(row.leaderId) === String(userStore.userInfo?.id || '')
 }
 
 const handleStartProject = async (row: Project) => {

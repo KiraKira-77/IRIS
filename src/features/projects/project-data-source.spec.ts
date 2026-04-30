@@ -20,6 +20,7 @@ const projectCreateSource = readFileSync(join(here, '../../views/project/create/
 const projectDetailSource = readFileSync(join(here, '../../views/project/detail/index.vue'), 'utf8')
 const projectTaskSource = readFileSync(join(here, '../../views/project/task/index.vue'), 'utf8')
 const apiSource = readFileSync(join(here, '../../api/index.ts'), 'utf8')
+const routerSource = readFileSync(join(here, '../../router/index.ts'), 'utf8')
 const typeSource = readFileSync(join(here, '../../types/index.ts'), 'utf8')
 
 describe('project management data sources', () => {
@@ -127,6 +128,7 @@ describe('project management data sources', () => {
 
     expect(projectApiSource).toContain('start: (id: string)')
     expect(projectApiSource).toContain('complete: (id: string)')
+    expect(projectApiSource).toContain('update: (id: string, data: ProjectUpsertPayload)')
     expect(projectApiSource).toContain('delete: (id: string)')
     expect(projectApiSource).not.toContain('/close')
     expect(projectApiSource).not.toContain('/archive')
@@ -138,6 +140,25 @@ describe('project management data sources', () => {
     expect(projectListSource).toContain('projectApi.start')
     expect(projectListSource).toContain("row.status === 'not_started'")
     expect(projectListSource).toContain('启动')
+  })
+
+  it('uses create wording for the project creation entry', () => {
+    expect(projectListSource).toContain('新建项目')
+    expect(routerSource).toContain("title: '新建项目'")
+    expect(projectCreateSource).toContain("'新建项目'")
+    expect(projectListSource).not.toContain('>项目启动</el-button>')
+  })
+
+  it('allows project leaders to edit projects until they are archived', () => {
+    expect(projectListSource).toContain('canEditProject(row)')
+    expect(projectListSource).toContain("row.status !== 'archived'")
+    expect(projectListSource).toContain('router.push(`/project/create?id=${row.id}`)')
+    expect(projectDetailSource).toContain('canEditProject')
+    expect(projectDetailSource).toContain("project.status !== 'archived'")
+    expect(projectDetailSource).toContain('router.push(`/project/create?id=${project.id}`)')
+    expect(projectCreateSource).toContain('isEditMode')
+    expect(projectCreateSource).toContain('projectApi.detail')
+    expect(projectCreateSource).toContain('projectApi.update')
   })
 
   it('normalizes backend project pages', () => {

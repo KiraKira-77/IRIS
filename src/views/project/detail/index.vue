@@ -26,6 +26,14 @@
         </div>
         <div class="actions" v-if="project">
           <el-button
+            v-if="project.status !== 'archived' && canEditProject"
+            type="primary"
+            plain
+            @click="router.push(`/project/create?id=${project.id}`)"
+          >
+            编辑
+          </el-button>
+          <el-button
             v-if="canManageProject && project.status === 'not_started'"
             type="success"
             @click="handleStartProject"
@@ -229,6 +237,9 @@ const assignableMembers = computed(() => getAssignableProjectMembers(members.val
 const currentUserId = computed(() => (userStore.userInfo?.id ? String(userStore.userInfo.id) : ''))
 const canManageProject = computed(() => {
   return !!project.value?.leaderId && String(project.value.leaderId) === currentUserId.value
+})
+const canEditProject = computed(() => {
+  return !!project.value && project.value.status !== 'archived' && canManageProject.value
 })
 
 const leaderName = computed(() => {

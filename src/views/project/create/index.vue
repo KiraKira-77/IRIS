@@ -57,7 +57,7 @@
                 <el-form-item label="项目来源" prop="source">
                   <el-select v-model="form.source" placeholder="选择来源" style="width: 100%">
                     <el-option label="计划生成" value="plan" />
-                    <el-option label="临时启动" value="manual" />
+                    <el-option label="手动创建" value="manual" />
                   </el-select>
                 </el-form-item>
               </el-col>
@@ -224,7 +224,7 @@
         <el-icon class="el-icon--right"><ArrowRight /></el-icon>
       </el-button>
       <el-button v-if="currentStep === 1" type="primary" @click="handleSubmit" :icon="Promotion">
-        启动项目
+        {{ isEditMode ? '保存项目' : '新建项目' }}
       </el-button>
     </div>
   </div>
@@ -250,8 +250,13 @@ import {
 import { checklistApi, planApi, projectApi, systemUserApi } from '@/api'
 import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
 import { normalizePlanPage } from '@/features/plans/plan-data'
-import { buildProjectUpsertPayload, filterProjectMemberUsers } from '@/features/projects/project-data'
-import type { ControlChecklist, ControlPlan, SystemUser, TeamMember } from '@/types'
+import {
+  buildProjectUpsertPayload,
+  filterProjectMemberUsers,
+  getProjectMembers,
+  normalizeProject,
+} from '@/features/projects/project-data'
+import type { ControlChecklist, ControlPlan, Project, SystemUser, TeamMember } from '@/types'
 
 const router = useRouter()
 const route = useRoute()
@@ -260,7 +265,13 @@ const currentStep = ref(0)
 const basicFormRef = ref<FormInstance>()
 
 const linkedPlan = ref<ControlPlan | null>(null)
-const pageTitle = computed(() => (linkedPlan.value ? '从计划创建项目' : '项目启动'))
+const editingProject = ref<Project | null>(null)
+const projectId = computed(() => route.query.id as string | undefined)
+const isEditMode = computed(() => !!projectId.value)
+const pageTitle = computed(() => {
+  if (isEditMode.value) return '编辑项目'
+  return linkedPlan.value ? '从计划创建项目' : '新建项目'
+})
 const today = () => new Date().toISOString().slice(0, 10)
 
 // ==================
@@ -332,7 +343,9 @@ const onPlanChange = async (planId: string) => {
   if (plan) {
     linkedPlan.value = plan
     pruneUnavailableTeamMembers()
-    form.value.name = `${plan.name} - 执行项目`
+    if (!isEditMode.value) {
+      form.value.name = `${plan.name} - 执行项目`
+    }
     // Auto-select checklists from plan items
     const clIds = new Set<string>()
     plan.items.forEach((item) => {
@@ -340,6 +353,31 @@ const onPlanChange = async (planId: string) => {
     })
     form.value.checklistIds = Array.from(clIds)
   }
+}
+
+const loadProjectForEdit = async (id: string) => {
+  const project = normalizeProject(await projectApi.detail(id))
+  editingProject.value = project
+  form.value = {
+    name: project.name,
+    source: project.source,
+    planId: project.planId || '',
+    startDate: project.startDate,
+    endDate: project.endDate || '',
+    description: project.description || '',
+    checklistIds: project.checklistIds || [],
+  }
+  teamMembers.value = getProjectMembers(project).map((member) => ({
+    personnelId: member.personnelId,
+    personnelName: member.personnelName,
+    employeeNo: member.employeeNo,
+    department: member.department,
+    role: member.role === 'leader' || member.role === 'auditor' ? member.role : 'observer',
+  }))
+  if (project.planId) {
+    linkedPlan.value = availablePlans.value.find((plan) => plan.id === project.planId) || null
+  }
+  pruneUnavailableTeamMembers()
 }
 
 const onPersonnelChange = (idx: number, personnelId: string) => {
@@ -366,6 +404,10 @@ const toggleChecklist = (id: string) => {
 // ==================
 onMounted(async () => {
   await Promise.all([loadAvailablePlans(), loadChecklistOptions(), loadPersonnelOptions()])
+  if (projectId.value) {
+    await loadProjectForEdit(projectId.value)
+    return
+  }
   const planId = route.query.planId as string
   if (planId) {
     form.value.source = 'plan'
@@ -407,22 +449,23 @@ const handleSubmit = async () => {
 
   const plan = linkedPlan.value || availablePlans.value.find((item) => item.id === form.value.planId)
   try {
-    const created = await projectApi.create(
-      buildProjectUpsertPayload({
-        name: form.value.name,
-        source: form.value.source,
-        planId: form.value.planId,
-        planName: plan?.name,
-        description: form.value.description,
-        startDate: form.value.startDate,
-        endDate: form.value.endDate,
-        checklistIds: form.value.checklistIds,
-        members: validMembers,
-      }),
-    )
+    const payload = buildProjectUpsertPayload({
+      name: form.value.name,
+      source: form.value.source,
+      planId: form.value.planId,
+      planName: plan?.name || editingProject.value?.planName,
+      description: form.value.description,
+      startDate: form.value.startDate,
+      endDate: form.value.endDate,
+      checklistIds: form.value.checklistIds,
+      members: validMembers,
+    })
+    const saved = isEditMode.value
+      ? await projectApi.update(projectId.value!, payload)
+      : await projectApi.create(payload)
 
-    ElMessage.success('项目已创建')
-    router.push(`/project/detail/${created.id}`)
+    ElMessage.success(isEditMode.value ? '项目已保存' : '项目已创建')
+    router.push(`/project/detail/${saved.id}`)
   } catch {
     // request interceptor shows the error
   }

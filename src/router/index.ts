@@ -105,7 +105,7 @@ const routes: RouteRecordRaw[] = [
         path: 'project/create',
         name: 'ProjectCreate',
         component: () => import('@/views/project/create/index.vue'),
-        meta: { title: '项目启动', icon: 'Plus' },
+        meta: { title: '新建项目', icon: 'Plus' },
       },
       {
         path: 'project/detail/:id',

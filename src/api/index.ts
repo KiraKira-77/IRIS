@@ -96,6 +96,8 @@ export const projectApi = {
   list: (params: PageQuery) => request.get<PageResult<Project>>('/v1/projects', params),
   detail: (id: string) => request.get<Project>(`/v1/projects/${id}`),
   create: (data: ProjectUpsertPayload) => request.post<Project>('/v1/projects', data),
+  update: (id: string, data: ProjectUpsertPayload) =>
+    request.put<Project>(`/v1/projects/${id}`, data),
   start: (id: string) => request.post<Project>(`/v1/projects/${id}/start`),
   complete: (id: string) => request.post<Project>(`/v1/projects/${id}/complete`),
   assignTasks: (
