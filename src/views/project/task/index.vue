@@ -130,7 +130,27 @@
                   <el-tag size="small" effect="plain" :type="auditResultTagType(workOrderReviewResultOf(order))">
                     {{ auditResultLabel(workOrderReviewResultOf(order)) }}
                   </el-tag>
-                  <el-button link type="primary" @click="openWorkOrderReview(order)">审核</el-button>
+                  <el-button link type="primary" @click="toggleWorkOrderReview(order)">
+                    {{ workOrderReviewForm.workOrderId === order.id ? '收起' : '审核' }}
+                  </el-button>
+                  <el-popconfirm
+                    title="确认删除该工单吗？"
+                    width="220"
+                    confirm-button-text="删除"
+                    cancel-button-text="取消"
+                    @confirm="handleDeleteWorkOrder(order)"
+                  >
+                    <template #reference>
+                      <el-button
+                        link
+                        type="danger"
+                        :icon="DeleteIcon"
+                        :loading="workOrderDeletingIds.has(order.id)"
+                      >
+                        删除
+                      </el-button>
+                    </template>
+                  </el-popconfirm>
                 </div>
                 <div v-if="workOrderReviewForm.workOrderId === order.id" class="work-order-review-panel">
                   <el-form label-position="top" class="handle-form review-form">
@@ -179,7 +199,7 @@
               </div>
               <div class="flow-item">
                 <span>工单数量</span>
-                <strong>{{ task.workOrderCount || visibleWorkOrders.length }}</strong>
+                <strong>{{ visibleWorkOrders.length }}</strong>
               </div>
               <div class="flow-item">
                 <span>当前结果</span>
@@ -487,7 +507,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, Connection, House, Link, View } from '@element-plus/icons-vue'
+import { Back, Connection, Delete as DeleteIcon, House, Link, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { UploadUserFile } from 'element-plus'
 import { checklistApi, projectApi, systemUserApi, taskApi } from '@/api'
@@ -528,6 +548,7 @@ const checklistOptions = ref<ControlChecklist[]>([])
 const systemUsers = ref<SystemUser[]>([])
 const workOrders = ref<ProjectTaskWorkOrder[]>([])
 const workOrderSubmitting = ref(false)
+const workOrderDeletingIds = ref(new Set<string>())
 const workOrderMode = ref<WorkOrderProvider>('oms')
 const localWorkOrderCreated = ref(false)
 const localWorkOrderId = ref('')
@@ -942,6 +963,14 @@ const handleCompleteLocalWorkOrder = () => {
   ElMessage.success('本地工单已完成')
 }
 
+const closeWorkOrderReview = () => {
+  workOrderReviewForm.value = {
+    workOrderId: '',
+    result: '',
+    opinion: '',
+  }
+}
+
 const openWorkOrderReview = (order: ProjectTaskWorkOrder) => {
   const savedReview = workOrderReviewResults.value[order.id]
   workOrderReviewForm.value = {
@@ -951,6 +980,14 @@ const openWorkOrderReview = (order: ProjectTaskWorkOrder) => {
   }
 }
 
+const toggleWorkOrderReview = (order: ProjectTaskWorkOrder) => {
+  if (workOrderReviewForm.value.workOrderId === order.id) {
+    closeWorkOrderReview()
+    return
+  }
+  openWorkOrderReview(order)
+}
+
 const handleConfirmWorkOrderReview = () => {
   if (!workOrderReviewForm.value.workOrderId || !workOrderReviewForm.value.result) return
   workOrderReviewResults.value[workOrderReviewForm.value.workOrderId] = {
@@ -958,6 +995,34 @@ const handleConfirmWorkOrderReview = () => {
     opinion: workOrderReviewForm.value.opinion.trim(),
   }
   ElMessage.success('工单审核结果已确认')
+}
+
+const handleDeleteWorkOrder = async (order: ProjectTaskWorkOrder) => {
+  if (!task.value || !projectId.value) return
+  if (order.id === localWorkOrderId.value) {
+    localWorkOrderCreated.value = false
+    localWorkOrderId.value = ''
+    localWorkOrderCompletedAt.value = ''
+    localWorkOrderLogs.value = []
+    delete workOrderReviewResults.value[order.id]
+    closeWorkOrderReview()
+    ElMessage.success('工单已删除')
+    return
+  }
+  workOrderDeletingIds.value = new Set([...workOrderDeletingIds.value, order.id])
+  try {
+    await taskApi.deleteWorkOrder(projectId.value, task.value.id, order.id)
+    workOrders.value = workOrders.value.filter((item) => item.id !== order.id)
+    delete workOrderReviewResults.value[order.id]
+    if (workOrderReviewForm.value.workOrderId === order.id) {
+      closeWorkOrderReview()
+    }
+    ElMessage.success('工单已删除')
+  } finally {
+    const nextDeletingIds = new Set(workOrderDeletingIds.value)
+    nextDeletingIds.delete(order.id)
+    workOrderDeletingIds.value = nextDeletingIds
+  }
 }
 
 const handleManualWorkOrderPreview = () => {

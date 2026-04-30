@@ -133,6 +133,8 @@ export const taskApi = {
   ) => request.post(`/v1/projects/${projectId}/tasks/${taskId}/work-orders`, data),
   refreshWorkOrder: (projectId: string, taskId: string, workOrderId: string) =>
     request.post(`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/refresh`),
+  deleteWorkOrder: (projectId: string, taskId: string, workOrderId: string) =>
+    request.delete(`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}`),
 }
 
 export const rectificationApi = {
