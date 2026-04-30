@@ -119,7 +119,11 @@ export const taskApi = {
   createWorkOrders: (
     projectId: string,
     taskId: string,
-    data: { title?: string; description?: string; handlers: Array<{ handlerId: string; handlerName: string }> },
+    data: {
+      title?: string
+      description?: string
+      handlers: Array<{ handlerId: string; handlerEmployeeNo: string; handlerName: string }>
+    },
   ) => request.post(`/v1/projects/${projectId}/tasks/${taskId}/work-orders`, data),
   refreshWorkOrder: (projectId: string, taskId: string, workOrderId: string) =>
     request.post(`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/refresh`),

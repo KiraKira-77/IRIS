@@ -162,11 +162,11 @@
                   <el-option
                     v-for="member in assignableMembers"
                     :key="member.personnelId"
-                    :label="member.personnelName"
+                    :label="`${member.personnelName} (${member.employeeNo})`"
                     :value="member.personnelId"
                   >
                     <span>{{ member.personnelName }}</span>
-                    <span class="option-meta">{{ roleLabel(member.role) }}</span>
+                    <span class="option-meta">{{ member.employeeNo }} · {{ roleLabel(member.role) }}</span>
                   </el-option>
                 </el-select>
               </el-form-item>
@@ -174,7 +174,7 @@
                 type="primary"
                 class="submit-btn"
                 :loading="workOrderSubmitting"
-                :disabled="workOrderForm.handlerIds.length === 0"
+                :disabled="workOrderHandlers.length === 0"
                 @click="handleCreateWorkOrders"
               >
                 生成工单
@@ -237,7 +237,9 @@ onMounted(async () => {
 const projectId = computed(() => (route.query.projectId as string | undefined) || project.value?.id || '')
 const handleModeRequested = computed(() => route.query.action === 'handle')
 const members = computed(() => (project.value ? getProjectMembers(project.value) : []))
-const assignableMembers = computed(() => getAssignableProjectMembers(members.value))
+const assignableMembers = computed(() =>
+  getAssignableProjectMembers(members.value).filter((member) => !!normalizeIdentityValue(member.employeeNo)),
+)
 const currentUserIdentityValues = computed(() => {
   const user = userStore.userInfo
   return new Set([user?.id, user?.username, user?.name].map(normalizeIdentityValue).filter(Boolean))
@@ -293,7 +295,11 @@ const inspectionItemHandleTip = computed(() => {
 const workOrderHandlers = computed(() =>
   assignableMembers.value
     .filter((member) => workOrderForm.value.handlerIds.includes(member.personnelId))
-    .map((member) => ({ handlerId: member.personnelId, handlerName: member.personnelName })),
+    .map((member) => ({
+      handlerId: member.personnelId,
+      handlerEmployeeNo: normalizeIdentityValue(member.employeeNo),
+      handlerName: member.personnelName,
+    })),
 )
 
 const loadChecklistOptions = async () => {

@@ -487,6 +487,7 @@ export interface ProjectTaskWorkOrder {
   taskId: string
   omsWorkOrderId?: string
   handlerId?: string
+  handlerEmployeeNo?: string
   handlerName?: string
   issuedAt?: string
   completedAt?: string

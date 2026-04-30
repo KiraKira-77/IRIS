@@ -136,6 +136,7 @@ describe('project management data sources', () => {
     expect(projectTaskSource).toContain('member.employeeNo')
     expect(projectTaskSource).toContain('workOrderForm.handlerIds')
     expect(projectTaskSource).toContain('multiple')
+    expect(projectTaskSource).toContain('handlerEmployeeNo')
     expect(projectTaskSource).toContain('taskApi.createWorkOrders')
     expect(projectTaskSource).toContain('handlers: workOrderHandlers.value')
     expect(projectTaskSource).toContain("project.value.status === 'in_progress'")
