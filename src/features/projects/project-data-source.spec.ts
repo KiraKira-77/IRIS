@@ -133,6 +133,13 @@ describe('project management data sources', () => {
     expect(projectApiSource).not.toContain('update: (id: string, data: Partial<Project>)')
   })
 
+  it('shows a project start action on the project list for not started projects', () => {
+    expect(projectListSource).toContain('handleStartProject(row)')
+    expect(projectListSource).toContain('projectApi.start')
+    expect(projectListSource).toContain("row.status === 'not_started'")
+    expect(projectListSource).toContain('启动')
+  })
+
   it('normalizes backend project pages', () => {
     const page = normalizeProjectPage({
       records: [

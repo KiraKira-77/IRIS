@@ -131,11 +131,20 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180" fixed="right">
+        <el-table-column label="操作" width="220" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button link type="primary" size="small" @click.stop="handleRowClick(row)">
                 查看
+              </el-button>
+              <el-button
+                v-if="row.status === 'not_started' && canStartProject(row)"
+                link
+                type="success"
+                size="small"
+                @click.stop="handleStartProject(row)"
+              >
+                启动
               </el-button>
               <el-button
                 v-if="row.status === 'not_started'"
@@ -172,6 +181,7 @@ import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi } from '@/api'
+import { useUserStore } from '@/stores/modules/user'
 import {
   normalizeProjectPage,
   projectChecklistCount,
@@ -184,6 +194,7 @@ import {
 import type { Project } from '@/types'
 
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 const tableData = ref<Project[]>([])
 const searchForm = reactive({
@@ -255,6 +266,25 @@ const handlePageChange = () => {
 
 const handleRowClick = (row: Project) => {
   router.push(`/project/detail/${row.id}`)
+}
+
+const canStartProject = (row: Project) => {
+  return !!row.leaderId && String(row.leaderId) === String(userStore.userInfo?.id || '')
+}
+
+const handleStartProject = async (row: Project) => {
+  try {
+    await ElMessageBox.confirm(`确认启动项目「${row.name}」？启动后检查项可开始办理。`, '启动项目', {
+      type: 'warning',
+      confirmButtonText: '确认启动',
+      cancelButtonText: '取消',
+    })
+    await projectApi.start(row.id)
+    ElMessage.success('项目已启动')
+    loadProjects()
+  } catch {
+    // cancelled or request failed
+  }
 }
 
 const handleDelete = async (row: Project) => {

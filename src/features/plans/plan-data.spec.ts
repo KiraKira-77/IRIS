@@ -4,6 +4,7 @@ import {
   PLAN_SUBMIT_STATUS,
   buildControlPlanTree,
   canEditControlPlan,
+  canDeleteControlPlan,
   createPlanUpsertPayload,
   normalizePlanPage,
   resolvePlanPeriodDateRange,
@@ -75,6 +76,47 @@ describe('plan-data', () => {
     expect(canEditControlPlan(createPlan({ status: 'in_progress' }))).toBe(false)
     expect(canEditControlPlan(createPlan({ status: 'completed' }))).toBe(false)
     expect(canEditControlPlan(createPlan({ status: 'archived' }))).toBe(false)
+  })
+
+  it('only allows deleting plans when the plan and its descendants have no linked projects', () => {
+    const parent = createPlan({ id: 'parent' })
+    const childWithoutProject = createPlan({
+      id: 'child-without-project',
+      parentId: 'parent',
+      items: [
+        {
+          id: 'item-1',
+          planId: 'child-without-project',
+          sequence: 1,
+          targetScope: 'scope',
+          checklistIds: ['checklist-1'],
+          assignee: 'user-1',
+          plannedStartDate: '2026-01-01',
+          plannedEndDate: '2026-01-31',
+        },
+      ],
+    })
+    const childWithProject = createPlan({
+      id: 'child-with-project',
+      parentId: 'parent',
+      items: [
+        {
+          id: 'item-2',
+          planId: 'child-with-project',
+          sequence: 1,
+          targetScope: 'scope',
+          checklistIds: ['checklist-1'],
+          assignee: 'user-1',
+          plannedStartDate: '2026-01-01',
+          plannedEndDate: '2026-01-31',
+          projectId: 'project-1',
+        },
+      ],
+    })
+
+    expect(canDeleteControlPlan(childWithoutProject, [parent, childWithoutProject, childWithProject])).toBe(true)
+    expect(canDeleteControlPlan(childWithProject, [parent, childWithoutProject, childWithProject])).toBe(false)
+    expect(canDeleteControlPlan(parent, [parent, childWithoutProject, childWithProject])).toBe(false)
   })
 
   it('builds parent-child plan tree with children under their own parent', () => {

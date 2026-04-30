@@ -179,6 +179,7 @@
                 >提交计划</el-button
               >
               <el-button
+                v-if="canDeleteControlPlan(row, allPlans)"
                 link
                 type="danger"
                 size="small"
@@ -201,6 +202,7 @@ import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { planApi } from '@/api'
 import {
   buildControlPlanTree,
+  canDeleteControlPlan,
   canEditControlPlan,
   normalizePlanPage,
 } from '@/features/plans/plan-data'

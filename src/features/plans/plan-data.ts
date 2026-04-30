@@ -37,6 +37,38 @@ export function canEditControlPlan(plan: Pick<ControlPlan, 'status'>): boolean {
   return plan.status === 'draft' || plan.status === 'approved'
 }
 
+export function canDeleteControlPlan(plan: ControlPlan, allPlans: ControlPlan[]): boolean {
+  const plans = flattenControlPlans(allPlans)
+  const childrenByParentId = plans.reduce<Map<string, ControlPlan[]>>((map, item) => {
+    if (!item.parentId) return map
+    map.set(item.parentId, [...(map.get(item.parentId) || []), item])
+    return map
+  }, new Map())
+  const planIds = new Set<string>()
+  const pendingIds = [plan.id]
+
+  while (pendingIds.length > 0) {
+    const currentId = pendingIds.shift()!
+    if (planIds.has(currentId)) continue
+    planIds.add(currentId)
+    pendingIds.push(...(childrenByParentId.get(currentId) || []).map((item) => item.id))
+  }
+
+  return plans
+    .filter((item) => planIds.has(item.id))
+    .every((item) => item.items.every((planItem) => !planItem.projectId?.trim()))
+}
+
+function flattenControlPlans(plans: ControlPlan[]): ControlPlan[] {
+  const flattened: ControlPlan[] = []
+  const visit = (plan: ControlPlan) => {
+    flattened.push(plan)
+    plan.children?.forEach(visit)
+  }
+  plans.forEach(visit)
+  return flattened
+}
+
 const padDatePart = (value: number) => String(value).padStart(2, '0')
 
 const formatDate = (year: number, month: number, day: number) =>

@@ -118,12 +118,13 @@ describe('plan related pages data sources', () => {
     expect(planListSource).toContain('row-actions')
   })
 
-  it('shows the delete action in the plan list without status gating', () => {
+  it('hides the delete action for plans that are linked to projects', () => {
     const deleteButtonEnd = planListSource.indexOf('>删除</el-button')
     const deleteButtonSource = planListSource.slice(deleteButtonEnd - 220, deleteButtonEnd)
 
     expect(deleteButtonEnd).toBeGreaterThan(0)
     expect(deleteButtonSource).toContain('handleDelete(row)')
+    expect(deleteButtonSource).toContain('canDeleteControlPlan(row, allPlans)')
     expect(deleteButtonSource).not.toContain("row.status === 'draft'")
   })
 
