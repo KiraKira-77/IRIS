@@ -487,6 +487,11 @@ export interface ProjectTaskWorkOrder {
   projectId: string
   taskId: string
   provider?: WorkOrderProvider
+  taskName?: string
+  taskDescription?: string
+  contactId?: string
+  contactName?: string
+  contactEmployeeNo?: string
   omsWorkOrderId?: string
   externalWorkOrderId?: string
   handlerId?: string

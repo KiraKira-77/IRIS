@@ -98,8 +98,18 @@
             <div v-else class="work-order-list">
               <div v-for="order in visibleWorkOrders" :key="order.id" class="work-order-item">
                 <div class="work-order-main">
-                  <strong>{{ order.omsWorkOrderId || order.externalWorkOrderId || order.id }}</strong>
-                  <span>{{ order.handlerName || '—' }}</span>
+                  <strong>{{ workOrderDisplayTitle(order) }}</strong>
+                  <span class="work-order-code">{{ workOrderDisplayCode(order) }}</span>
+                  <div class="work-order-record-grid">
+                    <div
+                      v-for="item in workOrderRecordRows(order)"
+                      :key="item.label"
+                      class="work-order-record-field"
+                    >
+                      <label>{{ item.label }}</label>
+                      <span>{{ item.value }}</span>
+                    </div>
+                  </div>
                 </div>
                 <div class="work-order-side">
                   <el-tag
@@ -684,9 +694,15 @@ const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
       taskId: task.value?.id || '',
       provider: 'local',
       externalWorkOrderId: localWorkOrderId.value,
+      taskName: localWorkOrderForm.value.taskName,
+      taskDescription: localWorkOrderForm.value.taskDescription,
+      contactId: selectedLocalWorkOrderContact.value?.id,
+      contactName: selectedLocalWorkOrderContact.value?.username,
+      contactEmployeeNo: selectedLocalWorkOrderContact.value?.account,
       handlerId: firstLocalWorkOrderHandler.value?.handlerId,
       handlerEmployeeNo: firstLocalWorkOrderHandler.value?.handlerEmployeeNo,
       handlerName: firstLocalWorkOrderHandler.value?.handlerName,
+      issuedAt: localWorkOrderForm.value.issuedAt,
       completedAt: localWorkOrderCompletedAt.value,
       omsStatus: localWorkOrderCompletedAt.value ? '20' : '10',
       omsStatusName: localWorkOrderCompletedAt.value ? '已完成' : '处理中',
@@ -695,6 +711,25 @@ const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
     },
   ]
 })
+const workOrderDisplayCode = (order: ProjectTaskWorkOrder) =>
+  order.omsWorkOrderId || order.externalWorkOrderId || order.id
+const workOrderDisplayTitle = (order: ProjectTaskWorkOrder) =>
+  order.taskName ||
+  (workOrderProviderOf(order) === 'manual' ? '外部工单登记' : '') ||
+  task.value?.taskName ||
+  task.value?.checkContent ||
+  workOrderDisplayCode(order)
+const personText = (name?: string, employeeNo?: string) => {
+  if (name && employeeNo) return `${name} (${employeeNo})`
+  return name || employeeNo || '—'
+}
+const workOrderRecordRows = (order: ProjectTaskWorkOrder) => [
+  { label: '任务描述', value: order.taskDescription || task.value?.taskDescription || '—' },
+  { label: '对接人', value: personText(order.contactName, order.contactEmployeeNo) },
+  { label: '处理人', value: personText(order.handlerName, order.handlerEmployeeNo) },
+  { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
+  { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
+]
 const inspectionAuditResultText = computed(() => {
   const orders = visibleWorkOrders.value
   if (orders.length === 0) return '待生成工单'
@@ -979,6 +1014,11 @@ const workOrderReviewResultOf = (order: ProjectTaskWorkOrder) => {
 const normalizeDateText = (value?: string | null) => {
   const normalized = String(value || '').replace('T', ' ')
   return normalized ? normalized.slice(0, 10) : ''
+}
+
+const normalizeDateTimeText = (value?: string | null) => {
+  const normalized = String(value || '').replace('T', ' ').replace(/Z$/, '').trim()
+  return normalized ? normalized.split('.')[0] : ''
 }
 
 const currentDateTimeText = () => {
@@ -1305,10 +1345,40 @@ const workOrderStatusType = (status?: string) => {
     color: $iris-text-primary;
   }
 
-  span {
+  .work-order-code {
     margin-top: 2px;
     font-size: 12px;
     color: $iris-text-muted;
+  }
+}
+
+.work-order-record-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.work-order-record-field {
+  min-width: 0;
+
+  label,
+  span {
+    display: block;
+  }
+
+  label {
+    margin-bottom: 2px;
+    font-size: 12px;
+    color: $iris-text-muted;
+  }
+
+  span {
+    overflow: hidden;
+    font-size: 13px;
+    color: $iris-text-primary;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -1590,6 +1660,15 @@ const workOrderStatusType = (status?: string) => {
 
   .local-work-order-detail-grid {
     grid-template-columns: 1fr;
+  }
+
+  .work-order-item,
+  .work-order-record-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .work-order-side {
+    justify-content: flex-start;
   }
 
   .archive-summary,
