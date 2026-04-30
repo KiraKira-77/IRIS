@@ -79,6 +79,16 @@
             <div class="section-heading">
               <span class="heading-mark"></span>
               <h3>工单记录</h3>
+              <el-button
+                text
+                type="primary"
+                size="small"
+                :icon="View"
+                class="heading-action"
+                @click="archivePreviewVisible = true"
+              >
+                归档快照预览
+              </el-button>
             </div>
             <el-empty
               v-if="visibleWorkOrders.length === 0"
@@ -110,6 +120,35 @@
                   <el-tag size="small" effect="plain" :type="auditResultTagType(workOrderReviewResultOf(order))">
                     {{ auditResultLabel(workOrderReviewResultOf(order)) }}
                   </el-tag>
+                  <el-button link type="primary" @click="openWorkOrderReview(order)">审核</el-button>
+                </div>
+                <div v-if="workOrderReviewForm.workOrderId === order.id" class="work-order-review-panel">
+                  <el-form label-position="top" class="handle-form review-form">
+                    <el-form-item label="审核结果">
+                      <el-radio-group v-model="workOrderReviewForm.result">
+                        <el-radio-button value="passed">通过</el-radio-button>
+                        <el-radio-button value="nonconforming">不符合项</el-radio-button>
+                      </el-radio-group>
+                    </el-form-item>
+                    <el-form-item label="审核意见">
+                      <el-input
+                        v-model="workOrderReviewForm.opinion"
+                        type="textarea"
+                        :rows="3"
+                        maxlength="500"
+                        show-word-limit
+                      />
+                    </el-form-item>
+                    <el-button
+                      type="primary"
+                      plain
+                      class="submit-btn"
+                      :disabled="!workOrderReviewForm.result"
+                      @click="handleConfirmWorkOrderReview"
+                    >
+                      确认工单审核
+                    </el-button>
+                  </el-form>
                 </div>
               </div>
             </div>
@@ -399,75 +438,36 @@
                 </el-button>
               </el-form>
 
-              <div class="inspection-conclusion-section">
-                <div class="mini-heading">工单审核</div>
-                <el-form label-position="top" class="handle-form conclusion-form">
-                  <el-form-item label="审核工单">
-                    <el-select
-                      v-model="workOrderReviewForm.workOrderId"
-                      placeholder="选择待审核工单"
-                      style="width: 100%"
-                      filterable
-                    >
-                      <el-option
-                        v-for="order in reviewableWorkOrderOptions"
-                        :key="order.id"
-                        :label="order.omsWorkOrderId || order.externalWorkOrderId || order.id"
-                        :value="order.id"
-                      />
-                    </el-select>
-                  </el-form-item>
-                  <el-form-item label="审核结果">
-                    <el-radio-group v-model="workOrderReviewForm.result">
-                      <el-radio-button value="passed">通过</el-radio-button>
-                      <el-radio-button value="nonconforming">不符合项</el-radio-button>
-                    </el-radio-group>
-                  </el-form-item>
-                  <el-form-item label="审核意见">
-                    <el-input
-                      v-model="workOrderReviewForm.opinion"
-                      type="textarea"
-                      :rows="3"
-                      maxlength="500"
-                      show-word-limit
-                    />
-                  </el-form-item>
-                  <el-button
-                    type="primary"
-                    plain
-                    class="submit-btn"
-                    :disabled="!workOrderReviewForm.workOrderId || !workOrderReviewForm.result"
-                    @click="handleConfirmWorkOrderReview"
-                  >
-                    确认工单审核
-                  </el-button>
-                </el-form>
-              </div>
-
-              <el-collapse v-model="archivePreviewPanels" class="archive-preview-collapse">
-                <el-collapse-item title="归档快照预览" name="snapshot">
-                  <div class="archive-summary">
-                    <div v-for="item in archiveSnapshotPreview" :key="item.label" class="archive-item">
-                      <label>{{ item.label }}</label>
-                      <span>{{ item.value }}</span>
-                    </div>
-                  </div>
-                  <div class="archive-flow">
-                    <div
-                      v-for="item in archiveSnapshotLogPreview"
-                      :key="item.title"
-                      class="archive-flow-item"
-                    >
-                      <strong>{{ item.title }}</strong>
-                      <span>{{ item.description }}</span>
-                    </div>
-                  </div>
-                </el-collapse-item>
-              </el-collapse>
             </template>
           </section>
         </aside>
       </div>
+
+      <el-drawer
+        v-model="archivePreviewVisible"
+        title="归档快照预览"
+        size="520px"
+        class="archive-preview-drawer"
+      >
+        <div class="archive-drawer-content">
+          <div class="archive-summary">
+            <div v-for="item in archiveSnapshotPreview" :key="item.label" class="archive-item">
+              <label>{{ item.label }}</label>
+              <span>{{ item.value }}</span>
+            </div>
+          </div>
+          <div class="archive-flow">
+            <div
+              v-for="item in archiveSnapshotLogPreview"
+              :key="item.title"
+              class="archive-flow-item"
+            >
+              <strong>{{ item.title }}</strong>
+              <span>{{ item.description }}</span>
+            </div>
+          </div>
+        </div>
+      </el-drawer>
     </section>
 
     <el-empty v-else-if="!loading" description="未找到该检查项" :image-size="120" />
@@ -477,7 +477,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, Connection, House, Link } from '@element-plus/icons-vue'
+import { Back, Connection, House, Link, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { UploadUserFile } from 'element-plus'
 import { checklistApi, projectApi, systemUserApi, taskApi } from '@/api'
@@ -553,7 +553,7 @@ const workOrderReviewForm = ref({
   opinion: '',
 })
 const workOrderReviewResults = ref<Record<string, { result: string; opinion: string }>>({})
-const archivePreviewPanels = ref<string[]>([])
+const archivePreviewVisible = ref(false)
 const manualWorkOrderForm = ref({
   externalWorkOrderId: '',
   externalUrl: '',
@@ -695,7 +695,6 @@ const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
     },
   ]
 })
-const reviewableWorkOrderOptions = computed(() => visibleWorkOrders.value)
 const inspectionAuditResultText = computed(() => {
   const orders = visibleWorkOrders.value
   if (orders.length === 0) return '待生成工单'
@@ -884,7 +883,6 @@ const handleCreateLocalWorkOrder = () => {
   if (localWorkOrderHandlers.value.length === 0) return
   localWorkOrderCreated.value = true
   localWorkOrderId.value = `LOCAL-${task.value?.id || 'TASK'}`
-  workOrderReviewForm.value.workOrderId = localWorkOrderId.value
   ElMessage.success('本地工单已创建，继续填写工作日志')
 }
 
@@ -907,6 +905,15 @@ const handleCompleteLocalWorkOrder = () => {
   if (localWorkOrderLogs.value.length === 0 || localWorkOrderCompletedAt.value) return
   localWorkOrderCompletedAt.value = currentDateTimeText()
   ElMessage.success('本地工单已完成')
+}
+
+const openWorkOrderReview = (order: ProjectTaskWorkOrder) => {
+  const savedReview = workOrderReviewResults.value[order.id]
+  workOrderReviewForm.value = {
+    workOrderId: order.id,
+    result: savedReview?.result || order.irisReviewStatus || '',
+    opinion: savedReview?.opinion || order.irisReviewOpinion || '',
+  }
 }
 
 const handleConfirmWorkOrderReview = () => {
@@ -1119,6 +1126,10 @@ const workOrderStatusType = (status?: string) => {
   &.compact {
     margin-bottom: 14px;
   }
+
+  .heading-action {
+    margin-left: auto;
+  }
 }
 
 .inspection-summary {
@@ -1266,6 +1277,12 @@ const workOrderStatusType = (status?: string) => {
   border-radius: 8px;
 }
 
+.work-order-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+}
+
 .flow-item {
   span {
     color: $iris-text-muted;
@@ -1302,6 +1319,12 @@ const workOrderStatusType = (status?: string) => {
   justify-content: flex-end;
 }
 
+.work-order-review-panel {
+  grid-column: 1 / -1;
+  padding-top: 10px;
+  border-top: 1px solid #e2e8f0;
+}
+
 .provider-badge {
   font-weight: 600;
 
@@ -1312,8 +1335,9 @@ const workOrderStatusType = (status?: string) => {
   }
 }
 
-.archive-preview-section {
-  background: #fbfcff;
+.archive-drawer-content {
+  display: grid;
+  gap: 12px;
 }
 
 .archive-summary {

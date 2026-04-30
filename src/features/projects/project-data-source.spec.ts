@@ -188,7 +188,16 @@ describe('project management data sources', () => {
     expect(projectTaskSource).toContain('workOrderReviewForm')
     expect(projectTaskSource).toContain('handleConfirmWorkOrderReview')
     expect(projectTaskSource).toContain('inspectionAuditResultText')
-    expect(projectTaskSource).toContain('archivePreviewPanels')
+    expect(projectTaskSource).toContain('archivePreviewVisible')
+    expect(projectTaskSource).toContain('el-drawer')
+    expect(projectTaskSource).not.toContain('archivePreviewPanels')
+    expect(projectTaskSource).not.toContain('archive-preview-collapse')
+    expect(projectTaskSource.indexOf('workOrderReviewForm')).toBeLessThan(
+      projectTaskSource.indexOf('办理检查项'),
+    )
+    expect(projectTaskSource.indexOf('archivePreviewVisible')).toBeLessThan(
+      projectTaskSource.indexOf('办理检查项'),
+    )
     expect(projectTaskSource).toContain('详情')
     expect(projectTaskSource).not.toContain('localWorkOrderLogForm.result')
     expect(projectTaskSource).not.toContain('localResultLabel(log.result)')
