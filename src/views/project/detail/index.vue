@@ -105,7 +105,6 @@
             <el-button
               v-if="canAssignInspectionItems"
               type="primary"
-              :disabled="selectedTaskIds.length === 0"
               @click="openBatchAssignDialog"
             >
               批量分配负责人
@@ -130,14 +129,14 @@
                 <span class="text-muted">{{ row.checkCriterion }}</span>
               </template>
             </el-table-column>
-            <el-table-column label="负责人" width="130">
+            <el-table-column label="负责人" min-width="180">
               <template #default="{ row }">
                 <el-select
                   v-if="canAssignInspectionItems"
                   :model-value="row.assigneeId || ''"
+                  class="assignee-select"
                   size="small"
                   placeholder="分配负责人"
-                  style="width: 120px"
                   :loading="assigningTaskId === row.id"
                   @change="(assigneeId: string) => handleAssignTask(row, assigneeId)"
                 >
@@ -574,7 +573,15 @@ const roleLabel = (role: string) => {
 .task-toolbar {
   display: flex;
   justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.assignee-select {
+  width: 160px;
+  max-width: 100%;
 }
 
 .strong-text {

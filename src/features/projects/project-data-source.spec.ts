@@ -99,6 +99,9 @@ describe('project management data sources', () => {
     ])
     expect(projectDetailSource).toContain('canAssignInspectionItems')
     expect(projectDetailSource).not.toContain('v-if="canManageProject"')
+    expect(projectDetailSource).toContain('class="assignee-select"')
+    expect(projectDetailSource).toContain('label="负责人" min-width="180"')
+    expect(projectDetailSource).not.toContain('style="width: 120px"')
   })
 
   it('supports batch assignment of inspection item owners', () => {
@@ -108,6 +111,7 @@ describe('project management data sources', () => {
     expect(projectDetailSource).toContain('selectedTaskIds')
     expect(projectDetailSource).toContain('handleBatchAssignTasks')
     expect(projectDetailSource).toContain('taskIds: selectedTaskIds.value')
+    expect(projectDetailSource).not.toContain(':disabled="selectedTaskIds.length === 0"')
   })
 
   it('renames project task wording to inspection item wording', () => {
