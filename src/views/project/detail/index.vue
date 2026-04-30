@@ -367,9 +367,23 @@ const loadProject = async () => {
 
 const members = computed(() => (project.value ? getProjectMembers(project.value) : []))
 const assignableMembers = computed(() => getAssignableProjectMembers(members.value))
-const currentUserId = computed(() => (userStore.userInfo?.id ? String(userStore.userInfo.id) : ''))
+const currentUserIdentityValues = computed(() => {
+  const user = userStore.userInfo
+  return new Set([user?.id, user?.username, user?.name].map(normalizeIdentityValue).filter(Boolean))
+})
+const currentProjectMember = computed(() =>
+  members.value.find((member) =>
+    [member.personnelId, member.employeeNo, member.personnelName]
+      .map(normalizeIdentityValue)
+      .some((value) => currentUserIdentityValues.value.has(value)),
+  ),
+)
 const canManageProject = computed(() => {
-  return !!project.value?.leaderId && String(project.value.leaderId) === currentUserId.value
+  return (
+    (!!project.value?.leaderId && currentUserIdentityValues.value.has(String(project.value.leaderId))) ||
+    (!!project.value?.leaderName && currentUserIdentityValues.value.has(project.value.leaderName)) ||
+    currentProjectMember.value?.role === 'leader'
+  )
 })
 const canEditProject = computed(() => {
   return !!project.value && project.value.status !== 'archived' && canManageProject.value
@@ -474,18 +488,35 @@ const handleAssignTask = async (task: CheckTask, assigneeId: string) => {
   }
 }
 
+const normalizeIdentityValue = (value?: string | number | null) => String(value || '').trim()
+
+const hasInspectionItemAssignee = (task: CheckTask) => {
+  return !!normalizeIdentityValue(task.assigneeId || task.assigneeName)
+}
+
+const isCurrentInspectionItemAssignee = (task: CheckTask) => {
+  const member = currentProjectMember.value
+  return (
+    currentUserIdentityValues.value.has(normalizeIdentityValue(task.assigneeId)) ||
+    currentUserIdentityValues.value.has(normalizeIdentityValue(task.assigneeName)) ||
+    (!!member &&
+      (normalizeIdentityValue(member.personnelId) === normalizeIdentityValue(task.assigneeId) ||
+        normalizeIdentityValue(member.personnelName) === normalizeIdentityValue(task.assigneeName)))
+  )
+}
+
 const canHandleInspectionItem = (task: CheckTask) => {
   return (
     !!project.value &&
     project.value.status === 'in_progress' &&
-    !!task.assigneeId &&
+    hasInspectionItemAssignee(task) &&
     !finishedTaskStatuses.includes(task.status) &&
-    (canManageProject.value || currentUserId.value === String(task.assigneeId))
+    (canManageProject.value || isCurrentInspectionItemAssignee(task))
   )
 }
 
 const canSeeInspectionItemHandleAction = (task: CheckTask) => {
-  return !!task.assigneeId && (canManageProject.value || currentUserId.value === String(task.assigneeId))
+  return hasInspectionItemAssignee(task) && (canManageProject.value || isCurrentInspectionItemAssignee(task))
 }
 
 const inspectionItemHandleTip = (task: CheckTask) => {

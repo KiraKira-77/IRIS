@@ -120,6 +120,10 @@ describe('project management data sources', () => {
     expect(projectDetailSource).toContain('canHandleInspectionItem(row)')
     expect(projectDetailSource).toContain(':disabled="!canHandleInspectionItem(row)"')
     expect(projectDetailSource).toContain('inspectionItemHandleTip(row)')
+    expect(projectDetailSource).toContain('currentUserIdentityValues')
+    expect(projectDetailSource).toContain('isCurrentInspectionItemAssignee')
+    expect(projectDetailSource).toContain('task.assigneeName')
+    expect(projectDetailSource).toContain('member.employeeNo')
     expect(projectDetailSource).toContain('openWorkOrderDialog(row)')
     expect(projectDetailSource).toContain('workOrderDialogVisible')
     expect(projectDetailSource).toContain('workOrderForm.handlerIds')
@@ -127,7 +131,7 @@ describe('project management data sources', () => {
     expect(projectDetailSource).toContain('taskApi.createWorkOrders')
     expect(projectDetailSource).toContain('handlers: workOrderHandlers.value')
     expect(projectDetailSource).toContain("project.value.status === 'in_progress'")
-    expect(projectDetailSource).toContain('currentUserId.value === String(task.assigneeId)')
+    expect(projectDetailSource).toContain('currentUserIdentityValues.value.has(normalizeIdentityValue(task.assigneeId))')
   })
 
   it('renames project task wording to inspection item wording', () => {
