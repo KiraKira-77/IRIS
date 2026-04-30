@@ -124,10 +124,10 @@ export const taskApi = {
       description?: string
       taskName?: string
       taskDescription?: string
+      contactId?: string
       contactName?: string
+      contactEmployeeNo?: string
       issuedAt?: string
-      completedAt?: string
-      auditResult?: string
       handlers: Array<{ handlerId: string; handlerEmployeeNo: string; handlerName: string }>
     },
   ) => request.post(`/v1/projects/${projectId}/tasks/${taskId}/work-orders`, data),

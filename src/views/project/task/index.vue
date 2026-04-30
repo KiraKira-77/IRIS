@@ -61,7 +61,7 @@
               </div>
               <div class="meta-item">
                 <label>下达时间</label>
-                <span>{{ task.issuedAt || '—' }}</span>
+                <span>{{ normalizeDateText(task.issuedAt) || '—' }}</span>
               </div>
               <div class="meta-item">
                 <label>完成时间</label>
@@ -107,29 +107,14 @@
                   <el-tag size="small" effect="dark" :type="workOrderStatusType(order.omsStatus)">
                     {{ order.omsStatusName || order.omsStatus || '未知' }}
                   </el-tag>
+                  <el-tag size="small" effect="plain" :type="auditResultTagType(workOrderReviewResultOf(order))">
+                    {{ auditResultLabel(workOrderReviewResultOf(order)) }}
+                  </el-tag>
                 </div>
               </div>
             </div>
           </section>
 
-          <section class="section-block archive-preview-section">
-            <div class="section-heading">
-              <span class="heading-mark"></span>
-              <h3>归档快照预览</h3>
-            </div>
-            <div class="archive-summary">
-              <div v-for="item in archiveSnapshotPreview" :key="item.label" class="archive-item">
-                <label>{{ item.label }}</label>
-                <span>{{ item.value }}</span>
-              </div>
-            </div>
-            <div class="archive-flow">
-              <div v-for="item in archiveSnapshotLogPreview" :key="item.title" class="archive-flow-item">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.description }}</span>
-              </div>
-            </div>
-          </section>
         </main>
 
         <aside class="task-side">
@@ -149,7 +134,7 @@
               </div>
               <div class="flow-item">
                 <span>当前结果</span>
-                <strong>{{ taskStatusLabel(task.status) }}</strong>
+                <strong>{{ inspectionAuditResultText }}</strong>
               </div>
             </div>
           </section>
@@ -193,51 +178,39 @@
                   />
                 </el-form-item>
                 <el-form-item label="对接人">
-                  <el-input v-model="workOrderForm.contactName" maxlength="40" />
+                  <el-select
+                    v-model="workOrderForm.contactId"
+                    placeholder="选择对接人"
+                    style="width: 100%"
+                    filterable
+                  >
+                    <el-option
+                      v-for="user in contactUserOptions"
+                      :key="user.id"
+                      :label="systemUserLabel(user)"
+                      :value="user.id"
+                    >
+                      <span>{{ user.username }}</span>
+                      <span class="option-meta">{{ user.account }}</span>
+                    </el-option>
+                  </el-select>
                 </el-form-item>
                 <el-form-item label="下达时间">
                   <el-date-picker
                     v-model="workOrderForm.issuedAt"
-                    type="datetime"
-                    format="YYYY-MM-DD HH:mm:ss"
-                    value-format="YYYY-MM-DD HH:mm:ss"
+                    type="date"
+                    format="YYYY-MM-DD"
+                    value-format="YYYY-MM-DD"
                     placeholder="选择下达时间"
                     style="width: 100%"
                   />
                 </el-form-item>
-                <el-form-item label="完成时间">
-                  <el-date-picker
-                    v-model="workOrderForm.completedAt"
-                    type="datetime"
-                    format="YYYY-MM-DD HH:mm:ss"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    placeholder="选择完成时间"
-                    style="width: 100%"
-                  />
-                </el-form-item>
-                <el-form-item label="审核结果">
-                  <el-select
-                    v-model="workOrderForm.auditResult"
-                    placeholder="选择审核结果"
-                    style="width: 100%"
-                  >
-                    <el-option
-                      v-for="item in auditResultOptions"
-                      :key="item.value"
-                      :label="item.label"
-                      :value="item.value"
-                    />
-                  </el-select>
-                </el-form-item>
                 <el-form-item label="工单处理人">
                   <el-select
-                    v-model="workOrderForm.handlerIds"
+                    v-model="workOrderForm.handlerId"
                     placeholder="选择处理人"
                     style="width: 100%"
-                    multiple
                     filterable
-                    collapse-tags
-                    collapse-tags-tooltip
                   >
                     <el-option
                       v-for="member in assignableMembers"
@@ -280,51 +253,39 @@
                     />
                   </el-form-item>
                   <el-form-item label="对接人">
-                    <el-input v-model="localWorkOrderForm.contactName" maxlength="40" />
+                    <el-select
+                      v-model="localWorkOrderForm.contactId"
+                      placeholder="选择对接人"
+                      style="width: 100%"
+                      filterable
+                    >
+                      <el-option
+                        v-for="user in contactUserOptions"
+                        :key="user.id"
+                        :label="systemUserLabel(user)"
+                        :value="user.id"
+                      >
+                        <span>{{ user.username }}</span>
+                        <span class="option-meta">{{ user.account }}</span>
+                      </el-option>
+                    </el-select>
                   </el-form-item>
                   <el-form-item label="下达时间">
                     <el-date-picker
                       v-model="localWorkOrderForm.issuedAt"
-                      type="datetime"
-                      format="YYYY-MM-DD HH:mm:ss"
-                      value-format="YYYY-MM-DD HH:mm:ss"
+                      type="date"
+                      format="YYYY-MM-DD"
+                      value-format="YYYY-MM-DD"
                       placeholder="选择下达时间"
                       style="width: 100%"
                     />
                   </el-form-item>
-                  <el-form-item label="完成时间">
-                    <el-date-picker
-                      v-model="localWorkOrderForm.completedAt"
-                      type="datetime"
-                      format="YYYY-MM-DD HH:mm:ss"
-                      value-format="YYYY-MM-DD HH:mm:ss"
-                      placeholder="选择完成时间"
-                      style="width: 100%"
-                    />
-                  </el-form-item>
-                  <el-form-item label="审核结果">
-                    <el-select
-                      v-model="localWorkOrderForm.auditResult"
-                      placeholder="选择审核结果"
-                      style="width: 100%"
-                    >
-                      <el-option
-                        v-for="item in auditResultOptions"
-                        :key="item.value"
-                        :label="item.label"
-                        :value="item.value"
-                      />
-                    </el-select>
-                  </el-form-item>
                   <el-form-item label="工单处理人">
                     <el-select
-                      v-model="localWorkOrderForm.handlerIds"
+                      v-model="localWorkOrderForm.handlerId"
                       placeholder="选择处理人"
                       style="width: 100%"
-                      multiple
                       filterable
-                      collapse-tags
-                      collapse-tags-tooltip
                     >
                       <el-option
                         v-for="member in assignableMembers"
@@ -402,6 +363,13 @@
                       >
                         提交工作日志
                       </el-button>
+                      <el-button
+                        class="submit-btn"
+                        :disabled="localWorkOrderLogs.length === 0 || !!localWorkOrderCompletedAt"
+                        @click="handleCompleteLocalWorkOrder"
+                      >
+                        完成本地工单
+                      </el-button>
                     </el-form>
                   </div>
                 </div>
@@ -432,17 +400,32 @@
               </el-form>
 
               <div class="inspection-conclusion-section">
-                <div class="mini-heading">检查项结论</div>
+                <div class="mini-heading">工单审核</div>
                 <el-form label-position="top" class="handle-form conclusion-form">
-                  <el-form-item label="整体结论">
-                    <el-radio-group v-model="inspectionConclusionForm.result">
+                  <el-form-item label="审核工单">
+                    <el-select
+                      v-model="workOrderReviewForm.workOrderId"
+                      placeholder="选择待审核工单"
+                      style="width: 100%"
+                      filterable
+                    >
+                      <el-option
+                        v-for="order in reviewableWorkOrderOptions"
+                        :key="order.id"
+                        :label="order.omsWorkOrderId || order.externalWorkOrderId || order.id"
+                        :value="order.id"
+                      />
+                    </el-select>
+                  </el-form-item>
+                  <el-form-item label="审核结果">
+                    <el-radio-group v-model="workOrderReviewForm.result">
                       <el-radio-button value="passed">通过</el-radio-button>
                       <el-radio-button value="nonconforming">不符合项</el-radio-button>
                     </el-radio-group>
                   </el-form-item>
-                  <el-form-item label="结论说明">
+                  <el-form-item label="审核意见">
                     <el-input
-                      v-model="inspectionConclusionForm.opinion"
+                      v-model="workOrderReviewForm.opinion"
                       type="textarea"
                       :rows="3"
                       maxlength="500"
@@ -453,13 +436,34 @@
                     type="primary"
                     plain
                     class="submit-btn"
-                    :disabled="!inspectionConclusionForm.result"
-                    @click="handleConfirmInspectionConclusion"
+                    :disabled="!workOrderReviewForm.workOrderId || !workOrderReviewForm.result"
+                    @click="handleConfirmWorkOrderReview"
                   >
-                    确认检查项结论
+                    确认工单审核
                   </el-button>
                 </el-form>
               </div>
+
+              <el-collapse v-model="archivePreviewPanels" class="archive-preview-collapse">
+                <el-collapse-item title="归档快照预览" name="snapshot">
+                  <div class="archive-summary">
+                    <div v-for="item in archiveSnapshotPreview" :key="item.label" class="archive-item">
+                      <label>{{ item.label }}</label>
+                      <span>{{ item.value }}</span>
+                    </div>
+                  </div>
+                  <div class="archive-flow">
+                    <div
+                      v-for="item in archiveSnapshotLogPreview"
+                      :key="item.title"
+                      class="archive-flow-item"
+                    >
+                      <strong>{{ item.title }}</strong>
+                      <span>{{ item.description }}</span>
+                    </div>
+                  </div>
+                </el-collapse-item>
+              </el-collapse>
             </template>
           </section>
         </aside>
@@ -476,7 +480,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Back, Connection, House, Link } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { UploadUserFile } from 'element-plus'
-import { checklistApi, projectApi, taskApi } from '@/api'
+import { checklistApi, projectApi, systemUserApi, taskApi } from '@/api'
 import {
   CONTROL_FREQUENCY_OPTIONS,
   EVALUATION_TYPE_OPTIONS,
@@ -484,6 +488,7 @@ import {
   optionLabel,
 } from '@/features/checklists/checklist-data'
 import {
+  filterProjectMemberUsers,
   getAssignableProjectMembers,
   getProjectMembers,
   normalizeProject,
@@ -499,6 +504,7 @@ import type {
   ControlChecklist,
   Project,
   ProjectTaskWorkOrder,
+  SystemUser,
   WorkOrderProvider,
 } from '@/types'
 
@@ -509,28 +515,26 @@ const loading = ref(false)
 const task = ref<CheckTask>()
 const project = ref<Project>()
 const checklistOptions = ref<ControlChecklist[]>([])
+const systemUsers = ref<SystemUser[]>([])
 const workOrders = ref<ProjectTaskWorkOrder[]>([])
 const workOrderSubmitting = ref(false)
 const workOrderMode = ref<WorkOrderProvider>('oms')
 const localWorkOrderCreated = ref(false)
 const localWorkOrderId = ref('')
+const localWorkOrderCompletedAt = ref('')
 const workOrderForm = ref({
   taskName: '',
   taskDescription: '',
-  contactName: '',
+  contactId: '',
   issuedAt: '',
-  completedAt: '',
-  auditResult: '',
-  handlerIds: [] as string[],
+  handlerId: '',
 })
 const localWorkOrderForm = ref({
   taskName: '',
   taskDescription: '',
-  contactName: '',
+  contactId: '',
   issuedAt: '',
-  completedAt: '',
-  auditResult: '',
-  handlerIds: [] as string[],
+  handlerId: '',
 })
 const localWorkOrderLogForm = ref({
   content: '',
@@ -543,10 +547,13 @@ const localWorkOrderLogs = ref<
     attachments: UploadUserFile[]
   }>
 >([])
-const inspectionConclusionForm = ref({
+const workOrderReviewForm = ref({
+  workOrderId: '',
   result: '',
   opinion: '',
 })
+const workOrderReviewResults = ref<Record<string, { result: string; opinion: string }>>({})
+const archivePreviewPanels = ref<string[]>([])
 const manualWorkOrderForm = ref({
   externalWorkOrderId: '',
   externalUrl: '',
@@ -555,13 +562,13 @@ const manualWorkOrderForm = ref({
 })
 const auditResultOptions = [
   { label: '待审核', value: 'pending' },
-  { label: '审核通过', value: 'passed' },
-  { label: '审核不通过', value: 'rejected' },
+  { label: '通过', value: 'passed' },
+  { label: '不符合项', value: 'nonconforming' },
 ]
 
 onMounted(async () => {
   await userStore.ensureUserInfoLoaded()
-  await Promise.all([loadChecklistOptions(), loadTask()])
+  await Promise.all([loadChecklistOptions(), loadSystemUsers(), loadTask()])
   resetWorkOrderForm()
   await loadWorkOrders()
 })
@@ -580,6 +587,13 @@ const activeWorkOrderModeDescription = computed(
 const members = computed(() => (project.value ? getProjectMembers(project.value) : []))
 const assignableMembers = computed(() =>
   getAssignableProjectMembers(members.value).filter((member) => !!normalizeIdentityValue(member.employeeNo)),
+)
+const contactUserOptions = computed(() => filterProjectMemberUsers(systemUsers.value))
+const selectedWorkOrderContact = computed(() =>
+  contactUserOptions.value.find((user) => String(user.id) === String(workOrderForm.value.contactId)),
+)
+const selectedLocalWorkOrderContact = computed(() =>
+  contactUserOptions.value.find((user) => String(user.id) === String(localWorkOrderForm.value.contactId)),
 )
 const currentUserIdentityValues = computed(() => {
   const user = userStore.userInfo
@@ -635,7 +649,7 @@ const inspectionItemHandleTip = computed(() => {
 })
 const workOrderHandlers = computed(() =>
   assignableMembers.value
-    .filter((member) => workOrderForm.value.handlerIds.includes(member.personnelId))
+    .filter((member) => member.personnelId === workOrderForm.value.handlerId)
     .map((member) => ({
       handlerId: member.personnelId,
       handlerEmployeeNo: normalizeIdentityValue(member.employeeNo),
@@ -644,20 +658,21 @@ const workOrderHandlers = computed(() =>
 )
 const localWorkOrderHandlers = computed(() =>
   assignableMembers.value
-    .filter((member) => localWorkOrderForm.value.handlerIds.includes(member.personnelId))
+    .filter((member) => member.personnelId === localWorkOrderForm.value.handlerId)
     .map((member) => ({
       handlerId: member.personnelId,
       handlerEmployeeNo: normalizeIdentityValue(member.employeeNo),
       handlerName: member.personnelName,
     })),
 )
+const firstLocalWorkOrderHandler = computed(() => localWorkOrderHandlers.value[0])
 const localWorkOrderDetailRows = computed(() => [
   { label: '任务名称', value: localWorkOrderForm.value.taskName || '—' },
   { label: '任务描述', value: localWorkOrderForm.value.taskDescription || '—' },
-  { label: '对接人', value: localWorkOrderForm.value.contactName || '—' },
+  { label: '对接人', value: selectedLocalWorkOrderContact.value ? systemUserLabel(selectedLocalWorkOrderContact.value) : '—' },
   { label: '下达时间', value: localWorkOrderForm.value.issuedAt || '—' },
-  { label: '完成时间', value: localWorkOrderForm.value.completedAt || '—' },
-  { label: '审核结果', value: auditResultLabel(localWorkOrderForm.value.auditResult) },
+  { label: '完成时间', value: localWorkOrderCompletedAt.value || '待完成' },
+  { label: '审核结果', value: auditResultLabel(workOrderReviewResults.value[localWorkOrderId.value]?.result || 'pending') },
 ])
 const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
   if (!localWorkOrderCreated.value) return workOrders.value
@@ -669,11 +684,25 @@ const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
       taskId: task.value?.id || '',
       provider: 'local',
       externalWorkOrderId: localWorkOrderId.value,
-      handlerName: localWorkOrderHandlers.value.map((handler) => handler.handlerName).join('、'),
-      omsStatus: localWorkOrderLogs.value.length > 0 ? '20' : '10',
-      omsStatusName: localWorkOrderLogs.value.length > 0 ? '已记录日志' : '待填写日志',
+      handlerId: firstLocalWorkOrderHandler.value?.handlerId,
+      handlerEmployeeNo: firstLocalWorkOrderHandler.value?.handlerEmployeeNo,
+      handlerName: firstLocalWorkOrderHandler.value?.handlerName,
+      completedAt: localWorkOrderCompletedAt.value,
+      omsStatus: localWorkOrderCompletedAt.value ? '20' : '10',
+      omsStatusName: localWorkOrderCompletedAt.value ? '已完成' : '处理中',
+      irisReviewStatus: workOrderReviewResults.value[localWorkOrderId.value]?.result || 'pending',
+      irisReviewOpinion: workOrderReviewResults.value[localWorkOrderId.value]?.opinion,
     },
   ]
+})
+const reviewableWorkOrderOptions = computed(() => visibleWorkOrders.value)
+const inspectionAuditResultText = computed(() => {
+  const orders = visibleWorkOrders.value
+  if (orders.length === 0) return '待生成工单'
+  const results = orders.map((order) => workOrderReviewResultOf(order))
+  if (results.includes('nonconforming')) return '不符合项'
+  if (results.length > 0 && results.every((result) => result === 'passed')) return '通过'
+  return '待审核'
 })
 const archiveSnapshotPreview = computed(() => {
   const providerLabel = workOrderProviderLabel(workOrderMode.value)
@@ -712,8 +741,8 @@ const archiveSnapshotLogPreview = computed(() => {
         description: '处理人在本地工单内提交日志和附件。',
       },
       {
-        title: '确认检查项结论',
-        description: '检查项负责人结合工单执行情况确认通过或不符合项。',
+        title: '工单审核',
+        description: '检查项负责人逐个审核工单，检查项结果由工单审核结果汇总。',
       },
       {
         title: '生成统一快照',
@@ -746,16 +775,7 @@ const snapshotHandlerText = computed(() => {
   return task.value?.assigneeName || currentProjectMember.value?.personnelName || '待确认'
 })
 const snapshotResultText = computed(() => {
-  if (inspectionConclusionForm.value.result) {
-    return localResultLabel(inspectionConclusionForm.value.result)
-  }
-  if (workOrderMode.value === 'oms') {
-    return workOrders.value.length > 0 ? '待确认检查项结论' : '待生成工单'
-  }
-  if (workOrderMode.value === 'local') {
-    return localWorkOrderCreated.value ? '待确认检查项结论' : '待创建工单'
-  }
-  return manualWorkOrderForm.value.statusName.trim() ? '待确认检查项结论' : '待登记'
+  return inspectionAuditResultText.value
 })
 const snapshotAttachmentText = computed(() => {
   if (workOrderMode.value === 'oms') return 'OMS 日志附件'
@@ -768,6 +788,10 @@ const snapshotAttachmentText = computed(() => {
 const loadChecklistOptions = async () => {
   const page = normalizeChecklistPageFromApi(await checklistApi.list({ page: 1, pageSize: 100 }))
   checklistOptions.value = page.list
+}
+
+const loadSystemUsers = async () => {
+  systemUsers.value = await systemUserApi.list()
 }
 
 const loadTask = async () => {
@@ -810,24 +834,26 @@ const resetWorkOrderForm = () => {
       normalizeIdentityValue(member.personnelId) === normalizeIdentityValue(currentTask.assigneeId) ||
       normalizeIdentityValue(member.personnelName) === normalizeIdentityValue(currentTask.assigneeName),
   )
+  const contact = contactUserOptions.value.find(
+    (user) =>
+      normalizeIdentityValue(user.id) === normalizeIdentityValue(currentTask.contactId) ||
+      normalizeIdentityValue(user.username) === normalizeIdentityValue(currentTask.contactName),
+  )
   workOrderForm.value = {
     taskName: currentTask.taskName || currentTask.checkContent,
     taskDescription: currentTask.taskDescription || currentTask.checkCriterion,
-    contactName: currentTask.contactName || '',
-    issuedAt: normalizeDateTimeText(currentTask.issuedAt),
-    completedAt: normalizeDateTimeText(currentTask.completedAt),
-    auditResult: '',
-    handlerIds: assignee ? [assignee.personnelId] : [],
+    contactId: contact?.id || '',
+    issuedAt: normalizeDateText(currentTask.issuedAt),
+    handlerId: assignee?.personnelId || '',
   }
   localWorkOrderForm.value = {
     taskName: currentTask.taskName || currentTask.checkContent,
     taskDescription: currentTask.taskDescription || currentTask.checkCriterion,
-    contactName: currentTask.contactName || '',
-    issuedAt: normalizeDateTimeText(currentTask.issuedAt),
-    completedAt: normalizeDateTimeText(currentTask.completedAt),
-    auditResult: '',
-    handlerIds: assignee ? [assignee.personnelId] : [],
+    contactId: contact?.id || '',
+    issuedAt: normalizeDateText(currentTask.issuedAt),
+    handlerId: assignee?.personnelId || '',
   }
+  localWorkOrderCompletedAt.value = ''
 }
 
 const handleCreateWorkOrders = async () => {
@@ -839,10 +865,10 @@ const handleCreateWorkOrders = async () => {
       description: workOrderForm.value.taskDescription.trim() || undefined,
       taskName: workOrderForm.value.taskName.trim() || undefined,
       taskDescription: workOrderForm.value.taskDescription.trim() || undefined,
-      contactName: workOrderForm.value.contactName.trim() || undefined,
+      contactId: selectedWorkOrderContact.value?.id,
+      contactName: selectedWorkOrderContact.value?.username,
+      contactEmployeeNo: selectedWorkOrderContact.value?.account,
       issuedAt: workOrderForm.value.issuedAt || undefined,
-      completedAt: workOrderForm.value.completedAt || undefined,
-      auditResult: workOrderForm.value.auditResult || undefined,
       handlers: workOrderHandlers.value,
     })
     ElMessage.success('工单已生成')
@@ -858,6 +884,7 @@ const handleCreateLocalWorkOrder = () => {
   if (localWorkOrderHandlers.value.length === 0) return
   localWorkOrderCreated.value = true
   localWorkOrderId.value = `LOCAL-${task.value?.id || 'TASK'}`
+  workOrderReviewForm.value.workOrderId = localWorkOrderId.value
   ElMessage.success('本地工单已创建，继续填写工作日志')
 }
 
@@ -876,9 +903,19 @@ const handleAddLocalWorkOrderLog = () => {
   ElMessage.success('工作日志已加入归档预览')
 }
 
-const handleConfirmInspectionConclusion = () => {
-  if (!inspectionConclusionForm.value.result) return
-  ElMessage.success('检查项结论已确认')
+const handleCompleteLocalWorkOrder = () => {
+  if (localWorkOrderLogs.value.length === 0 || localWorkOrderCompletedAt.value) return
+  localWorkOrderCompletedAt.value = currentDateTimeText()
+  ElMessage.success('本地工单已完成')
+}
+
+const handleConfirmWorkOrderReview = () => {
+  if (!workOrderReviewForm.value.workOrderId || !workOrderReviewForm.value.result) return
+  workOrderReviewResults.value[workOrderReviewForm.value.workOrderId] = {
+    result: workOrderReviewForm.value.result,
+    opinion: workOrderReviewForm.value.opinion.trim(),
+  }
+  ElMessage.success('工单审核结果已确认')
 }
 
 const handleManualWorkOrderPreview = () => {
@@ -919,15 +956,31 @@ const auditResultLabel = (result: string) => {
   return auditResultOptions.find((item) => item.value === result)?.label || '待审核'
 }
 
-const normalizeDateTimeText = (value?: string | null) => String(value || '').replace('T', ' ')
-
-const localResultLabel = (result: string) => {
-  const map: Record<string, string> = {
-    passed: '通过',
-    nonconforming: '不符合项',
+const auditResultTagType = (result: string) => {
+  const map: Record<string, 'info' | 'success' | 'danger'> = {
+    pending: 'info',
+    passed: 'success',
+    nonconforming: 'danger',
   }
-  return map[result] || result
+  return map[result] || 'info'
 }
+
+const workOrderReviewResultOf = (order: ProjectTaskWorkOrder) => {
+  return workOrderReviewResults.value[order.id]?.result || order.irisReviewStatus || 'pending'
+}
+
+const normalizeDateText = (value?: string | null) => {
+  const normalized = String(value || '').replace('T', ' ')
+  return normalized ? normalized.slice(0, 10) : ''
+}
+
+const currentDateTimeText = () => {
+  const now = new Date()
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+}
+
+const systemUserLabel = (user: SystemUser) => `${user.username} (${user.account})`
 
 const workOrderProviderOf = (order: ProjectTaskWorkOrder): WorkOrderProvider => {
   if (order.provider) return order.provider
