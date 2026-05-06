@@ -20,6 +20,18 @@ const projectListSource = readFileSync(join(here, '../../views/project/list/inde
 const projectCreateSource = readFileSync(join(here, '../../views/project/create/index.vue'), 'utf8')
 const projectDetailSource = readFileSync(join(here, '../../views/project/detail/index.vue'), 'utf8')
 const projectTaskSource = readFileSync(join(here, '../../views/project/task/index.vue'), 'utf8')
+const rectificationListSource = readFileSync(
+  join(here, '../../views/rectification/list/index.vue'),
+  'utf8',
+)
+const rectificationCreateSource = readFileSync(
+  join(here, '../../views/rectification/create/index.vue'),
+  'utf8',
+)
+const rectificationDetailSource = readFileSync(
+  join(here, '../../views/rectification/detail/index.vue'),
+  'utf8',
+)
 const apiSource = readFileSync(join(here, '../../api/index.ts'), 'utf8')
 const routerSource = readFileSync(join(here, '../../router/index.ts'), 'utf8')
 const typeSource = readFileSync(join(here, '../../types/index.ts'), 'utf8')
@@ -154,31 +166,31 @@ describe('project management data sources', () => {
     expect(projectTaskSource).toContain('value-format="YYYY-MM-DD"')
     expect(projectTaskSource).not.toContain('issuedAt: normalizeDateTimeText(currentTask.issuedAt)')
     expect(projectTaskSource).toContain("project.value.status === 'in_progress'")
-    expect(projectDetailSource).toContain('currentUserIdentityValues.value.has(normalizeIdentityValue(task.assigneeId))')
+    expect(projectDetailSource).toContain(
+      'currentUserIdentityValues.value.has(normalizeIdentityValue(task.assigneeId))',
+    )
   })
 
-  it('shows configurable work order providers and a unified archive snapshot preview', () => {
+  it('uses OMS as the only work order provider and keeps the archive snapshot preview', () => {
     expect(workOrderProviderLabel('oms')).toBe('OMS 工单')
-    expect(workOrderProviderLabel('local')).toBe('本地工单')
-    expect(workOrderProviderLabel('manual')).toBe('手工登记')
 
     expect(projectTaskSource).toContain('workOrderMode')
     expect(projectTaskSource).toContain('workOrderModeOptions')
-    expect(projectTaskSource).toContain('localWorkOrderForm')
-    expect(projectTaskSource).toContain('localWorkOrderCreated')
-    expect(projectTaskSource).toContain('localWorkOrderLogForm')
-    expect(projectTaskSource).toContain('localWorkOrderLogs')
+    expect(projectTaskSource).not.toContain('localWorkOrderForm')
+    expect(projectTaskSource).not.toContain('localWorkOrderCreated')
+    expect(projectTaskSource).not.toContain('localWorkOrderLogForm')
+    expect(projectTaskSource).not.toContain('localWorkOrderLogs')
     expect(projectTaskSource).not.toContain('inspectionConclusionForm')
     expect(projectTaskSource).not.toContain('handleConfirmInspectionConclusion')
     expect(projectTaskSource).toContain('inspectionAuditResultText')
-    expect(projectTaskSource).toContain('handleCreateLocalWorkOrder')
-    expect(projectTaskSource).toContain('handleAddLocalWorkOrderLog')
+    expect(projectTaskSource).not.toContain('handleCreateLocalWorkOrder')
+    expect(projectTaskSource).not.toContain('handleAddLocalWorkOrderLog')
     expect(projectTaskSource).toContain('provider-badge')
     expect(projectTaskSource).toContain('workOrderProviderOf')
     expect(projectTaskSource).toContain('workOrderProviderIcon')
-    expect(projectTaskSource).toContain('创建本地工单')
-    expect(projectTaskSource).toContain('工作日志')
-    expect(projectTaskSource).toContain('localWorkOrderDetailRows')
+    expect(projectTaskSource).not.toContain('创建本地工单')
+    expect(projectTaskSource).not.toContain('提交工作日志')
+    expect(projectTaskSource).not.toContain('localWorkOrderDetailRows')
     expect(projectTaskSource).toContain('workOrderRecordRows')
     expect(projectTaskSource).toContain('workOrderDisplayTitle')
     expect(projectTaskSource).toContain('workOrderDisplayCode')
@@ -201,7 +213,9 @@ describe('project management data sources', () => {
     expect(projectTaskSource).toContain('收起')
     expect(projectTaskSource).not.toContain('task.workOrderCount || visibleWorkOrders.length')
     expect(apiSource).toContain('deleteWorkOrder')
-    expect(apiSource).toContain('request.delete(`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}`)')
+    expect(apiSource).toContain(
+      'request.delete(`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}`)',
+    )
     expect(projectTaskSource).toContain('inspectionAuditResultText')
     expect(projectTaskSource).toContain('archivePreviewVisible')
     expect(projectTaskSource).toContain('el-drawer')
@@ -214,14 +228,49 @@ describe('project management data sources', () => {
       projectTaskSource.indexOf('办理检查项'),
     )
     expect(projectTaskSource).toContain('详情')
-    expect(projectTaskSource).not.toContain('localWorkOrderLogForm.result')
     expect(projectTaskSource).not.toContain('localResultLabel(log.result)')
-    expect(projectTaskSource).toContain('manualWorkOrderForm')
+    expect(projectTaskSource).not.toContain('manualWorkOrderForm')
     expect(projectTaskSource).toContain('archiveSnapshotPreview')
     expect(projectTaskSource).toContain('归档快照预览')
     expect(projectTaskSource).toContain("workOrderMode === 'oms'")
-    expect(projectTaskSource).toContain("workOrderMode === 'local'")
-    expect(projectTaskSource).toContain("workOrderMode === 'manual'")
+    expect(projectTaskSource).not.toContain("workOrderMode === 'local'")
+    expect(projectTaskSource).not.toContain("workOrderMode === 'manual'")
+  })
+
+  it('reviews OMS work orders through task APIs without exposing local work orders', () => {
+    expect(apiSource).not.toContain('createLocalWorkOrders')
+    expect(apiSource).not.toContain('work-orders/local')
+    expect(apiSource).toContain('reviewWorkOrder')
+    expect(apiSource).toContain(
+      '`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/review`',
+    )
+    expect(projectTaskSource).not.toContain('taskApi.createLocalWorkOrders')
+    expect(projectTaskSource).toContain('taskApi.reviewWorkOrder')
+    expect(projectTaskSource).toContain('taskApi.returnWorkOrder')
+    expect(projectTaskSource).toContain('handleReturnWorkOrder')
+    expect(apiSource).toContain('returnWorkOrder')
+    expect(apiSource).toContain(
+      '`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/return`',
+    )
+    expect(projectTaskSource).toContain('value="rectification_required"')
+    expect(projectTaskSource).not.toContain('value="nonconforming"')
+  })
+
+  it('uses rectification APIs instead of mock rectifications on rectification pages', () => {
+    expect(rectificationListSource).toContain('rectificationApi.list')
+    expect(rectificationCreateSource).toContain('rectificationApi.create')
+    expect(rectificationCreateSource).toContain('projectApi.list')
+    expect(rectificationDetailSource).toContain('rectificationApi.detail')
+    expect(rectificationDetailSource).toContain('rectificationApi.submit')
+
+    for (const source of [
+      rectificationListSource,
+      rectificationCreateSource,
+      rectificationDetailSource,
+    ]) {
+      expect(source).not.toContain('mockRectifications')
+    }
+    expect(rectificationCreateSource).not.toContain('mockProjects')
   })
 
   it('renames project task wording to inspection item wording', () => {
@@ -234,7 +283,12 @@ describe('project management data sources', () => {
   })
 
   it('does not expose project tags, maintenance domain, or shared domain', () => {
-    const projectSources = [projectListSource, projectCreateSource, projectDetailSource, projectTaskSource]
+    const projectSources = [
+      projectListSource,
+      projectCreateSource,
+      projectDetailSource,
+      projectTaskSource,
+    ]
     for (const source of projectSources) {
       expect(source).not.toContain('标签')
       expect(source).not.toContain('维护域')

@@ -328,12 +328,7 @@ export interface Personnel {
 // 计划管控
 // ===========================
 export type PlanCycle = 'monthly' | 'quarterly' | 'half-yearly' | 'yearly'
-export type PlanStatus =
-  | 'draft'
-  | 'approved'
-  | 'in_progress'
-  | 'completed'
-  | 'archived'
+export type PlanStatus = 'draft' | 'approved' | 'in_progress' | 'completed' | 'archived'
 export interface ControlPlan {
   id: string
   code: string
@@ -435,7 +430,7 @@ export interface TeamMember {
   role: 'leader' | 'auditor' | 'observer' | 'reviewer' | 'member'
   avatar?: string
 }
-export type WorkOrderProvider = 'oms' | 'local' | 'manual'
+export type WorkOrderProvider = 'oms'
 export type TaskStatus =
   | 'pending'
   | 'in_progress'
@@ -494,6 +489,8 @@ export interface ProjectTaskWorkOrder {
   handlerId?: string
   handlerEmployeeNo?: string
   handlerName?: string
+  workOrderTitle?: string
+  workOrderDescription?: string
   issuedAt?: string
   completedAt?: string
   omsStatus?: string
@@ -508,6 +505,10 @@ export interface ProjectTaskWorkOrder {
   idempotencyKey?: string
   irisReviewStatus?: string
   irisReviewOpinion?: string
+  irisReviewedAt?: string
+  irisReviewedBy?: string
+  rectificationId?: string
+  reviewLocked?: boolean
   reviewable?: boolean
 }
 export interface ProjectUpsertPayload {

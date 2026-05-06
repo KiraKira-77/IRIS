@@ -2,7 +2,9 @@
   <div class="page-container iris-page">
     <div class="page-header">
       <div>
-        <el-button link :icon="Back" @click="router.push('/rectification/list')">返回列表</el-button>
+        <el-button link :icon="Back" @click="router.push('/rectification/list')"
+          >返回列表</el-button
+        >
         <h2 class="page-title">创建整改单</h2>
         <p class="page-subtitle">支持从项目任务一键发起，也支持手工录入整改事项</p>
       </div>
@@ -213,15 +215,13 @@ import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Back, DataAnalysis, Document, EditPen, WarningFilled } from '@element-plus/icons-vue'
-import { systemUserApi } from '@/api'
-import { mockProjects, mockRectifications } from '@/mock'
-import type { CheckTask, RectificationOrder, SystemUser } from '@/types'
+import { projectApi, rectificationApi, systemUserApi } from '@/api'
+import { normalizeProjectPage } from '@/features/projects/project-data'
+import type { CheckTask, Project, RectificationOrder, SystemUser } from '@/types'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
 
-const today = () => new Date().toISOString().slice(0, 10)
-const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ')
 const plusDays = (days: number) => {
   const date = new Date()
   date.setDate(date.getDate() + days)
@@ -241,6 +241,13 @@ const defaultForm = () => ({
 
 const form = reactive(defaultForm())
 const users = ref<SystemUser[]>([])
+const projects = ref<Project[]>([])
+const activeRectificationCount = ref(0)
+
+type BackendPage<T> = {
+  records?: T[]
+  list?: T[]
+}
 
 const rules: FormRules = {
   source: [{ required: true, message: '请选择整改来源', trigger: 'change' }],
@@ -253,30 +260,56 @@ const rules: FormRules = {
   taskId: [{ required: true, message: '请选择关联任务', trigger: 'change' }],
 }
 
-const projectOptions = computed(() => mockProjects.filter((project) => project.tasks.length > 0))
+const projectOptions = computed(() => projects.value.filter((project) => project.tasks.length > 0))
 const personnelOptions = computed(() => users.value.filter((person) => person.status === 1))
 const reviewerOptions = computed(() => personnelOptions.value)
 
 onMounted(async () => {
-  users.value = await systemUserApi.list()
+  await Promise.all([loadUsers(), loadProjects(), loadActiveRectificationCount()])
 })
 
-const selectedProject = computed(() => mockProjects.find((project) => project.id === form.projectId))
+const loadUsers = async () => {
+  users.value = await systemUserApi.list()
+}
+
+const loadProjects = async () => {
+  const page = normalizeProjectPage(await projectApi.list({ page: 1, pageSize: 100 }))
+  projects.value = page.list
+}
+
+const loadActiveRectificationCount = async () => {
+  const page = (await rectificationApi.list({
+    page: 1,
+    pageSize: 100,
+  })) as BackendPage<RectificationOrder>
+  activeRectificationCount.value = (page.records || page.list || []).filter(
+    (item) => item.status !== 'approved',
+  ).length
+}
+
+const selectedProject = computed(() =>
+  projects.value.find((project) => project.id === form.projectId),
+)
 const taskOptions = computed(() => {
   if (!selectedProject.value) return []
   return selectedProject.value.tasks.filter((task) =>
-    ['submitted', 'reviewing', 'rejected', 'rectifying', 'uploaded', 'approved'].includes(
-      task.status,
-    ),
+    [
+      'in_progress',
+      'submitted',
+      'reviewing',
+      'rejected',
+      'rectifying',
+      'uploaded',
+      'approved',
+      'passed',
+      'nonconforming',
+    ].includes(task.status),
   )
 })
 const selectedTask = computed<CheckTask | undefined>(() =>
   taskOptions.value.find((task) => task.id === form.taskId),
 )
 
-const activeRectificationCount = computed(
-  () => mockRectifications.filter((item) => item.status !== 'approved').length,
-)
 const selectedProjectPendingCount = computed(() => {
   if (!selectedProject.value) return 0
   return selectedProject.value.tasks.filter((task) => task.status !== 'approved').length
@@ -299,10 +332,14 @@ const handleTaskChange = () => {
   if (!selectedTask.value) return
   form.title = `关于${selectedTask.value.checkContent}的整改`
   form.description = `${selectedTask.value.checkContent}。整改标准：${selectedTask.value.checkCriterion}。请补充整改措施并提交证明材料。`
-  form.assigneeId = personnelOptions.value.some((person) => person.id === selectedTask.value?.assigneeId)
+  form.assigneeId = personnelOptions.value.some(
+    (person) => person.id === selectedTask.value?.assigneeId,
+  )
     ? selectedTask.value.assigneeId || ''
     : ''
-  form.reviewerId = reviewerOptions.value.some((person) => person.id === selectedTask.value?.reviewerId)
+  form.reviewerId = reviewerOptions.value.some(
+    (person) => person.id === selectedTask.value?.reviewerId,
+  )
     ? selectedTask.value.reviewerId || ''
     : ''
   form.deadline = plusDays(5)
@@ -327,42 +364,22 @@ const handleSubmit = async () => {
     return
   }
 
-  const nextIndex = mockRectifications.length + 1
-  const code = `REC-2026-${String(nextIndex).padStart(3, '0')}`
   const project = selectedProject.value
 
-  const newRectification: RectificationOrder = {
-    id: `rect-${Date.now()}`,
-    code,
-    source: form.source,
-    taskId: form.source === 'task' ? form.taskId : undefined,
-    projectId: project?.id,
-    projectName: project?.name,
+  const created = await rectificationApi.create({
     title: form.title,
     description: form.description,
+    projectId: form.source === 'task' ? project?.id : undefined,
+    projectName: form.source === 'task' ? project?.name : undefined,
+    taskId: form.source === 'task' ? form.taskId : undefined,
     assigneeId: assignee.id,
     assigneeName: assignee.username,
     reviewerId: reviewer.id,
     reviewerName: reviewer.username,
-    status: 'in_progress',
     deadline: form.deadline,
-    attachments: [],
-    logs: [
-      {
-        id: `log-${Date.now()}-create`,
-        action: '创建整改单',
-        operator: 'admin',
-        operatorName: '当前用户',
-        remark: form.source === 'task' ? `关联任务 ${form.taskId}` : '手工创建',
-        createdAt: nowText(),
-      },
-    ],
-    createdAt: today(),
-    updatedAt: today(),
-  }
+  })
 
-  mockRectifications.unshift(newRectification)
-  ElMessage.success(`整改单 ${code} 已创建`)
+  ElMessage.success(`整改单 ${created.code} 已创建`)
   router.push('/rectification/list')
 }
 

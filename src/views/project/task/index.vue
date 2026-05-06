@@ -123,7 +123,11 @@
                   <el-tag size="small" effect="dark" :type="workOrderStatusType(order.omsStatus)">
                     {{ workOrderStatusLabel(order) }}
                   </el-tag>
-                  <el-tag size="small" effect="plain" :type="auditResultTagType(workOrderReviewResultOf(order))">
+                  <el-tag
+                    size="small"
+                    effect="plain"
+                    :type="auditResultTagType(workOrderReviewResultOf(order))"
+                  >
                     {{ auditResultLabel(workOrderReviewResultOf(order)) }}
                   </el-tag>
                   <el-button link type="primary" :icon="View" @click="openWorkOrderDetail(order)">
@@ -151,12 +155,15 @@
                     </template>
                   </el-popconfirm>
                 </div>
-                <div v-if="workOrderReviewForm.workOrderId === order.id" class="work-order-review-panel">
+                <div
+                  v-if="workOrderReviewForm.workOrderId === order.id"
+                  class="work-order-review-panel"
+                >
                   <el-form label-position="top" class="handle-form review-form">
                     <el-form-item label="审核结果">
                       <el-radio-group v-model="workOrderReviewForm.result">
                         <el-radio-button value="passed">通过</el-radio-button>
-                        <el-radio-button value="nonconforming">不符合项</el-radio-button>
+                        <el-radio-button value="rectification_required">不符合项</el-radio-button>
                       </el-radio-group>
                     </el-form-item>
                     <el-form-item label="审核意见">
@@ -177,12 +184,29 @@
                     >
                       确认工单审核
                     </el-button>
+                    <el-button
+                      type="warning"
+                      plain
+                      class="submit-btn"
+                      :loading="workOrderReturningIds.has(order.id)"
+                      :disabled="!workOrderReviewForm.opinion.trim()"
+                      @click="handleReturnWorkOrder(order)"
+                    >
+                      退回 OMS
+                    </el-button>
+                    <el-button
+                      v-if="order.rectificationId"
+                      link
+                      type="warning"
+                      @click="router.push(`/rectification/detail/${order.rectificationId}`)"
+                    >
+                      查看整改
+                    </el-button>
                   </el-form>
                 </div>
               </div>
             </div>
           </section>
-
         </main>
 
         <aside class="task-side">
@@ -224,11 +248,7 @@
 
             <template v-else>
               <div class="provider-switch">
-                <el-segmented
-                  v-model="workOrderMode"
-                  :options="workOrderModeOptions"
-                  block
-                />
+                <el-segmented v-model="workOrderMode" :options="workOrderModeOptions" block />
                 <p>{{ activeWorkOrderModeDescription }}</p>
               </div>
 
@@ -269,7 +289,9 @@
                       :value="member.personnelId"
                     >
                       <span>{{ member.personnelName }}</span>
-                      <span class="option-meta">{{ member.employeeNo }} · {{ roleLabel(member.role) }}</span>
+                      <span class="option-meta"
+                        >{{ member.employeeNo }} · {{ roleLabel(member.role) }}</span
+                      >
                     </el-option>
                   </el-select>
                 </el-form-item>
@@ -283,154 +305,6 @@
                   生成 OMS 工单
                 </el-button>
               </el-form>
-
-              <div v-else-if="workOrderMode === 'local'" class="local-work-order">
-                <el-form
-                  v-if="!localWorkOrderCreated"
-                  label-position="top"
-                  class="handle-form"
-                >
-                  <el-form-item label="任务名称">
-                    <el-input v-model="localWorkOrderForm.taskName" maxlength="80" show-word-limit />
-                  </el-form-item>
-                  <el-form-item label="任务描述">
-                    <el-input
-                      v-model="localWorkOrderForm.taskDescription"
-                      type="textarea"
-                      :rows="3"
-                      maxlength="300"
-                      show-word-limit
-                    />
-                  </el-form-item>
-                  <el-form-item label="下达时间">
-                    <el-date-picker
-                      v-model="localWorkOrderForm.issuedAt"
-                      type="date"
-                      format="YYYY-MM-DD"
-                      value-format="YYYY-MM-DD"
-                      placeholder="选择下达时间"
-                      style="width: 100%"
-                    />
-                  </el-form-item>
-                  <el-form-item label="工单负责人">
-                    <el-select
-                      v-model="localWorkOrderForm.handlerId"
-                      placeholder="选择工单负责人"
-                      style="width: 100%"
-                      filterable
-                    >
-                      <el-option
-                        v-for="member in assignableMembers"
-                        :key="member.personnelId"
-                        :label="`${member.personnelName} (${member.employeeNo})`"
-                        :value="member.personnelId"
-                      >
-                        <span>{{ member.personnelName }}</span>
-                        <span class="option-meta">{{ member.employeeNo }} · {{ roleLabel(member.role) }}</span>
-                      </el-option>
-                    </el-select>
-                  </el-form-item>
-                  <el-button
-                    type="primary"
-                    class="submit-btn"
-                    :disabled="!localWorkOrderForm.taskName.trim() || localWorkOrderHandlers.length === 0"
-                    @click="handleCreateLocalWorkOrder"
-                  >
-                    创建本地工单
-                  </el-button>
-                </el-form>
-
-                <div v-else class="local-work-order-created">
-                  <div class="local-work-order-card">
-                    <label>本地工单</label>
-                    <strong>{{ localWorkOrderId }}</strong>
-                    <div class="local-work-order-detail-grid">
-                      <div
-                        v-for="item in localWorkOrderDetailRows"
-                        :key="item.label"
-                        class="local-work-order-detail"
-                      >
-                        <label>{{ item.label }}</label>
-                        <span>{{ item.value }}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div class="local-log-section">
-                    <div class="mini-heading">详情</div>
-                    <div v-if="localWorkOrderLogs.length > 0" class="local-log-list">
-                      <div v-for="log in localWorkOrderLogs" :key="log.id" class="local-log-item">
-                        <strong>工作日志</strong>
-                        <span>{{ log.content }}</span>
-                        <small>{{ log.attachments.length }} 个附件</small>
-                      </div>
-                    </div>
-                    <el-empty v-else description="暂无工作日志" :image-size="56" />
-
-                    <el-form label-position="top" class="handle-form log-form">
-                      <el-form-item label="日志内容">
-                        <el-input
-                          v-model="localWorkOrderLogForm.content"
-                          type="textarea"
-                          :rows="4"
-                          maxlength="500"
-                          show-word-limit
-                        />
-                      </el-form-item>
-                      <el-form-item label="附件">
-                        <el-upload
-                          v-model:file-list="localWorkOrderLogForm.attachments"
-                          action="#"
-                          :auto-upload="false"
-                          multiple
-                        >
-                          <el-button>选择附件</el-button>
-                        </el-upload>
-                      </el-form-item>
-                      <el-button
-                        type="primary"
-                        class="submit-btn"
-                        :disabled="!localWorkOrderLogForm.content.trim()"
-                        @click="handleAddLocalWorkOrderLog"
-                      >
-                        提交工作日志
-                      </el-button>
-                      <el-button
-                        class="submit-btn"
-                        :disabled="localWorkOrderLogs.length === 0 || !!localWorkOrderCompletedAt"
-                        @click="handleCompleteLocalWorkOrder"
-                      >
-                        完成本地工单
-                      </el-button>
-                    </el-form>
-                  </div>
-                </div>
-              </div>
-
-              <el-form v-else-if="workOrderMode === 'manual'" label-position="top" class="handle-form">
-                <el-form-item label="外部工单号">
-                  <el-input v-model="manualWorkOrderForm.externalWorkOrderId" maxlength="80" />
-                </el-form-item>
-                <el-form-item label="外部链接">
-                  <el-input v-model="manualWorkOrderForm.externalUrl" maxlength="200" />
-                </el-form-item>
-                <el-form-item label="当前状态">
-                  <el-input v-model="manualWorkOrderForm.statusName" maxlength="40" />
-                </el-form-item>
-                <el-form-item label="外部处理说明">
-                  <el-input
-                    v-model="manualWorkOrderForm.resultSummary"
-                    type="textarea"
-                    :rows="4"
-                    maxlength="500"
-                    show-word-limit
-                  />
-                </el-form-item>
-                <el-button type="primary" class="submit-btn" @click="handleManualWorkOrderPreview">
-                  更新归档预览
-                </el-button>
-              </el-form>
-
             </template>
           </section>
         </aside>
@@ -461,12 +335,7 @@
           </div>
         </div>
       </el-drawer>
-      <el-drawer
-        v-model="workOrderDetailVisible"
-        title="工单详情"
-        size="520px"
-        append-to-body
-      >
+      <el-drawer v-model="workOrderDetailVisible" title="工单详情" size="520px" append-to-body>
         <div v-if="selectedWorkOrder" class="work-order-detail">
           <div class="detail-title-row">
             <div>
@@ -484,7 +353,11 @@
           </div>
 
           <div class="detail-grid">
-            <div v-for="item in workOrderDetailRows(selectedWorkOrder)" :key="item.label" class="detail-item">
+            <div
+              v-for="item in workOrderDetailRows(selectedWorkOrder)"
+              :key="item.label"
+              class="detail-item"
+            >
               <label>{{ item.label }}</label>
               <span>{{ item.value }}</span>
             </div>
@@ -531,9 +404,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Back, Connection, Delete as DeleteIcon, House, Link, View } from '@element-plus/icons-vue'
+import { Back, Connection, Delete as DeleteIcon, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import type { UploadUserFile } from 'element-plus'
 import { checklistApi, projectApi, taskApi } from '@/api'
 import {
   CONTROL_FREQUENCY_OPTIONS,
@@ -570,33 +442,14 @@ const checklistOptions = ref<ControlChecklist[]>([])
 const workOrders = ref<ProjectTaskWorkOrder[]>([])
 const workOrderSubmitting = ref(false)
 const workOrderDeletingIds = ref(new Set<string>())
+const workOrderReturningIds = ref(new Set<string>())
 const workOrderMode = ref<WorkOrderProvider>('oms')
-const localWorkOrderCreated = ref(false)
-const localWorkOrderId = ref('')
-const localWorkOrderCompletedAt = ref('')
 const workOrderForm = ref({
   taskName: '',
   taskDescription: '',
   issuedAt: '',
   handlerId: '',
 })
-const localWorkOrderForm = ref({
-  taskName: '',
-  taskDescription: '',
-  issuedAt: '',
-  handlerId: '',
-})
-const localWorkOrderLogForm = ref({
-  content: '',
-  attachments: [] as UploadUserFile[],
-})
-const localWorkOrderLogs = ref<
-  Array<{
-    id: string
-    content: string
-    attachments: UploadUserFile[]
-  }>
->([])
 const workOrderReviewForm = ref({
   workOrderId: '',
   result: '',
@@ -607,16 +460,11 @@ const workOrderDetailVisible = ref(false)
 const selectedWorkOrder = ref<ProjectTaskWorkOrder>()
 const workOrderDetailRefreshing = ref(false)
 const archivePreviewVisible = ref(false)
-const manualWorkOrderForm = ref({
-  externalWorkOrderId: '',
-  externalUrl: '',
-  statusName: '',
-  resultSummary: '',
-})
 const auditResultOptions = [
   { label: '待审核', value: 'pending' },
   { label: '通过', value: 'passed' },
-  { label: '不符合项', value: 'nonconforming' },
+  { label: '不符合项', value: 'rectification_required' },
+  { label: '已退回', value: 'returned' },
 ]
 
 onMounted(async () => {
@@ -626,7 +474,9 @@ onMounted(async () => {
   await loadWorkOrders()
 })
 
-const projectId = computed(() => (route.query.projectId as string | undefined) || project.value?.id || '')
+const projectId = computed(
+  () => (route.query.projectId as string | undefined) || project.value?.id || '',
+)
 const handleModeRequested = computed(() => route.query.action === 'handle')
 const workOrderModeOptions = WORK_ORDER_PROVIDER_OPTIONS.map((item) => ({
   label: item.label,
@@ -639,7 +489,9 @@ const activeWorkOrderModeDescription = computed(
 )
 const members = computed(() => (project.value ? getProjectMembers(project.value) : []))
 const assignableMembers = computed(() =>
-  getAssignableProjectMembers(members.value).filter((member) => !!normalizeIdentityValue(member.employeeNo)),
+  getAssignableProjectMembers(members.value).filter(
+    (member) => !!normalizeIdentityValue(member.employeeNo),
+  ),
 )
 const currentUserIdentityValues = computed(() => {
   const user = userStore.userInfo
@@ -654,8 +506,10 @@ const currentProjectMember = computed(() =>
 )
 const canManageProject = computed(() => {
   return (
-    (!!project.value?.leaderId && currentUserIdentityValues.value.has(String(project.value.leaderId))) ||
-    (!!project.value?.leaderName && currentUserIdentityValues.value.has(project.value.leaderName)) ||
+    (!!project.value?.leaderId &&
+      currentUserIdentityValues.value.has(String(project.value.leaderId))) ||
+    (!!project.value?.leaderName &&
+      currentUserIdentityValues.value.has(project.value.leaderName)) ||
     currentProjectMember.value?.role === 'leader'
   )
 })
@@ -669,8 +523,10 @@ const isCurrentInspectionItemAssignee = computed(() => {
     currentUserIdentityValues.value.has(normalizeIdentityValue(task.value?.assigneeId)) ||
     currentUserIdentityValues.value.has(normalizeIdentityValue(task.value?.assigneeName)) ||
     (!!member &&
-      (normalizeIdentityValue(member.personnelId) === normalizeIdentityValue(task.value?.assigneeId) ||
-        normalizeIdentityValue(member.personnelName) === normalizeIdentityValue(task.value?.assigneeName)))
+      (normalizeIdentityValue(member.personnelId) ===
+        normalizeIdentityValue(task.value?.assigneeId) ||
+        normalizeIdentityValue(member.personnelName) ===
+          normalizeIdentityValue(task.value?.assigneeName)))
   )
 })
 const canHandleInspectionItem = computed(() => {
@@ -690,7 +546,8 @@ const inspectionItemHandleTip = computed(() => {
   if (project.value.status === 'completed') return '项目已完成，不能办理'
   if (project.value.status === 'archived') return '项目已归档，不能办理'
   if (finishedTaskStatuses.includes(task.value.status)) return '检查项已完成，不能重复办理'
-  if (!canManageProject.value && !isCurrentInspectionItemAssignee.value) return '只有项目负责人或检查项负责人可以办理'
+  if (!canManageProject.value && !isCurrentInspectionItemAssignee.value)
+    return '只有项目负责人或检查项负责人可以办理'
   return '当前状态不能办理'
 })
 const workOrderHandlers = computed(() =>
@@ -702,48 +559,7 @@ const workOrderHandlers = computed(() =>
       handlerName: member.personnelName,
     })),
 )
-const localWorkOrderHandlers = computed(() =>
-  assignableMembers.value
-    .filter((member) => member.personnelId === localWorkOrderForm.value.handlerId)
-    .map((member) => ({
-      handlerId: member.personnelId,
-      handlerEmployeeNo: normalizeIdentityValue(member.employeeNo),
-      handlerName: member.personnelName,
-    })),
-)
-const firstLocalWorkOrderHandler = computed(() => localWorkOrderHandlers.value[0])
-const localWorkOrderDetailRows = computed(() => [
-  { label: '任务名称', value: localWorkOrderForm.value.taskName || '—' },
-  { label: '任务描述', value: localWorkOrderForm.value.taskDescription || '—' },
-  { label: '工单负责人', value: personText(firstLocalWorkOrderHandler.value?.handlerName, firstLocalWorkOrderHandler.value?.handlerEmployeeNo) },
-  { label: '下达时间', value: localWorkOrderForm.value.issuedAt || '—' },
-  { label: '完成时间', value: localWorkOrderCompletedAt.value || '待完成' },
-  { label: '审核结果', value: auditResultLabel(workOrderReviewResults.value[localWorkOrderId.value]?.result || 'pending') },
-])
-const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => {
-  if (!localWorkOrderCreated.value) return workOrders.value
-  return [
-    ...workOrders.value,
-    {
-      id: localWorkOrderId.value,
-      projectId: project.value?.id || '',
-      taskId: task.value?.id || '',
-      provider: 'local',
-      externalWorkOrderId: localWorkOrderId.value,
-      taskName: localWorkOrderForm.value.taskName,
-      taskDescription: localWorkOrderForm.value.taskDescription,
-      handlerId: firstLocalWorkOrderHandler.value?.handlerId,
-      handlerEmployeeNo: firstLocalWorkOrderHandler.value?.handlerEmployeeNo,
-      handlerName: firstLocalWorkOrderHandler.value?.handlerName,
-      issuedAt: localWorkOrderForm.value.issuedAt,
-      completedAt: localWorkOrderCompletedAt.value,
-      omsStatus: localWorkOrderCompletedAt.value ? '20' : '10',
-      omsStatusName: localWorkOrderCompletedAt.value ? '已完成' : '处理中',
-      irisReviewStatus: workOrderReviewResults.value[localWorkOrderId.value]?.result || 'pending',
-      irisReviewOpinion: workOrderReviewResults.value[localWorkOrderId.value]?.opinion,
-    },
-  ]
-})
+const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => workOrders.value)
 const selectedWorkOrderLogRows = computed(() =>
   selectedWorkOrder.value ? workOrderLogRows(selectedWorkOrder.value) : [],
 )
@@ -751,7 +567,7 @@ const workOrderDisplayCode = (order: ProjectTaskWorkOrder) =>
   order.omsWorkOrderId || order.externalWorkOrderId || order.id
 const workOrderDisplayTitle = (order: ProjectTaskWorkOrder) =>
   order.taskName ||
-  (workOrderProviderOf(order) === 'manual' ? '外部工单登记' : '') ||
+  order.workOrderTitle ||
   task.value?.taskName ||
   task.value?.checkContent ||
   workOrderDisplayCode(order)
@@ -760,14 +576,22 @@ const personText = (name?: string, employeeNo?: string) => {
   return name || employeeNo || '—'
 }
 const workOrderRecordRows = (order: ProjectTaskWorkOrder) => [
-  { label: '任务描述', value: order.taskDescription || task.value?.taskDescription || '—' },
+  {
+    label: '任务描述',
+    value:
+      order.taskDescription || order.workOrderDescription || task.value?.taskDescription || '—',
+  },
   { label: '工单负责人', value: personText(order.handlerName, order.handlerEmployeeNo) },
   { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
   { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
 ]
 const workOrderDetailRows = (order: ProjectTaskWorkOrder) => [
   { label: '任务名称', value: workOrderDisplayTitle(order) },
-  { label: '任务描述', value: order.taskDescription || task.value?.taskDescription || '—' },
+  {
+    label: '任务描述',
+    value:
+      order.taskDescription || order.workOrderDescription || task.value?.taskDescription || '—',
+  },
   { label: '工单负责人', value: personText(order.handlerName, order.handlerEmployeeNo) },
   { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
   { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
@@ -780,89 +604,38 @@ const inspectionAuditResultText = computed(() => {
   const orders = visibleWorkOrders.value
   if (orders.length === 0) return '待生成工单'
   const results = orders.map((order) => workOrderReviewResultOf(order))
-  if (results.includes('nonconforming')) return '不符合项'
+  if (results.includes('rectification_required')) return '不符合项'
   if (results.length > 0 && results.every((result) => result === 'passed')) return '通过'
   return '待审核'
 })
 const archiveSnapshotPreview = computed(() => {
   const providerLabel = workOrderProviderLabel(workOrderMode.value)
-  const orderCountText =
-    workOrderMode.value === 'oms' ? `${workOrders.value.length} 个 OMS 工单` : previewOrderCountText.value
   return [
     { label: '来源系统', value: providerLabel },
     { label: '检查项', value: task.value?.taskName || task.value?.checkContent || '—' },
-    { label: '工单负责人', value: snapshotHandlerText.value },
-    { label: '工单数量', value: orderCountText },
+    {
+      label: '工单负责人',
+      value: workOrderHandlers.value.map((handler) => handler.handlerName).join('、') || '待选择',
+    },
+    { label: '工单数量', value: `${workOrders.value.length} 个 OMS 工单` },
     { label: '检查项结论', value: snapshotResultText.value },
-    { label: '附件来源', value: snapshotAttachmentText.value },
+    { label: '附件来源', value: 'OMS 日志附件' },
   ]
 })
 const archiveSnapshotLogPreview = computed(() => {
-  if (workOrderMode.value === 'oms') {
-    return [
-      {
-        title: '同步外部工单',
-        description: '从 OMS 拉取状态、日志和附件。',
-      },
-      {
-        title: '生成统一快照',
-        description: '归档时固化为项目生命周期档案。',
-      },
-    ]
-  }
-  if (workOrderMode.value === 'local') {
-    return [
-      {
-        title: '创建本地工单',
-        description: 'IRIS 生成本地工单并确定工单负责人。',
-      },
-      {
-        title: '填写工作日志',
-        description: '工单负责人在本地工单内提交日志和附件。',
-      },
-      {
-        title: '工单审核',
-        description: '检查项负责人逐个审核工单，检查项结果由工单审核结果汇总。',
-      },
-      {
-        title: '生成统一快照',
-        description: '归档读取同一套快照结构。',
-      },
-    ]
-  }
   return [
     {
-      title: '登记外部信息',
-      description: '录入工单号、链接、状态和外部处理说明。',
+      title: '同步外部工单',
+      description: '从 OMS 拉取状态、日志和附件。',
     },
     {
       title: '生成统一快照',
-      description: '归档时与本地、OMS 工单保持同一口径。',
+      description: '归档时固化为项目生命周期档案。',
     },
   ]
 })
-const previewOrderCountText = computed(() => {
-  if (workOrderMode.value === 'local') return localWorkOrderCreated.value ? '1 个本地工单' : '待创建'
-  return manualWorkOrderForm.value.externalWorkOrderId.trim() ? '1 个外部工单' : '待登记'
-})
-const snapshotHandlerText = computed(() => {
-  if (workOrderMode.value === 'oms') {
-    return workOrderHandlers.value.map((handler) => handler.handlerName).join('、') || '待选择'
-  }
-  if (workOrderMode.value === 'local') {
-    return localWorkOrderHandlers.value.map((handler) => handler.handlerName).join('、') || '待选择'
-  }
-  return task.value?.assigneeName || currentProjectMember.value?.personnelName || '待确认'
-})
 const snapshotResultText = computed(() => {
   return inspectionAuditResultText.value
-})
-const snapshotAttachmentText = computed(() => {
-  if (workOrderMode.value === 'oms') return 'OMS 日志附件'
-  if (workOrderMode.value === 'local') {
-    return `${localWorkOrderLogs.value.reduce((sum, log) => sum + log.attachments.length, 0)} 个本地附件`
-  }
-  return manualWorkOrderForm.value.externalUrl.trim() ? '外部链接' : '待登记'
 })
 
 const loadChecklistOptions = async () => {
@@ -882,7 +655,9 @@ const loadTask = async () => {
     }
 
     const page = normalizeProjectPage(await projectApi.list({ page: 1, pageSize: 100 }))
-    const matched = page.list.find((item) => item.tasks.some((candidate) => candidate.id === taskId))
+    const matched = page.list.find((item) =>
+      item.tasks.some((candidate) => candidate.id === taskId),
+    )
     if (matched) {
       project.value = normalizeProject(await projectApi.detail(matched.id))
       task.value = project.value.tasks.find((item) => item.id === taskId)
@@ -899,7 +674,7 @@ const loadWorkOrders = async () => {
   workOrders.value =
     task.value.workOrders && task.value.workOrders.length > 0
       ? task.value.workOrders
-      : ((await taskApi.listWorkOrders(projectId.value, task.value.id)) as ProjectTaskWorkOrder[])
+      : await taskApi.listWorkOrders(projectId.value, task.value.id)
 }
 
 const resetWorkOrderForm = () => {
@@ -907,8 +682,10 @@ const resetWorkOrderForm = () => {
   if (!currentTask) return
   const assignee = assignableMembers.value.find(
     (member) =>
-      normalizeIdentityValue(member.personnelId) === normalizeIdentityValue(currentTask.assigneeId) ||
-      normalizeIdentityValue(member.personnelName) === normalizeIdentityValue(currentTask.assigneeName),
+      normalizeIdentityValue(member.personnelId) ===
+        normalizeIdentityValue(currentTask.assigneeId) ||
+      normalizeIdentityValue(member.personnelName) ===
+        normalizeIdentityValue(currentTask.assigneeName),
   )
   workOrderForm.value = {
     taskName: currentTask.taskName || currentTask.checkContent,
@@ -916,13 +693,6 @@ const resetWorkOrderForm = () => {
     issuedAt: normalizeDateText(currentTask.issuedAt),
     handlerId: assignee?.personnelId || '',
   }
-  localWorkOrderForm.value = {
-    taskName: currentTask.taskName || currentTask.checkContent,
-    taskDescription: currentTask.taskDescription || currentTask.checkCriterion,
-    issuedAt: normalizeDateText(currentTask.issuedAt),
-    handlerId: assignee?.personnelId || '',
-  }
-  localWorkOrderCompletedAt.value = ''
 }
 
 const handleCreateWorkOrders = async () => {
@@ -944,34 +714,6 @@ const handleCreateWorkOrders = async () => {
   } finally {
     workOrderSubmitting.value = false
   }
-}
-
-const handleCreateLocalWorkOrder = () => {
-  if (localWorkOrderHandlers.value.length === 0) return
-  localWorkOrderCreated.value = true
-  localWorkOrderId.value = `LOCAL-${task.value?.id || 'TASK'}`
-  ElMessage.success('本地工单已创建，继续填写工作日志')
-}
-
-const handleAddLocalWorkOrderLog = () => {
-  const content = localWorkOrderLogForm.value.content.trim()
-  if (!content) return
-  localWorkOrderLogs.value.push({
-    id: `LOCAL-LOG-${Date.now()}`,
-    content,
-    attachments: [...localWorkOrderLogForm.value.attachments],
-  })
-  localWorkOrderLogForm.value = {
-    content: '',
-    attachments: [],
-  }
-  ElMessage.success('工作日志已加入归档预览')
-}
-
-const handleCompleteLocalWorkOrder = () => {
-  if (localWorkOrderLogs.value.length === 0 || localWorkOrderCompletedAt.value) return
-  localWorkOrderCompletedAt.value = currentDateTimeText()
-  ElMessage.success('本地工单已完成')
 }
 
 const closeWorkOrderReview = () => {
@@ -999,13 +741,50 @@ const toggleWorkOrderReview = (order: ProjectTaskWorkOrder) => {
   openWorkOrderReview(order)
 }
 
-const handleConfirmWorkOrderReview = () => {
-  if (!workOrderReviewForm.value.workOrderId || !workOrderReviewForm.value.result) return
-  workOrderReviewResults.value[workOrderReviewForm.value.workOrderId] = {
-    result: workOrderReviewForm.value.result,
-    opinion: workOrderReviewForm.value.opinion.trim(),
+const handleConfirmWorkOrderReview = async () => {
+  if (!task.value || !projectId.value || !workOrderReviewForm.value.workOrderId) return
+  const reviewStatus = workOrderReviewForm.value.result
+  if (reviewStatus !== 'passed' && reviewStatus !== 'rectification_required') return
+  const reviewed = await taskApi.reviewWorkOrder(
+    projectId.value,
+    task.value.id,
+    workOrderReviewForm.value.workOrderId,
+    {
+      reviewStatus,
+      opinion: workOrderReviewForm.value.opinion.trim() || undefined,
+    },
+  )
+  workOrders.value = workOrders.value.map((item) => (item.id === reviewed.id ? reviewed : item))
+  if (selectedWorkOrder.value?.id === reviewed.id) {
+    selectedWorkOrder.value = reviewed
   }
-  ElMessage.success('工单审核结果已确认')
+  closeWorkOrderReview()
+  await loadTask()
+  ElMessage.success(
+    reviewed.rectificationId ? '工单审核已确认，已生成整改单' : '工单审核结果已确认',
+  )
+}
+
+const handleReturnWorkOrder = async (order: ProjectTaskWorkOrder) => {
+  if (!task.value || !projectId.value || !workOrderReviewForm.value.workOrderId) return
+  const reason = workOrderReviewForm.value.opinion.trim()
+  if (!reason) return
+  workOrderReturningIds.value = new Set([...workOrderReturningIds.value, order.id])
+  try {
+    const returned = await taskApi.returnWorkOrder(projectId.value, task.value.id, order.id, { reason })
+    workOrders.value = workOrders.value.map((item) => (item.id === returned.id ? returned : item))
+    delete workOrderReviewResults.value[returned.id]
+    if (selectedWorkOrder.value?.id === returned.id) {
+      selectedWorkOrder.value = returned
+    }
+    closeWorkOrderReview()
+    await loadTask()
+    ElMessage.success('工单已退回 OMS')
+  } finally {
+    const nextReturningIds = new Set(workOrderReturningIds.value)
+    nextReturningIds.delete(order.id)
+    workOrderReturningIds.value = nextReturningIds
+  }
 }
 
 const openWorkOrderDetail = async (order: ProjectTaskWorkOrder) => {
@@ -1025,11 +804,7 @@ const refreshWorkOrderDetail = async (order: ProjectTaskWorkOrder) => {
   if (!task.value || !projectId.value || workOrderProviderOf(order) !== 'oms') return
   workOrderDetailRefreshing.value = true
   try {
-    const refreshed = (await taskApi.refreshWorkOrder(
-      projectId.value,
-      task.value.id,
-      order.id,
-    )) as ProjectTaskWorkOrder
+    const refreshed = await taskApi.refreshWorkOrder(projectId.value, task.value.id, order.id)
     workOrders.value = workOrders.value.map((item) => (item.id === refreshed.id ? refreshed : item))
     selectedWorkOrder.value = refreshed
   } finally {
@@ -1039,20 +814,6 @@ const refreshWorkOrderDetail = async (order: ProjectTaskWorkOrder) => {
 
 const handleDeleteWorkOrder = async (order: ProjectTaskWorkOrder) => {
   if (!task.value || !projectId.value) return
-  if (order.id === localWorkOrderId.value) {
-    localWorkOrderCreated.value = false
-    localWorkOrderId.value = ''
-    localWorkOrderCompletedAt.value = ''
-    localWorkOrderLogs.value = []
-    delete workOrderReviewResults.value[order.id]
-    closeWorkOrderReview()
-    if (selectedWorkOrder.value?.id === order.id) {
-      workOrderDetailVisible.value = false
-      selectedWorkOrder.value = undefined
-    }
-    ElMessage.success('工单已删除')
-    return
-  }
   workOrderDeletingIds.value = new Set([...workOrderDeletingIds.value, order.id])
   try {
     await taskApi.deleteWorkOrder(projectId.value, task.value.id, order.id)
@@ -1071,10 +832,6 @@ const handleDeleteWorkOrder = async (order: ProjectTaskWorkOrder) => {
     nextDeletingIds.delete(order.id)
     workOrderDeletingIds.value = nextDeletingIds
   }
-}
-
-const handleManualWorkOrderPreview = () => {
-  ElMessage.info('已更新手工登记归档预览，接口接入后保存外部工单信息')
 }
 
 const getChecklistName = (id: string) =>
@@ -1112,10 +869,11 @@ const auditResultLabel = (result: string) => {
 }
 
 const auditResultTagType = (result: string) => {
-  const map: Record<string, 'info' | 'success' | 'danger'> = {
+  const map: Record<string, 'info' | 'success' | 'danger' | 'warning'> = {
     pending: 'info',
     passed: 'success',
-    nonconforming: 'danger',
+    rectification_required: 'danger',
+    returned: 'warning',
   }
   return map[result] || 'info'
 }
@@ -1126,7 +884,9 @@ const workOrderReviewResultOf = (order: ProjectTaskWorkOrder) => {
 
 const workOrderStatusLabel = (order: ProjectTaskWorkOrder) => {
   const raw = order.omsStatusName || order.omsStatus
-  const normalized = String(raw || '').trim().toLowerCase()
+  const normalized = String(raw || '')
+    .trim()
+    .toLowerCase()
   const map: Record<string, string> = {
     created: '已创建',
     create: '已创建',
@@ -1149,7 +909,7 @@ const workOrderStatusLabel = (order: ProjectTaskWorkOrder) => {
     '20': '已完成',
     '25': '已完成',
     '30': '已关闭',
-    '40': '异常',
+    '40': '已退回',
   }
   return map[normalized] || raw || '未知'
 }
@@ -1165,19 +925,6 @@ const syncStatusLabel = (status?: string, error?: string) => {
 }
 
 const workOrderLogRows = (order: ProjectTaskWorkOrder) => {
-  if (order.id === localWorkOrderId.value) {
-    return localWorkOrderLogs.value.map((log, index) => ({
-      id: log.id,
-      occurredAt: `第 ${index + 1} 条`,
-      operator: personText(order.handlerName, order.handlerEmployeeNo),
-      action: '工作日志',
-      content: log.content,
-      attachments:
-        log.attachments.length > 0
-          ? `附件：${log.attachments.map((file) => file.name).join('、')}`
-          : '',
-    }))
-  }
   const parsedLogs = parseJsonArray(order.omsLogPayload)
   return parsedLogs.map((log, index) => {
     const row = log as Record<string, unknown>
@@ -1197,10 +944,18 @@ const parseJsonArray = (payload?: string): unknown[] => {
   try {
     const parsed = JSON.parse(payload) as unknown
     if (Array.isArray(parsed)) return parsed
-    if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { logs?: unknown[] }).logs)) {
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray((parsed as { logs?: unknown[] }).logs)
+    ) {
       return (parsed as { logs: unknown[] }).logs
     }
-    if (parsed && typeof parsed === 'object' && Array.isArray((parsed as { data?: unknown[] }).data)) {
+    if (
+      parsed &&
+      typeof parsed === 'object' &&
+      Array.isArray((parsed as { data?: unknown[] }).data)
+    ) {
       return (parsed as { data: unknown[] }).data
     }
     return []
@@ -1219,6 +974,9 @@ const workOrderLogActionLabel = (action: string) => {
     completed: '完成工单',
     close: '关闭工单',
     comment: '工作日志',
+    back: '退回工单',
+    return: '退回工单',
+    returned: '退回工单',
   }
   return map[normalized] || action || '日志'
 }
@@ -1229,28 +987,21 @@ const normalizeDateText = (value?: string | null) => {
 }
 
 const normalizeDateTimeText = (value?: string | null) => {
-  const normalized = String(value || '').replace('T', ' ').replace(/Z$/, '').trim()
+  const normalized = String(value || '')
+    .replace('T', ' ')
+    .replace(/Z$/, '')
+    .trim()
   return normalized ? normalized.split('.')[0] : ''
-}
-
-const currentDateTimeText = () => {
-  const now = new Date()
-  const pad = (value: number) => String(value).padStart(2, '0')
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())} ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
 }
 
 const workOrderProviderOf = (order: ProjectTaskWorkOrder): WorkOrderProvider => {
   if (order.provider) return order.provider
-  if (order.omsWorkOrderId) return 'oms'
-  if (order.externalWorkOrderId) return 'manual'
-  return 'local'
+  return 'oms'
 }
 
 const workOrderProviderIcon = (provider: WorkOrderProvider) => {
   const map = {
     oms: Connection,
-    local: House,
-    manual: Link,
   }
   return map[provider]
 }
@@ -1258,10 +1009,8 @@ const workOrderProviderIcon = (provider: WorkOrderProvider) => {
 const workOrderProviderTagType = (provider: WorkOrderProvider) => {
   const map = {
     oms: 'primary',
-    local: 'success',
-    manual: 'warning',
   }
-  return map[provider] as 'primary' | 'success' | 'warning'
+  return map[provider] as 'primary'
 }
 
 const workOrderStatusType = (status?: string) => {
@@ -1825,115 +1574,6 @@ const workOrderStatusType = (status?: string) => {
   }
 }
 
-.local-work-order,
-.local-work-order-created,
-.local-log-section,
-.inspection-conclusion-section {
-  display: grid;
-  gap: 14px;
-}
-
-.inspection-conclusion-section {
-  padding-top: 14px;
-  margin-top: 14px;
-  border-top: 1px solid #e2e8f0;
-}
-
-.local-work-order-card {
-  display: grid;
-  gap: 4px;
-  padding: 12px;
-  background: #fff;
-  border: 1px solid #dbeafe;
-  border-radius: 8px;
-
-  label {
-    font-size: 12px;
-    color: $iris-text-muted;
-  }
-
-  strong {
-    font-family: monospace;
-    color: $iris-text-primary;
-  }
-
-  span {
-    color: $iris-text-secondary;
-    line-height: 1.5;
-  }
-}
-
-.local-work-order-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.local-work-order-detail {
-  min-width: 0;
-  padding: 8px 10px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-
-  label,
-  span {
-    display: block;
-  }
-
-  label {
-    margin-bottom: 3px;
-    font-size: 12px;
-    color: $iris-text-muted;
-  }
-
-  span {
-    overflow: hidden;
-    color: $iris-text-primary;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.mini-heading {
-  font-size: 13px;
-  font-weight: 700;
-  color: $iris-text-primary;
-}
-
-.local-log-list {
-  display: grid;
-  gap: 8px;
-}
-
-.local-log-item {
-  display: grid;
-  gap: 4px;
-  padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-
-  strong {
-    color: $iris-text-primary;
-  }
-
-  span {
-    color: $iris-text-secondary;
-    line-height: 1.5;
-  }
-
-  small {
-    color: $iris-text-muted;
-  }
-}
-
-.log-form {
-  padding-top: 4px;
-  border-top: 1px solid #e2e8f0;
-}
-
 .handle-form {
   :deep(.el-form-item) {
     margin-bottom: 16px;
@@ -1982,10 +1622,6 @@ const workOrderStatusType = (status?: string) => {
 
   .compact-meta-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .local-work-order-detail-grid {
-    grid-template-columns: 1fr;
   }
 
   .work-order-item,

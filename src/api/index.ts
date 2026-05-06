@@ -26,7 +26,39 @@ import type {
   Rule,
   AIModel,
   Tool,
+  ProjectTaskWorkOrder,
 } from '@/types'
+
+type WorkOrderCreatePayload = {
+  title?: string
+  description?: string
+  taskName?: string
+  taskDescription?: string
+  issuedAt?: string
+  handlers: Array<{ handlerId: string; handlerEmployeeNo: string; handlerName: string }>
+}
+
+type WorkOrderReviewPayload = {
+  reviewStatus: 'passed' | 'rectification_required'
+  opinion?: string
+}
+
+type WorkOrderReturnPayload = {
+  reason: string
+}
+
+type RectificationCreatePayload = {
+  title: string
+  description?: string
+  projectId?: string
+  projectName?: string
+  taskId?: string
+  assigneeId: string
+  assigneeName: string
+  reviewerId?: string
+  reviewerName?: string
+  deadline?: string
+}
 
 export const authApi = {
   login: (data: { account: string; password: string }) =>
@@ -115,21 +147,36 @@ export const projectApi = {
 
 export const taskApi = {
   listWorkOrders: (projectId: string, taskId: string) =>
-    request.get(`/v1/projects/${projectId}/tasks/${taskId}/work-orders`),
-  createWorkOrders: (
+    request.get<ProjectTaskWorkOrder[]>(`/v1/projects/${projectId}/tasks/${taskId}/work-orders`),
+  createWorkOrders: (projectId: string, taskId: string, data: WorkOrderCreatePayload) =>
+    request.post<ProjectTaskWorkOrder[]>(
+      `/v1/projects/${projectId}/tasks/${taskId}/work-orders`,
+      data,
+    ),
+  reviewWorkOrder: (
     projectId: string,
     taskId: string,
-    data: {
-      title?: string
-      description?: string
-      taskName?: string
-      taskDescription?: string
-      issuedAt?: string
-      handlers: Array<{ handlerId: string; handlerEmployeeNo: string; handlerName: string }>
-    },
-  ) => request.post(`/v1/projects/${projectId}/tasks/${taskId}/work-orders`, data),
+    workOrderId: string,
+    data: WorkOrderReviewPayload,
+  ) =>
+    request.post<ProjectTaskWorkOrder>(
+      `/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/review`,
+      data,
+    ),
+  returnWorkOrder: (
+    projectId: string,
+    taskId: string,
+    workOrderId: string,
+    data: WorkOrderReturnPayload,
+  ) =>
+    request.post<ProjectTaskWorkOrder>(
+      `/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/return`,
+      data,
+    ),
   refreshWorkOrder: (projectId: string, taskId: string, workOrderId: string) =>
-    request.post(`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/refresh`),
+    request.post<ProjectTaskWorkOrder>(
+      `/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/refresh`,
+    ),
   deleteWorkOrder: (projectId: string, taskId: string, workOrderId: string) =>
     request.delete(`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}`),
 }
@@ -138,9 +185,9 @@ export const rectificationApi = {
   list: (params: PageQuery) =>
     request.get<PageResult<RectificationOrder>>('/v1/rectifications', params),
   detail: (id: string) => request.get<RectificationOrder>(`/v1/rectifications/${id}`),
-  create: (data: Partial<RectificationOrder>) =>
+  create: (data: RectificationCreatePayload) =>
     request.post<RectificationOrder>('/v1/rectifications', data),
-  submit: (id: string) => request.post(`/v1/rectifications/${id}/submit`),
+  submit: (id: string) => request.post<RectificationOrder>(`/v1/rectifications/${id}/submit`),
   upload: (id: string, file: File) => request.upload(`/v1/rectifications/${id}/upload`, file),
   review: (id: string, data: { action: 'approve' | 'reject'; comment?: string }) =>
     request.post(`/v1/rectifications/${id}/review`, data),

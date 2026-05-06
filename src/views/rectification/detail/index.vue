@@ -92,38 +92,27 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute } from 'vue-router'
 import { Back } from '@element-plus/icons-vue'
-import { mockRectifications } from '@/mock'
+import { rectificationApi } from '@/api'
 import type { RectificationOrder } from '@/types'
 
 const route = useRoute()
 const rectification = ref<RectificationOrder>()
 const dialogVisible = ref(false)
 const feedback = ref('')
-const today = () => new Date().toISOString().slice(0, 10)
-const nowText = () => new Date().toISOString().slice(0, 16).replace('T', ' ')
 
-onMounted(() => {
+onMounted(async () => {
   const id = route.params.id as string
-  rectification.value = mockRectifications.find((r) => r.id === id) || mockRectifications[0]
+  rectification.value = await rectificationApi.detail(id)
 })
 
-const submitFeedback = () => {
+const submitFeedback = async () => {
   if (!rectification.value) return
   if (!feedback.value.trim()) {
     ElMessage.warning('请输入整改反馈内容')
     return
   }
 
-  rectification.value.status = 'submitted'
-  rectification.value.updatedAt = today()
-  rectification.value.logs.push({
-    id: `rect-log-${Date.now()}`,
-    action: '提交整改反馈',
-    operator: rectification.value.assigneeId,
-    operatorName: rectification.value.assigneeName,
-    remark: feedback.value.trim(),
-    createdAt: nowText(),
-  })
+  rectification.value = await rectificationApi.submit(rectification.value.id)
   feedback.value = ''
   dialogVisible.value = false
   ElMessage.success('整改反馈已提交')

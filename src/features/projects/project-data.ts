@@ -56,7 +56,9 @@ export function filterProjectMemberUsers(users: SystemUser[]): SystemUser[] {
   return users.filter((user) => user.status === 1 && !isSuperAdminUser(user))
 }
 
-export function getAssignableProjectMembers<T extends Pick<TeamMember, 'role'>>(members: readonly T[]): T[] {
+export function getAssignableProjectMembers<T extends Pick<TeamMember, 'role'>>(
+  members: readonly T[],
+): T[] {
   return members.filter((member) => member.role === 'leader' || member.role === 'auditor')
 }
 
@@ -70,20 +72,12 @@ export const WORK_ORDER_PROVIDER_OPTIONS: Array<{
     value: 'oms',
     description: '生成外部工单，办理日志和附件从 OMS 同步后归档。',
   },
-  {
-    label: '本地工单',
-    value: 'local',
-    description: '在 IRIS 内办理，日志和附件由本地工单沉淀后归档。',
-  },
-  {
-    label: '手工登记',
-    value: 'manual',
-    description: '登记外部工单号和处理结论，归档时纳入统一快照。',
-  },
 ]
 
 export function workOrderProviderLabel(provider?: string): string {
-  return WORK_ORDER_PROVIDER_OPTIONS.find((item) => item.value === provider)?.label || provider || ''
+  return (
+    WORK_ORDER_PROVIDER_OPTIONS.find((item) => item.value === provider)?.label || provider || ''
+  )
 }
 
 export function projectChecklistCount(project: Pick<Project, 'checklistIds'>): number {
@@ -94,7 +88,9 @@ export function projectProgress(project: Pick<Project, 'progress' | 'tasks'>): n
   if (typeof project.progress === 'number') return project.progress
   const tasks = project.tasks || []
   if (tasks.length === 0) return 0
-  const done = tasks.filter((task) => ['passed', 'nonconforming', 'approved'].includes(task.status)).length
+  const done = tasks.filter((task) =>
+    ['passed', 'nonconforming', 'approved'].includes(task.status),
+  ).length
   return Math.round((done / tasks.length) * 100)
 }
 

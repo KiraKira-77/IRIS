@@ -37,7 +37,7 @@
           </el-select>
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :icon="Search">查询</el-button>
+          <el-button type="primary" :icon="Search" @click="loadRectifications">查询</el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -49,6 +49,7 @@
       size="large"
       @row-click="handleRowClick"
       class="clickable-table"
+      v-loading="loading"
     >
       <el-table-column prop="code" label="整改单号" width="160">
         <template #default="{ row }">
@@ -73,7 +74,7 @@
             <el-avatar
               size="small"
               style="margin-right: 8px; background: #e2e8f0; color: #64748b"
-              >{{ row.assigneeName.charAt(0) }}</el-avatar
+              >{{ row.assigneeName?.charAt(0) || '-' }}</el-avatar
             >
             {{ row.assigneeName }}
           </div>
@@ -111,21 +112,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { onMounted, ref, reactive } from 'vue'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
-import { mockRectifications } from '@/mock'
-import type { RectificationOrder } from '@/types'
+import { rectificationApi } from '@/api'
+import type { PageResult, RectificationOrder } from '@/types'
 
 const router = useRouter()
 const searchForm = reactive({ keyword: '', status: '' })
-const tableData = ref(mockRectifications)
+const tableData = ref<RectificationOrder[]>([])
+const loading = ref(false)
+
+type BackendPage<T> = PageResult<T> & {
+  records?: T[]
+  pageNo?: number
+}
+
+const pageRecords = <T,>(page: BackendPage<T>) => page.records || page.list || []
+
+onMounted(() => {
+  void loadRectifications()
+})
+
+const loadRectifications = async () => {
+  loading.value = true
+  try {
+    const page = (await rectificationApi.list({
+      page: 1,
+      pageSize: 100,
+      keyword: searchForm.keyword || undefined,
+      status: searchForm.status || undefined,
+    })) as BackendPage<RectificationOrder>
+    tableData.value = pageRecords(page)
+  } finally {
+    loading.value = false
+  }
+}
 
 const handleRowClick = (row: RectificationOrder) => {
   router.push(`/rectification/detail/${row.id}`)
 }
 
-const isOverdue = (date: string) => new Date(date) < new Date()
+const isOverdue = (date?: string) => !!date && new Date(date) < new Date()
 
 const statusType = (val: string) => {
   const map: any = {
