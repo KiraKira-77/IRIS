@@ -120,7 +120,12 @@
                     </el-icon>
                     {{ workOrderProviderLabel(workOrderProviderOf(order)) }}
                   </el-tag>
-                  <el-tag size="small" effect="dark" :type="workOrderStatusType(order.omsStatus)">
+                  <el-tag
+                    size="small"
+                    effect="dark"
+                    :type="workOrderStatusType(order)"
+                    :style="workOrderStatusStyle(order)"
+                  >
                     {{ workOrderStatusLabel(order) }}
                   </el-tag>
                   <el-tag
@@ -133,10 +138,49 @@
                   <el-button link type="primary" :icon="View" @click="openWorkOrderDetail(order)">
                     详情/日志
                   </el-button>
-                  <el-button link type="primary" @click="toggleWorkOrderReview(order)">
+                  <el-button
+                    v-if="workOrderReviewable(order)"
+                    link
+                    type="primary"
+                    @click="toggleWorkOrderReview(order)"
+                  >
                     {{ workOrderReviewForm.workOrderId === order.id ? '收起' : '审核' }}
                   </el-button>
+                  <el-button
+                    v-if="workOrderReturnable(order)"
+                    link
+                    type="warning"
+                    @click="toggleWorkOrderReturn(order)"
+                  >
+                    {{ workOrderReturnForm.workOrderId === order.id ? '收起退回' : '退回 OMS' }}
+                  </el-button>
+                  <el-button
+                    v-if="workOrderNonconformityPending(order)"
+                    link
+                    type="warning"
+                    :loading="workOrderRectificationCreatingIds.has(order.id)"
+                    @click="handleCreateWorkOrderRectification(order)"
+                  >
+                    一键生成整改单
+                  </el-button>
+                  <el-button
+                    v-if="workOrderNonconformityPending(order)"
+                    link
+                    type="danger"
+                    @click="toggleWorkOrderRisk(order)"
+                  >
+                    {{ workOrderRiskForm.workOrderId === order.id ? '收起风险' : '承担风险' }}
+                  </el-button>
+                  <el-button
+                    v-if="order.rectificationId"
+                    link
+                    type="warning"
+                    @click="router.push(`/rectification/detail/${order.rectificationId}`)"
+                  >
+                    查看整改
+                  </el-button>
                   <el-popconfirm
+                    v-if="workOrderDeletable(order)"
                     title="确认删除该工单吗？"
                     width="220"
                     confirm-button-text="删除"
@@ -156,7 +200,7 @@
                   </el-popconfirm>
                 </div>
                 <div
-                  v-if="workOrderReviewForm.workOrderId === order.id"
+                  v-if="workOrderReviewable(order) && workOrderReviewForm.workOrderId === order.id"
                   class="work-order-review-panel"
                 >
                   <el-form label-position="top" class="handle-form review-form">
@@ -185,22 +229,67 @@
                       确认工单审核
                     </el-button>
                     <el-button
-                      type="warning"
-                      plain
-                      class="submit-btn"
-                      :loading="workOrderReturningIds.has(order.id)"
-                      :disabled="!workOrderReviewForm.opinion.trim()"
-                      @click="handleReturnWorkOrder(order)"
-                    >
-                      退回 OMS
-                    </el-button>
-                    <el-button
                       v-if="order.rectificationId"
                       link
                       type="warning"
                       @click="router.push(`/rectification/detail/${order.rectificationId}`)"
                     >
                       查看整改
+                    </el-button>
+                  </el-form>
+                </div>
+                <div
+                  v-if="workOrderReturnable(order) && workOrderReturnForm.workOrderId === order.id"
+                  class="work-order-return-panel"
+                >
+                  <el-form label-position="top" class="handle-form review-form">
+                    <el-form-item label="退回原因">
+                      <el-input
+                        v-model="workOrderReturnForm.reason"
+                        type="textarea"
+                        :rows="3"
+                        maxlength="500"
+                        show-word-limit
+                      />
+                    </el-form-item>
+                    <el-button
+                      type="warning"
+                      plain
+                      class="submit-btn"
+                      :loading="workOrderReturningIds.has(order.id)"
+                      :disabled="!workOrderReturnForm.reason.trim()"
+                      @click="handleReturnWorkOrder(order)"
+                    >
+                      确认退回 OMS
+                    </el-button>
+                  </el-form>
+                </div>
+                <div
+                  v-if="
+                    workOrderNonconformityPending(order) &&
+                    workOrderRiskForm.workOrderId === order.id
+                  "
+                  class="work-order-risk-panel"
+                >
+                  <el-form label-position="top" class="handle-form review-form">
+                    <el-form-item label="承担风险原因">
+                      <el-input
+                        v-model="workOrderRiskForm.reason"
+                        type="textarea"
+                        :rows="3"
+                        maxlength="500"
+                        show-word-limit
+                      />
+                    </el-form-item>
+                    <el-button
+                      type="danger"
+                      plain
+                      class="submit-btn"
+                      :loading="workOrderRiskAcceptingIds.has(order.id)"
+                      :disabled="!workOrderRiskForm.reason.trim()"
+                      @click="handleAcceptWorkOrderRisk(order)"
+                    >
+                      确认承担风险
                     </el-button>
                   </el-form>
                 </div>
@@ -387,9 +476,26 @@
                 <span>{{ log.occurredAt }}</span>
               </div>
               <p>{{ log.content }}</p>
+              <div v-if="log.isWorkLog" class="log-extra">
+                <span v-if="log.recordDate">日志时间：{{ log.recordDate }}</span>
+                <span v-if="log.duration">处理时长：{{ log.duration }}</span>
+              </div>
+              <div v-if="log.isWorkLog && log.attachments.length > 0" class="log-attachments">
+                <span>附件：</span>
+                <el-link
+                  v-for="attachment in log.attachments"
+                  :key="attachment.id"
+                  :href="attachment.url || undefined"
+                  :underline="false"
+                  :disabled="!attachment.url"
+                  target="_blank"
+                  type="primary"
+                >
+                  {{ attachment.name }}
+                </el-link>
+              </div>
               <div class="log-footer">
                 <span>{{ log.operator }}</span>
-                <span v-if="log.attachments">{{ log.attachments }}</span>
               </div>
             </div>
           </div>
@@ -432,6 +538,12 @@ import type {
   WorkOrderProvider,
 } from '@/types'
 
+interface WorkOrderLogAttachment {
+  id: string
+  name: string
+  url: string
+}
+
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
@@ -443,6 +555,8 @@ const workOrders = ref<ProjectTaskWorkOrder[]>([])
 const workOrderSubmitting = ref(false)
 const workOrderDeletingIds = ref(new Set<string>())
 const workOrderReturningIds = ref(new Set<string>())
+const workOrderRectificationCreatingIds = ref(new Set<string>())
+const workOrderRiskAcceptingIds = ref(new Set<string>())
 const workOrderMode = ref<WorkOrderProvider>('oms')
 const workOrderForm = ref({
   taskName: '',
@@ -454,6 +568,14 @@ const workOrderReviewForm = ref({
   workOrderId: '',
   result: '',
   opinion: '',
+})
+const workOrderReturnForm = ref({
+  workOrderId: '',
+  reason: '',
+})
+const workOrderRiskForm = ref({
+  workOrderId: '',
+  reason: '',
 })
 const workOrderReviewResults = ref<Record<string, { result: string; opinion: string }>>({})
 const workOrderDetailVisible = ref(false)
@@ -584,6 +706,12 @@ const workOrderRecordRows = (order: ProjectTaskWorkOrder) => [
   { label: '工单负责人', value: personText(order.handlerName, order.handlerEmployeeNo) },
   { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
   { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
+  ...(workOrderReviewResultOf(order) === 'rectification_required'
+    ? [{ label: '处置方式', value: nonconformityDispositionLabel(order) }]
+    : []),
+  ...(order.nonconformityDisposition === 'risk_accepted'
+    ? [{ label: '承担风险原因', value: order.riskAcceptanceReason || '—' }]
+    : []),
 ]
 const workOrderDetailRows = (order: ProjectTaskWorkOrder) => [
   { label: '任务名称', value: workOrderDisplayTitle(order) },
@@ -597,6 +725,15 @@ const workOrderDetailRows = (order: ProjectTaskWorkOrder) => [
   { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
   { label: '工单状态', value: workOrderStatusLabel(order) },
   { label: '审核结果', value: auditResultLabel(workOrderReviewResultOf(order)) },
+  ...(workOrderReviewResultOf(order) === 'rectification_required'
+    ? [{ label: '处置方式', value: nonconformityDispositionLabel(order) }]
+    : []),
+  ...(order.nonconformityDisposition === 'risk_accepted'
+    ? [
+        { label: '承担风险原因', value: order.riskAcceptanceReason || '—' },
+        { label: '承担风险时间', value: normalizeDateTimeText(order.riskAcceptedAt) || '—' },
+      ]
+    : []),
   { label: '同步状态', value: syncStatusLabel(order.syncStatus, order.syncError) },
   { label: '最近同步', value: normalizeDateTimeText(order.lastSyncedAt) || '—' },
 ]
@@ -724,13 +861,30 @@ const closeWorkOrderReview = () => {
   }
 }
 
+const closeWorkOrderReturn = () => {
+  workOrderReturnForm.value = {
+    workOrderId: '',
+    reason: '',
+  }
+}
+
+const closeWorkOrderRisk = () => {
+  workOrderRiskForm.value = {
+    workOrderId: '',
+    reason: '',
+  }
+}
+
 const openWorkOrderReview = (order: ProjectTaskWorkOrder) => {
+  if (!workOrderReviewable(order)) return
   const savedReview = workOrderReviewResults.value[order.id]
   workOrderReviewForm.value = {
     workOrderId: order.id,
     result: savedReview?.result || order.irisReviewStatus || '',
     opinion: savedReview?.opinion || order.irisReviewOpinion || '',
   }
+  closeWorkOrderReturn()
+  closeWorkOrderRisk()
 }
 
 const toggleWorkOrderReview = (order: ProjectTaskWorkOrder) => {
@@ -741,8 +895,46 @@ const toggleWorkOrderReview = (order: ProjectTaskWorkOrder) => {
   openWorkOrderReview(order)
 }
 
+const openWorkOrderReturn = (order: ProjectTaskWorkOrder) => {
+  if (!workOrderReturnable(order)) return
+  workOrderReturnForm.value = {
+    workOrderId: order.id,
+    reason: '',
+  }
+  closeWorkOrderReview()
+  closeWorkOrderRisk()
+}
+
+const toggleWorkOrderReturn = (order: ProjectTaskWorkOrder) => {
+  if (workOrderReturnForm.value.workOrderId === order.id) {
+    closeWorkOrderReturn()
+    return
+  }
+  openWorkOrderReturn(order)
+}
+
+const openWorkOrderRisk = (order: ProjectTaskWorkOrder) => {
+  if (!workOrderNonconformityPending(order)) return
+  workOrderRiskForm.value = {
+    workOrderId: order.id,
+    reason: '',
+  }
+  closeWorkOrderReview()
+  closeWorkOrderReturn()
+}
+
+const toggleWorkOrderRisk = (order: ProjectTaskWorkOrder) => {
+  if (workOrderRiskForm.value.workOrderId === order.id) {
+    closeWorkOrderRisk()
+    return
+  }
+  openWorkOrderRisk(order)
+}
+
 const handleConfirmWorkOrderReview = async () => {
   if (!task.value || !projectId.value || !workOrderReviewForm.value.workOrderId) return
+  const order = workOrders.value.find((item) => item.id === workOrderReviewForm.value.workOrderId)
+  if (!order || !workOrderReviewable(order)) return
   const reviewStatus = workOrderReviewForm.value.result
   if (reviewStatus !== 'passed' && reviewStatus !== 'rectification_required') return
   const reviewed = await taskApi.reviewWorkOrder(
@@ -760,30 +952,79 @@ const handleConfirmWorkOrderReview = async () => {
   }
   closeWorkOrderReview()
   await loadTask()
-  ElMessage.success(
-    reviewed.rectificationId ? '工单审核已确认，已生成整改单' : '工单审核结果已确认',
-  )
+  ElMessage.success('工单审核结果已确认')
 }
 
 const handleReturnWorkOrder = async (order: ProjectTaskWorkOrder) => {
-  if (!task.value || !projectId.value || !workOrderReviewForm.value.workOrderId) return
-  const reason = workOrderReviewForm.value.opinion.trim()
+  if (!task.value || !projectId.value || workOrderReturnForm.value.workOrderId !== order.id) return
+  if (!workOrderReturnable(order)) return
+  const reason = workOrderReturnForm.value.reason.trim()
   if (!reason) return
   workOrderReturningIds.value = new Set([...workOrderReturningIds.value, order.id])
   try {
-    const returned = await taskApi.returnWorkOrder(projectId.value, task.value.id, order.id, { reason })
+    const returned = await taskApi.returnWorkOrder(projectId.value, task.value.id, order.id, {
+      reason,
+    })
     workOrders.value = workOrders.value.map((item) => (item.id === returned.id ? returned : item))
     delete workOrderReviewResults.value[returned.id]
     if (selectedWorkOrder.value?.id === returned.id) {
       selectedWorkOrder.value = returned
     }
-    closeWorkOrderReview()
+    closeWorkOrderReturn()
     await loadTask()
     ElMessage.success('工单已退回 OMS')
   } finally {
     const nextReturningIds = new Set(workOrderReturningIds.value)
     nextReturningIds.delete(order.id)
     workOrderReturningIds.value = nextReturningIds
+  }
+}
+
+const handleCreateWorkOrderRectification = async (order: ProjectTaskWorkOrder) => {
+  if (!task.value || !projectId.value || !workOrderNonconformityPending(order)) return
+  workOrderRectificationCreatingIds.value = new Set([
+    ...workOrderRectificationCreatingIds.value,
+    order.id,
+  ])
+  try {
+    const disposed = await taskApi.createWorkOrderRectification(
+      projectId.value,
+      task.value.id,
+      order.id,
+    )
+    workOrders.value = workOrders.value.map((item) => (item.id === disposed.id ? disposed : item))
+    if (selectedWorkOrder.value?.id === disposed.id) {
+      selectedWorkOrder.value = disposed
+    }
+    closeWorkOrderRisk()
+    ElMessage.success('整改单已生成')
+  } finally {
+    const nextCreatingIds = new Set(workOrderRectificationCreatingIds.value)
+    nextCreatingIds.delete(order.id)
+    workOrderRectificationCreatingIds.value = nextCreatingIds
+  }
+}
+
+const handleAcceptWorkOrderRisk = async (order: ProjectTaskWorkOrder) => {
+  if (!task.value || !projectId.value || workOrderRiskForm.value.workOrderId !== order.id) return
+  if (!workOrderNonconformityPending(order)) return
+  const reason = workOrderRiskForm.value.reason.trim()
+  if (!reason) return
+  workOrderRiskAcceptingIds.value = new Set([...workOrderRiskAcceptingIds.value, order.id])
+  try {
+    const disposed = await taskApi.acceptWorkOrderRisk(projectId.value, task.value.id, order.id, {
+      reason,
+    })
+    workOrders.value = workOrders.value.map((item) => (item.id === disposed.id ? disposed : item))
+    if (selectedWorkOrder.value?.id === disposed.id) {
+      selectedWorkOrder.value = disposed
+    }
+    closeWorkOrderRisk()
+    ElMessage.success('已记录承担风险')
+  } finally {
+    const nextRiskAcceptingIds = new Set(workOrderRiskAcceptingIds.value)
+    nextRiskAcceptingIds.delete(order.id)
+    workOrderRiskAcceptingIds.value = nextRiskAcceptingIds
   }
 }
 
@@ -821,6 +1062,12 @@ const handleDeleteWorkOrder = async (order: ProjectTaskWorkOrder) => {
     delete workOrderReviewResults.value[order.id]
     if (workOrderReviewForm.value.workOrderId === order.id) {
       closeWorkOrderReview()
+    }
+    if (workOrderReturnForm.value.workOrderId === order.id) {
+      closeWorkOrderReturn()
+    }
+    if (workOrderRiskForm.value.workOrderId === order.id) {
+      closeWorkOrderRisk()
     }
     if (selectedWorkOrder.value?.id === order.id) {
       workOrderDetailVisible.value = false
@@ -882,36 +1129,86 @@ const workOrderReviewResultOf = (order: ProjectTaskWorkOrder) => {
   return workOrderReviewResults.value[order.id]?.result || order.irisReviewStatus || 'pending'
 }
 
+const omsStatusLabelMap: Record<string, string> = {
+  created: '已创建',
+  create: '已创建',
+  new: '已创建',
+  pending: '待领取',
+  processing: '处理中',
+  in_progress: '处理中',
+  running: '处理中',
+  complete: '已完成',
+  completed: '已完成',
+  closed: '已归档',
+  cancelled: '已终止',
+  canceled: '已终止',
+  failed: '同步失败',
+  '0': '待分配',
+  '5': '待领取',
+  '10': '处理中',
+  '13': '转办中',
+  '15': '挂起中',
+  '20': '已完成',
+  '25': '已终止',
+  '30': '已归档',
+  '40': '已退回',
+}
+
+const omsStatusColorMap: Record<string, { background: string; color: string }> = {
+  待分配: { background: '#fbffe8', color: '#93c75b' },
+  待领取: { background: '#e5fffb', color: '#00969b' },
+  处理中: { background: '#e6f3fe', color: '#386cf9' },
+  转办中: { background: '#fff8e7', color: '#d56f24' },
+  挂起中: { background: '#faeffe', color: '#5c00a6' },
+  已完成: { background: '#f5ffee', color: '#3ec73a' },
+  已终止: { background: '#fff1f0', color: '#d21d29' },
+  已归档: { background: '#AAAAAA', color: '#FFFFFF' },
+  已退回: { background: '#F53F3F', color: '#FFFFFF' },
+}
+
+const workOrderRawStatus = (order: ProjectTaskWorkOrder) =>
+  String(order.omsStatusName || order.omsStatus || '').trim()
+
 const workOrderStatusLabel = (order: ProjectTaskWorkOrder) => {
-  const raw = order.omsStatusName || order.omsStatus
-  const normalized = String(raw || '')
-    .trim()
-    .toLowerCase()
+  const raw = workOrderRawStatus(order)
+  return omsStatusLabelMap[raw] || omsStatusLabelMap[raw.toLowerCase()] || raw || '未知'
+}
+
+const workOrderReviewableStatusLabels = ['已完成', '已归档']
+const workOrderReturnableStatusLabels = ['已完成']
+
+const workOrderReturnable = (order: ProjectTaskWorkOrder) =>
+  !order.reviewLocked && workOrderReturnableStatusLabels.includes(workOrderStatusLabel(order))
+
+const workOrderReviewable = (order: ProjectTaskWorkOrder) =>
+  order.reviewable === true &&
+  !order.reviewLocked &&
+  workOrderReviewableStatusLabels.includes(workOrderStatusLabel(order))
+
+const workOrderDeletable = (order: ProjectTaskWorkOrder) => !order.reviewLocked
+
+const workOrderNonconformityPending = (order: ProjectTaskWorkOrder) =>
+  order.reviewLocked === true &&
+  workOrderReviewResultOf(order) === 'rectification_required' &&
+  !order.rectificationId &&
+  !order.nonconformityDisposition
+
+const nonconformityDispositionLabel = (order: ProjectTaskWorkOrder) => {
   const map: Record<string, string> = {
-    created: '已创建',
-    create: '已创建',
-    new: '已创建',
-    pending: '待处理',
-    processing: '处理中',
-    in_progress: '处理中',
-    running: '处理中',
-    complete: '已完成',
-    completed: '已完成',
-    closed: '已关闭',
-    cancelled: '已取消',
-    canceled: '已取消',
-    failed: '同步失败',
-    '0': '待处理',
-    '5': '待处理',
-    '10': '处理中',
-    '13': '处理中',
-    '15': '处理中',
-    '20': '已完成',
-    '25': '已完成',
-    '30': '已关闭',
-    '40': '已退回',
+    rectification_created: '已生成整改单',
+    risk_accepted: '承担风险',
   }
-  return map[normalized] || raw || '未知'
+  return map[String(order.nonconformityDisposition || '')] || '待处置'
+}
+
+const workOrderStatusStyle = (order: ProjectTaskWorkOrder) => {
+  const color = omsStatusColorMap[workOrderStatusLabel(order)]
+  if (!color) return {}
+  return {
+    backgroundColor: color.background,
+    borderColor: color.background,
+    color: color.color,
+  }
 }
 
 const syncStatusLabel = (status?: string, error?: string) => {
@@ -928,13 +1225,23 @@ const workOrderLogRows = (order: ProjectTaskWorkOrder) => {
   const parsedLogs = parseJsonArray(order.omsLogPayload)
   return parsedLogs.map((log, index) => {
     const row = log as Record<string, unknown>
+    const rawAction = String(row.action || row.actionName || row.RECORD_GDCZ || '日志')
+    const attachmentsPayload = row.attachmentsPayload || row.RECORD_FJ || ''
     return {
       id: String(row.id || row.logId || `${order.id}-${index}`),
-      occurredAt: normalizeDateTimeText(String(row.occurredAt || row.time || row.createdAt || '')),
-      operator: String(row.operator || row.operatorName || row.userName || 'OMS'),
-      action: workOrderLogActionLabel(String(row.action || row.actionName || '日志')),
-      content: String(row.content || row.message || row.description || '—'),
-      attachments: '',
+      occurredAt: normalizeDateTimeText(
+        String(row.occurredAt || row.SY_CREATETIME || row.time || row.createdAt || ''),
+      ),
+      operator: String(
+        row.operator || row.SY_CREATEUSERNAME || row.operatorName || row.userName || 'OMS',
+      ),
+      action: workOrderLogActionLabel(rawAction),
+      content: String(row.content || row.RECORD_CZXQ || row.message || row.description || '—'),
+      // OMS 的“日志”动作会额外返回 RECORD_RQ/RECORD_GS/RECORD_FJ，用于展示日志时间、处理时长和附件。
+      isWorkLog: isWorkLogAction(rawAction),
+      recordDate: normalizeDateText(String(row.recordDate || row.RECORD_RQ || '')),
+      duration: formatDurationText(String(row.duration || row.RECORD_GS || '')),
+      attachments: parseWorkOrderLogAttachments(attachmentsPayload),
     }
   })
 }
@@ -981,6 +1288,55 @@ const workOrderLogActionLabel = (action: string) => {
   return map[normalized] || action || '日志'
 }
 
+const isWorkLogAction = (action: string) => {
+  const normalized = action.trim().toLowerCase()
+  return normalized === '日志' || normalized === 'comment' || normalized === 'log'
+}
+
+const formatDurationText = (value: string) => {
+  const normalized = value.trim()
+  if (!normalized) return ''
+  return /小时|分钟|h$/i.test(normalized) ? normalized : `${normalized} 小时`
+}
+
+const parseWorkOrderLogAttachments = (payload: unknown): WorkOrderLogAttachment[] => {
+  const parsed = parseJsonValue(payload)
+  const rows = Array.isArray(parsed)
+    ? parsed
+    : parsed && typeof parsed === 'object' && Array.isArray((parsed as { data?: unknown[] }).data)
+      ? (parsed as { data: unknown[] }).data
+      : []
+
+  return rows
+    .filter((item): item is Record<string, unknown> => !!item && typeof item === 'object')
+    .map((item, index) => {
+      const name = String(
+        item.originalFileName ||
+          item.allFireName ||
+          item.fileName ||
+          item.name ||
+          `附件${index + 1}`,
+      )
+      return {
+        id: String(item.id || item.jeFileInfoId || item.fileName || `${name}-${index}`),
+        name,
+        url: String(item.minioUrl || item.url || ''),
+      }
+    })
+}
+
+const parseJsonValue = (payload: unknown): unknown => {
+  if (!payload) return undefined
+  if (typeof payload !== 'string') return payload
+  const normalized = payload.trim()
+  if (!normalized) return undefined
+  try {
+    return JSON.parse(normalized) as unknown
+  } catch {
+    return undefined
+  }
+}
+
 const normalizeDateText = (value?: string | null) => {
   const normalized = String(value || '').replace('T', ' ')
   return normalized ? normalized.slice(0, 10) : ''
@@ -1013,30 +1369,8 @@ const workOrderProviderTagType = (provider: WorkOrderProvider) => {
   return map[provider] as 'primary'
 }
 
-const workOrderStatusType = (status?: string) => {
-  const map: Record<string, string> = {
-    created: 'primary',
-    pending: 'info',
-    processing: 'primary',
-    in_progress: 'primary',
-    complete: 'success',
-    completed: 'success',
-    closed: 'success',
-    cancelled: 'info',
-    canceled: 'info',
-    failed: 'danger',
-    '0': 'info',
-    '5': 'info',
-    '10': 'primary',
-    '13': 'warning',
-    '15': 'warning',
-    '20': 'success',
-    '25': 'info',
-    '30': 'success',
-    '40': 'danger',
-  }
-  return (map[String(status || '').toLowerCase()] || 'info') as any
-}
+const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
+  (workOrderReturnable(order) ? 'success' : 'info') as any
 </script>
 
 <style lang="scss" scoped>
@@ -1358,7 +1692,9 @@ const workOrderStatusType = (status?: string) => {
   justify-content: flex-end;
 }
 
-.work-order-review-panel {
+.work-order-review-panel,
+.work-order-return-panel,
+.work-order-risk-panel {
   grid-column: 1 / -1;
   padding-top: 10px;
   border-top: 1px solid #e2e8f0;
@@ -1546,6 +1882,24 @@ const workOrderStatusType = (status?: string) => {
 
 .log-meta strong {
   color: $iris-text-primary;
+}
+
+.log-extra,
+.log-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: $iris-text-muted;
+}
+
+.log-attachments {
+  align-items: center;
+
+  .el-link {
+    font-size: 12px;
+  }
 }
 
 .work-order-panel {

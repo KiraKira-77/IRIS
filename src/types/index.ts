@@ -508,6 +508,10 @@ export interface ProjectTaskWorkOrder {
   irisReviewedAt?: string
   irisReviewedBy?: string
   rectificationId?: string
+  nonconformityDisposition?: string
+  riskAcceptanceReason?: string
+  riskAcceptedAt?: string
+  riskAcceptedBy?: string
   reviewLocked?: boolean
   reviewable?: boolean
 }

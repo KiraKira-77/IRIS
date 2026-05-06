@@ -47,6 +47,10 @@ type WorkOrderReturnPayload = {
   reason: string
 }
 
+type WorkOrderRiskAcceptPayload = {
+  reason: string
+}
+
 type RectificationCreatePayload = {
   title: string
   description?: string
@@ -171,6 +175,20 @@ export const taskApi = {
   ) =>
     request.post<ProjectTaskWorkOrder>(
       `/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/return`,
+      data,
+    ),
+  createWorkOrderRectification: (projectId: string, taskId: string, workOrderId: string) =>
+    request.post<ProjectTaskWorkOrder>(
+      `/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/rectification`,
+    ),
+  acceptWorkOrderRisk: (
+    projectId: string,
+    taskId: string,
+    workOrderId: string,
+    data: WorkOrderRiskAcceptPayload,
+  ) =>
+    request.post<ProjectTaskWorkOrder>(
+      `/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/risk-acceptance`,
       data,
     ),
   refreshWorkOrder: (projectId: string, taskId: string, workOrderId: string) =>
