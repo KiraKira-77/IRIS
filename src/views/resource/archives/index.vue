@@ -107,6 +107,25 @@
               <el-table-column type="index" label="#" width="50" />
               <el-table-column prop="category" label="分类" width="130" />
               <el-table-column prop="name" label="文件名" min-width="240" show-overflow-tooltip />
+              <el-table-column label="操作" width="120" fixed="right">
+                <template #default="{ row }">
+                  <div v-if="archiveDocumentDownloadItems(row).length" class="archive-downloads">
+                    <el-link
+                      v-for="item in archiveDocumentDownloadItems(row)"
+                      :key="item.url"
+                      :href="item.url"
+                      :download="item.name"
+                      target="_blank"
+                      type="primary"
+                      :underline="false"
+                    >
+                      <el-icon><Download /></el-icon>
+                      <span>下载</span>
+                    </el-link>
+                  </div>
+                  <el-text v-else type="info" size="small">暂无地址</el-text>
+                </template>
+              </el-table-column>
             </el-table>
           </el-tab-pane>
         </el-tabs>
@@ -117,10 +136,10 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Search, FolderOpened, Lock } from '@element-plus/icons-vue'
+import { Search, FolderOpened, Lock, Download } from '@element-plus/icons-vue'
 import { archiveApi } from '@/api'
 import { taskStatusLabel } from '@/features/projects/project-data'
-import type { Archive, PageResult } from '@/types'
+import type { Archive, ArchiveDocument, Attachment, PageResult } from '@/types'
 
 type ArchivePage = PageResult<Archive> & {
   records?: Archive[]
@@ -131,6 +150,12 @@ type ProjectArchiveSnapshot = {
   tasks?: Array<Record<string, string>>
   workOrders?: Array<Record<string, string>>
   rectifications?: Array<Record<string, string>>
+}
+
+type ArchiveAttachment = Partial<Attachment> & Record<string, unknown>
+type ArchiveDownloadItem = {
+  name: string
+  url: string
 }
 
 const searchForm = reactive({ keyword: '', status: '' })
@@ -182,6 +207,37 @@ const archiveSnapshot = computed<ProjectArchiveSnapshot>(() => {
 const snapshotTasks = computed(() => archiveSnapshot.value.tasks || [])
 const snapshotWorkOrders = computed(() => archiveSnapshot.value.workOrders || [])
 const snapshotRectifications = computed(() => archiveSnapshot.value.rectifications || [])
+
+const archiveDocumentDownloadItems = (document: ArchiveDocument): ArchiveDownloadItem[] => {
+  const attachments = (document.attachments || []) as ArchiveAttachment[]
+  return attachments
+    .map((attachment, index) => {
+      const url = firstText(
+        attachment.minioUrl,
+        attachment.url,
+        attachment.fileUrl,
+        attachment.attachmentUrl,
+        attachment.downloadUrl,
+      )
+      if (!url) return null
+      return {
+        url,
+        name:
+          firstText(
+            attachment.originalFileName,
+            attachment.name,
+            attachment.fileName,
+            document.name,
+          ) || `附件${index + 1}`,
+      }
+    })
+    .filter((item): item is ArchiveDownloadItem => Boolean(item))
+}
+
+const firstText = (...values: unknown[]) => {
+  const matched = values.find((value) => typeof value === 'string' && value.trim())
+  return typeof matched === 'string' ? matched.trim() : ''
+}
 </script>
 
 <style lang="scss" scoped>
@@ -274,5 +330,19 @@ const snapshotRectifications = computed(() => archiveSnapshot.value.rectificatio
 
 .archive-tabs {
   margin-top: 18px;
+}
+
+.archive-downloads {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+
+  .el-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    line-height: 1;
+  }
 }
 </style>

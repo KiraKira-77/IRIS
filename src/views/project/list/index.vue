@@ -131,7 +131,7 @@
             />
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="220" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button link type="primary" size="small" @click.stop="handleRowClick(row)">
@@ -154,6 +154,15 @@
                 @click.stop="handleStartProject(row)"
               >
                 启动
+              </el-button>
+              <el-button
+                v-if="canArchiveProject(row)"
+                link
+                type="warning"
+                size="small"
+                @click.stop="handleArchiveProject(row)"
+              >
+                归档
               </el-button>
               <el-button
                 v-if="canDeleteProject(row)"
@@ -252,6 +261,9 @@ const canEditProject = (row: Project) => row.status !== 'archived' && canManageP
 const canStartProject = (row: Project) =>
   row.status === 'not_started' && canManageProjectRow(row)
 
+const canArchiveProject = (row: Project) =>
+  row.status === 'completed' && canManageProjectRow(row)
+
 const canDeleteProject = (row: Project) =>
   row.status === 'not_started' && canManageProjectRow(row)
 
@@ -314,6 +326,26 @@ const handleStartProject = async (row: Project) => {
     })
     await projectApi.start(row.id)
     ElMessage.success('项目已启动')
+    loadProjects()
+  } catch {
+    // cancelled or request failed
+  }
+}
+
+const handleArchiveProject = async (row: Project) => {
+  if (!canArchiveProject(row)) return
+  try {
+    await ElMessageBox.confirm(
+      `确认归档项目「${row.name}」？归档后会生成完整项目档案，项目将不可再编辑或办理。`,
+      '归档项目',
+      {
+        type: 'warning',
+        confirmButtonText: '确认归档',
+        cancelButtonText: '取消',
+      },
+    )
+    await projectApi.archive(row.id)
+    ElMessage.success('项目已归档')
     loadProjects()
   } catch {
     // cancelled or request failed

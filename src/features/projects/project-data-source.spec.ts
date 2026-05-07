@@ -426,6 +426,14 @@ describe('project management data sources', () => {
     expect(projectDetailSource).toContain('归档项目')
   })
 
+  it('archives completed projects directly from the project list operation column', () => {
+    expect(projectListSource).toContain('canArchiveProject(row)')
+    expect(projectListSource).toContain('handleArchiveProject(row)')
+    expect(projectListSource).toContain('projectApi.archive')
+    expect(projectListSource).toContain("row.status === 'completed'")
+    expect(projectListSource).toContain('归档')
+  })
+
   it('uses real archive APIs and shows one project archive with full snapshot metadata', () => {
     expect(archiveSource).toContain('archiveApi.list')
     expect(archiveSource).toContain('archiveApi.detail')
@@ -434,6 +442,13 @@ describe('project management data sources', () => {
     expect(archiveSource).toContain('workOrderCount')
     expect(archiveSource).toContain('rectificationCount')
     expect(archiveSource).not.toContain('mockArchives')
+  })
+
+  it('allows archived OMS attachments to be downloaded from archive details', () => {
+    expect(archiveSource).toContain('archiveDocumentDownloadItems')
+    expect(archiveSource).toContain('minioUrl')
+    expect(archiveSource).toContain('download')
+    expect(archiveSource).toContain('下载')
   })
 
   it('shows a project start action on the project list for not started projects', () => {
