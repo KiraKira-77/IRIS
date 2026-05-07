@@ -622,6 +622,9 @@ export interface RectificationOrder {
   rectificationOmsStatusName?: string
   rectificationWorkOrderCreatedAt?: string
   rectificationWorkOrderCompletedAt?: string
+  rectificationOmsDetailPayload?: string
+  rectificationOmsLogPayload?: string
+  rectificationOmsAttachmentPayload?: string
   attachments: Attachment[]
   reviewComment?: string
   logs: OperationLog[]
