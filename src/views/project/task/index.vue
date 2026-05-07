@@ -85,25 +85,6 @@
                 >
                   归档快照预览
                 </el-button>
-                <el-button
-                  v-if="workOrderDispositionReady"
-                  type="warning"
-                  plain
-                  size="small"
-                  :loading="workOrderBatchRectificationCreating"
-                  @click="handleCreateAllPendingRectifications"
-                >
-                  为每个待处置工单生成整改单
-                </el-button>
-                <el-button
-                  v-if="workOrderDispositionReady"
-                  type="danger"
-                  plain
-                  size="small"
-                  @click="openAllPendingWorkOrderRisk"
-                >
-                  待处置工单承担风险
-                </el-button>
               </div>
             </div>
             <el-empty
@@ -112,35 +93,6 @@
               :image-size="80"
             />
             <div v-else class="work-order-list">
-              <div
-                v-if="
-                  workOrderDispositionReady &&
-                  workOrderRiskForm.workOrderId === allPendingRiskWorkOrderId
-                "
-                class="work-order-risk-panel batch-risk-panel"
-              >
-                <el-form label-position="top" class="handle-form review-form">
-                  <el-form-item label="承担风险原因">
-                    <el-input
-                      v-model="workOrderRiskForm.reason"
-                      type="textarea"
-                      :rows="3"
-                      maxlength="500"
-                      show-word-limit
-                    />
-                  </el-form-item>
-                  <el-button
-                    type="danger"
-                    plain
-                    class="submit-btn"
-                    :loading="workOrderBatchRiskAccepting"
-                    :disabled="!workOrderRiskForm.reason.trim()"
-                    @click="handleAcceptAllPendingWorkOrderRisk"
-                  >
-                    确认这些工单不生成整改单，承担风险
-                  </el-button>
-                </el-form>
-              </div>
               <div v-for="order in visibleWorkOrders" :key="order.id" class="work-order-item">
                 <div class="work-order-main">
                   <div class="work-order-title-block">
@@ -213,7 +165,7 @@
                     {{ workOrderReturnForm.workOrderId === order.id ? '收起退回' : '退回 OMS' }}
                   </el-button>
                   <el-button
-                    v-if="workOrderDispositionActionable(order)"
+                    v-if="workOrderRectificationCreatable(order)"
                     link
                     type="warning"
                     :loading="workOrderRectificationCreatingIds.has(order.id)"
@@ -222,7 +174,7 @@
                     生成该工单整改单
                   </el-button>
                   <el-button
-                    v-if="workOrderDispositionActionable(order)"
+                    v-if="workOrderRiskAcceptable(order)"
                     link
                     type="danger"
                     @click="toggleWorkOrderRisk(order)"
@@ -308,7 +260,7 @@
                 </div>
                 <div
                   v-if="
-                    workOrderDispositionActionable(order) &&
+                    workOrderRiskAcceptable(order) &&
                     workOrderRiskForm.workOrderId === order.id
                   "
                   class="work-order-risk-panel"
@@ -362,7 +314,11 @@
             </div>
           </section>
 
-          <section class="side-panel work-order-panel" :class="{ emphasized: handleModeRequested }">
+          <section
+            v-if="handleModeRequested"
+            class="side-panel work-order-panel"
+            :class="{ emphasized: handleModeRequested }"
+          >
             <div class="section-heading compact">
               <span class="heading-mark"></span>
               <h3>办理检查项</h3>
@@ -554,7 +510,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back, Connection, Delete as DeleteIcon, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { checklistApi, projectApi, taskApi } from '@/api'
+import { checklistApi, projectApi, rectificationApi, taskApi } from '@/api'
 import {
   CONTROL_FREQUENCY_OPTIONS,
   EVALUATION_TYPE_OPTIONS,
@@ -577,8 +533,14 @@ import type {
   ControlChecklist,
   Project,
   ProjectTaskWorkOrder,
+  RectificationOrder,
   WorkOrderProvider,
 } from '@/types'
+
+type BackendPage<T> = {
+  records?: T[]
+  list?: T[]
+}
 
 interface WorkOrderLogAttachment {
   id: string
@@ -599,8 +561,6 @@ const workOrderDeletingIds = ref(new Set<string>())
 const workOrderReturningIds = ref(new Set<string>())
 const workOrderRectificationCreatingIds = ref(new Set<string>())
 const workOrderRiskAcceptingIds = ref(new Set<string>())
-const workOrderBatchRectificationCreating = ref(false)
-const workOrderBatchRiskAccepting = ref(false)
 const workOrderMode = ref<WorkOrderProvider>('oms')
 const workOrderForm = ref({
   taskName: '',
@@ -626,7 +586,7 @@ const workOrderDetailVisible = ref(false)
 const selectedWorkOrder = ref<ProjectTaskWorkOrder>()
 const workOrderDetailRefreshing = ref(false)
 const archivePreviewVisible = ref(false)
-const allPendingRiskWorkOrderId = '__all_pending_nonconforming__'
+const taskRectifications = ref<RectificationOrder[]>([])
 const auditResultOptions = [
   { label: '待审核', value: 'pending' },
   { label: '通过', value: 'passed' },
@@ -638,7 +598,7 @@ onMounted(async () => {
   await userStore.ensureUserInfoLoaded()
   await Promise.all([loadChecklistOptions(), loadTask()])
   resetWorkOrderForm()
-  await loadWorkOrders()
+  await Promise.all([loadWorkOrders(), loadTaskRectifications()])
 })
 
 const projectId = computed(
@@ -706,6 +666,9 @@ const canHandleInspectionItem = computed(() => {
     (canManageProject.value || isCurrentInspectionItemAssignee.value)
   )
 })
+const canOperateInspectionItem = computed(
+  () => handleModeRequested.value && canHandleInspectionItem.value,
+)
 const inspectionItemHandleTip = computed(() => {
   if (!project.value || !task.value) return '检查项数据加载后才能办理'
   if (!hasInspectionItemAssignee.value) return '请先分配检查项负责人'
@@ -727,10 +690,6 @@ const workOrderHandlers = computed(() =>
     })),
 )
 const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => workOrders.value)
-const pendingNonconformingWorkOrders = computed(() =>
-  visibleWorkOrders.value.filter((order) => workOrderNonconformityPending(order)),
-)
-const workOrderDispositionReady = computed(() => pendingNonconformingWorkOrders.value.length > 0)
 const selectedWorkOrderLogRows = computed(() =>
   selectedWorkOrder.value ? workOrderLogRows(selectedWorkOrder.value) : [],
 )
@@ -861,6 +820,20 @@ const loadWorkOrders = async () => {
       : await taskApi.listWorkOrders(projectId.value, task.value.id)
 }
 
+const loadTaskRectifications = async () => {
+  if (!task.value || !projectId.value) {
+    taskRectifications.value = []
+    return
+  }
+  const page = (await rectificationApi.list({
+    page: 1,
+    pageSize: 500,
+    projectId: projectId.value,
+  })) as BackendPage<RectificationOrder>
+  const records = page.records || page.list || []
+  taskRectifications.value = records.filter((item) => item.taskId === task.value?.id)
+}
+
 const resetWorkOrderForm = () => {
   const currentTask = task.value
   if (!currentTask) return
@@ -880,7 +853,13 @@ const resetWorkOrderForm = () => {
 }
 
 const handleCreateWorkOrders = async () => {
-  if (!project.value || !task.value || workOrderHandlers.value.length === 0) return
+  if (
+    !canOperateInspectionItem.value ||
+    !project.value ||
+    !task.value ||
+    workOrderHandlers.value.length === 0
+  )
+    return
   workOrderSubmitting.value = true
   try {
     await taskApi.createWorkOrders(project.value.id, task.value.id, {
@@ -961,19 +940,9 @@ const toggleWorkOrderReturn = (order: ProjectTaskWorkOrder) => {
 }
 
 const openWorkOrderRisk = (order: ProjectTaskWorkOrder) => {
-  if (!workOrderDispositionActionable(order)) return
+  if (!workOrderRiskAcceptable(order)) return
   workOrderRiskForm.value = {
     workOrderId: order.id,
-    reason: '',
-  }
-  closeWorkOrderReview()
-  closeWorkOrderReturn()
-}
-
-const openAllPendingWorkOrderRisk = () => {
-  if (!workOrderDispositionReady.value) return
-  workOrderRiskForm.value = {
-    workOrderId: allPendingRiskWorkOrderId,
     reason: '',
   }
   closeWorkOrderReview()
@@ -1038,7 +1007,7 @@ const handleReturnWorkOrder = async (order: ProjectTaskWorkOrder) => {
 }
 
 const handleCreateWorkOrderRectification = async (order: ProjectTaskWorkOrder) => {
-  if (!task.value || !projectId.value || !workOrderDispositionActionable(order)) return
+  if (!task.value || !projectId.value || !workOrderRectificationCreatable(order)) return
   workOrderRectificationCreatingIds.value = new Set([
     ...workOrderRectificationCreatingIds.value,
     order.id,
@@ -1059,36 +1028,9 @@ const handleCreateWorkOrderRectification = async (order: ProjectTaskWorkOrder) =
   }
 }
 
-const handleCreateAllPendingRectifications = async () => {
-  if (!task.value || !projectId.value || !workOrderDispositionReady.value) return
-  const orders = [...pendingNonconformingWorkOrders.value]
-  workOrderBatchRectificationCreating.value = true
-  workOrderRectificationCreatingIds.value = new Set([
-    ...workOrderRectificationCreatingIds.value,
-    ...orders.map((order) => order.id),
-  ])
-  try {
-    for (const order of orders) {
-      await taskApi.createWorkOrderRectification(
-        projectId.value,
-        task.value.id,
-        order.id,
-      )
-    }
-    closeWorkOrderRisk()
-    await loadTask()
-    ElMessage.success(`已为 ${orders.length} 个工单生成整改单`)
-  } finally {
-    const nextCreatingIds = new Set(workOrderRectificationCreatingIds.value)
-    orders.forEach((order) => nextCreatingIds.delete(order.id))
-    workOrderRectificationCreatingIds.value = nextCreatingIds
-    workOrderBatchRectificationCreating.value = false
-  }
-}
-
 const handleAcceptWorkOrderRisk = async (order: ProjectTaskWorkOrder) => {
   if (!task.value || !projectId.value || workOrderRiskForm.value.workOrderId !== order.id) return
-  if (!workOrderDispositionActionable(order)) return
+  if (!workOrderRiskAcceptable(order)) return
   const reason = workOrderRiskForm.value.reason.trim()
   if (!reason) return
   workOrderRiskAcceptingIds.value = new Set([...workOrderRiskAcceptingIds.value, order.id])
@@ -1106,44 +1048,6 @@ const handleAcceptWorkOrderRisk = async (order: ProjectTaskWorkOrder) => {
     const nextRiskAcceptingIds = new Set(workOrderRiskAcceptingIds.value)
     nextRiskAcceptingIds.delete(order.id)
     workOrderRiskAcceptingIds.value = nextRiskAcceptingIds
-  }
-}
-
-const handleAcceptAllPendingWorkOrderRisk = async () => {
-  if (
-    !task.value ||
-    !projectId.value ||
-    !workOrderDispositionReady.value ||
-    workOrderRiskForm.value.workOrderId !== allPendingRiskWorkOrderId
-  ) {
-    return
-  }
-  const reason = workOrderRiskForm.value.reason.trim()
-  if (!reason) return
-  const orders = [...pendingNonconformingWorkOrders.value]
-  workOrderBatchRiskAccepting.value = true
-  workOrderRiskAcceptingIds.value = new Set([
-    ...workOrderRiskAcceptingIds.value,
-    ...orders.map((order) => order.id),
-  ])
-  try {
-    for (const order of orders) {
-      const disposed = await taskApi.acceptWorkOrderRisk(projectId.value, task.value.id, order.id, {
-        reason,
-      })
-      workOrders.value = workOrders.value.map((item) => (item.id === disposed.id ? disposed : item))
-      if (selectedWorkOrder.value?.id === disposed.id) {
-        selectedWorkOrder.value = disposed
-      }
-    }
-    closeWorkOrderRisk()
-    await loadTask()
-    ElMessage.success(`已记录 ${orders.length} 个工单承担风险`)
-  } finally {
-    const nextRiskAcceptingIds = new Set(workOrderRiskAcceptingIds.value)
-    orders.forEach((order) => nextRiskAcceptingIds.delete(order.id))
-    workOrderRiskAcceptingIds.value = nextRiskAcceptingIds
-    workOrderBatchRiskAccepting.value = false
   }
 }
 
@@ -1173,7 +1077,7 @@ const refreshWorkOrderDetail = async (order: ProjectTaskWorkOrder) => {
 }
 
 const handleDeleteWorkOrder = async (order: ProjectTaskWorkOrder) => {
-  if (!task.value || !projectId.value) return
+  if (!task.value || !projectId.value || !workOrderDeletable(order)) return
   workOrderDeletingIds.value = new Set([...workOrderDeletingIds.value, order.id])
   try {
     await taskApi.deleteWorkOrder(projectId.value, task.value.id, order.id)
@@ -1301,28 +1205,39 @@ const workOrderReviewLocked = (order: ProjectTaskWorkOrder) =>
   Boolean(order.reviewLocked) || lockedReviewResults.includes(workOrderReviewResultOf(order))
 
 const workOrderReturnable = (order: ProjectTaskWorkOrder) =>
+  canOperateInspectionItem.value &&
   !workOrderReviewLocked(order) &&
   workOrderReturnableStatusLabels.includes(workOrderStatusLabel(order))
 
 const workOrderReviewable = (order: ProjectTaskWorkOrder) =>
+  canOperateInspectionItem.value &&
   order.reviewable === true &&
   !workOrderReviewLocked(order) &&
   workOrderReviewableStatusLabels.includes(workOrderStatusLabel(order))
 
-const workOrderDeletable = (order: ProjectTaskWorkOrder) => !workOrderReviewLocked(order)
+const workOrderDeletable = (order: ProjectTaskWorkOrder) =>
+  canOperateInspectionItem.value && !workOrderReviewLocked(order)
 
 const workOrderNonconformityPending = (order: ProjectTaskWorkOrder) =>
   workOrderReviewResultOf(order) === 'rectification_required' &&
   !order.nonconformityDisposition
 
-const workOrderDispositionActionable = (order: ProjectTaskWorkOrder) =>
+const sourceWorkOrderHasRectification = (order: ProjectTaskWorkOrder) =>
+  taskRectifications.value.some((item) => item.sourceWorkOrderRecordId === order.id)
+
+const workOrderRectificationCreatable = (order: ProjectTaskWorkOrder) =>
+  canOperateInspectionItem.value &&
   workOrderNonconformityPending(order)
+
+const workOrderRiskAcceptable = (order: ProjectTaskWorkOrder) =>
+  workOrderRectificationCreatable(order) && !sourceWorkOrderHasRectification(order)
 
 const nonconformityDispositionLabel = (order: ProjectTaskWorkOrder) => {
   const map: Record<string, string> = {
     rectification_created: '已生成整改单',
     risk_accepted: '承担风险',
   }
+  if (sourceWorkOrderHasRectification(order)) return '已生成整改单'
   return map[String(order.nonconformityDisposition || '')] || '待处置'
 }
 
@@ -1859,13 +1774,6 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
   grid-column: 1 / -1;
   padding-top: 10px;
   border-top: 1px solid #e2e8f0;
-}
-
-.batch-risk-panel {
-  padding: 12px;
-  background: #fff7f7;
-  border: 1px solid #fecaca;
-  border-radius: 8px;
 }
 
 .provider-badge {

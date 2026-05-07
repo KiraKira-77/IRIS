@@ -64,6 +64,14 @@ type RectificationCreatePayload = {
   deadline?: string
 }
 
+type RectificationWorkOrderCreatePayload = {
+  title: string
+  description?: string
+  handlerId: string
+  handlerEmployeeNo: string
+  handlerName: string
+}
+
 export const authApi = {
   login: (data: { account: string; password: string }) =>
     request.post<AuthLoginResult>('/v1/auth/login', data),
@@ -206,13 +214,14 @@ export const rectificationApi = {
   create: (data: RectificationCreatePayload) =>
     request.post<RectificationOrder>('/v1/rectifications', data),
   submit: (id: string) => request.post<RectificationOrder>(`/v1/rectifications/${id}/submit`),
-  createWorkOrder: (id: string) =>
-    request.post<RectificationOrder>(`/v1/rectifications/${id}/work-order`),
+  createWorkOrder: (id: string, data: RectificationWorkOrderCreatePayload) =>
+    request.post<RectificationOrder>(`/v1/rectifications/${id}/work-order`, data),
   returnWorkOrder: (id: string, data: WorkOrderReturnPayload) =>
     request.post<RectificationOrder>(`/v1/rectifications/${id}/work-order/return`, data),
   upload: (id: string, file: File) => request.upload(`/v1/rectifications/${id}/upload`, file),
   review: (id: string, data: { action: 'approve' | 'reject'; comment?: string }) =>
     request.post<RectificationOrder>(`/v1/rectifications/${id}/review`, data),
+  delete: (id: string) => request.delete(`/v1/rectifications/${id}`),
 }
 
 export const dashboardApi = {

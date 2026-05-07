@@ -59,10 +59,19 @@
           </el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="详情" width="100" fixed="right">
+      <el-table-column label="操作" width="150" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click.stop="handleRowClick(row)">
             查看
+          </el-button>
+          <el-button
+            v-if="canDeleteRow(row)"
+            link
+            type="danger"
+            size="small"
+            @click.stop="handleDelete(row)"
+          >
+            删除
           </el-button>
         </template>
       </el-table-column>
@@ -71,13 +80,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { Plus, Search } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { rectificationApi } from '@/api'
+import { useUserStore } from '@/stores'
 import type { PageResult, RectificationOrder, RectStatus } from '@/types'
 
 const router = useRouter()
+const userStore = useUserStore()
 const searchForm = reactive({ keyword: '', status: '' })
 const tableData = ref<RectificationOrder[]>([])
 const loading = ref(false)
@@ -89,8 +101,9 @@ type BackendPage<T> = PageResult<T> & {
 
 const pageRecords = <T,>(page: BackendPage<T>) => page.records || page.list || []
 
-onMounted(() => {
-  void loadRectifications()
+onMounted(async () => {
+  await userStore.ensureUserInfoLoaded()
+  await loadRectifications()
 })
 
 const loadRectifications = async () => {
@@ -112,6 +125,27 @@ const handleRowClick = (row: RectificationOrder) => {
   router.push(`/rectification/detail/${row.id}`)
 }
 
+const handleDelete = async (row: RectificationOrder) => {
+  if (!canDeleteRow(row)) return
+  await ElMessageBox.confirm(`确认删除整改单「${row.title || row.code}」吗？`, '确认删除整改单', {
+    type: 'warning',
+    confirmButtonText: '确认删除',
+  })
+  await rectificationApi.delete(row.id)
+  ElMessage.success('整改单已删除')
+  await loadRectifications()
+}
+
+const currentUserIdentityValues = computed(() => {
+  const user = userStore.userInfo
+  return new Set([user?.id, user?.username, user?.name].map(normalizeIdentityValue).filter(Boolean))
+})
+
+const canDeleteRow = (row: RectificationOrder) =>
+  row.status === 'pending' &&
+  (currentUserIdentityValues.value.has(normalizeIdentityValue(row.assigneeId)) ||
+    currentUserIdentityValues.value.has(normalizeIdentityValue(row.assigneeName)))
+
 const statusType = (status: RectStatus) => {
   const map: Record<RectStatus, 'info' | 'primary' | 'success'> = {
     pending: 'info',
@@ -129,6 +163,8 @@ const statusLabel = (status: RectStatus) => {
   }
   return map[status]
 }
+
+const normalizeIdentityValue = (value?: string | number | null) => String(value || '').trim()
 </script>
 
 <style lang="scss" scoped>
