@@ -178,7 +178,7 @@ export const taskApi = {
       data,
     ),
   createWorkOrderRectification: (projectId: string, taskId: string, workOrderId: string) =>
-    request.post<ProjectTaskWorkOrder>(
+    request.post<RectificationOrder>(
       `/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}/rectification`,
     ),
   acceptWorkOrderRisk: (
@@ -206,9 +206,13 @@ export const rectificationApi = {
   create: (data: RectificationCreatePayload) =>
     request.post<RectificationOrder>('/v1/rectifications', data),
   submit: (id: string) => request.post<RectificationOrder>(`/v1/rectifications/${id}/submit`),
+  createWorkOrder: (id: string) =>
+    request.post<RectificationOrder>(`/v1/rectifications/${id}/work-order`),
+  returnWorkOrder: (id: string, data: WorkOrderReturnPayload) =>
+    request.post<RectificationOrder>(`/v1/rectifications/${id}/work-order/return`, data),
   upload: (id: string, file: File) => request.upload(`/v1/rectifications/${id}/upload`, file),
   review: (id: string, data: { action: 'approve' | 'reject'; comment?: string }) =>
-    request.post(`/v1/rectifications/${id}/review`, data),
+    request.post<RectificationOrder>(`/v1/rectifications/${id}/review`, data),
 }
 
 export const dashboardApi = {

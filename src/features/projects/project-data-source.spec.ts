@@ -272,6 +272,7 @@ describe('project management data sources', () => {
     expect(projectTaskSource).toContain('workOrderReviewable(order)')
     expect(projectTaskSource).toContain('workOrderReturnable(order)')
     expect(projectTaskSource).toContain('workOrderNonconformityPending(order)')
+    expect(projectTaskSource).not.toContain('!order.rectificationId')
     expect(projectTaskSource).toContain('nonconformityDispositionLabel')
     expect(projectTaskSource).toContain('v-if="workOrderReviewable(order)"')
     expect(projectTaskSource).toContain('workOrderReviewableStatusLabels')
@@ -310,7 +311,9 @@ describe('project management data sources', () => {
     expect(rectificationCreateSource).toContain('rectificationApi.create')
     expect(rectificationCreateSource).toContain('projectApi.list')
     expect(rectificationDetailSource).toContain('rectificationApi.detail')
-    expect(rectificationDetailSource).toContain('rectificationApi.submit')
+    expect(rectificationDetailSource).toContain('rectificationApi.createWorkOrder')
+    expect(rectificationDetailSource).toContain('rectificationApi.returnWorkOrder')
+    expect(rectificationDetailSource).toContain('rectificationApi.review')
 
     for (const source of [
       rectificationListSource,

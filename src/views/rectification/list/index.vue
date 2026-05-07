@@ -1,38 +1,24 @@
 <template>
   <div class="page-container iris-page">
     <div class="page-header">
-      <div class="left">
+      <div>
         <h2 class="page-title">整改管理</h2>
-        <span class="page-subtitle">内控缺陷整改的全流程跟踪</span>
+        <span class="page-subtitle">按项目、检查项和整改 OMS 工单跟踪整改闭环</span>
       </div>
-      <div class="right">
-        <el-button
-          type="primary"
-          :icon="Plus"
-          size="large"
-          @click="$router.push('/rectification/create')"
-          class="shadow-btn"
-          >新建整改单</el-button
-        >
-      </div>
+      <el-button type="primary" :icon="Plus" @click="router.push('/rectification/create')">
+        新建整改单
+      </el-button>
     </div>
 
-    <!-- 搜索 -->
     <div class="search-bar">
       <el-form :inline="true" :model="searchForm">
-        <el-form-item label="整改单号">
-          <el-input v-model="searchForm.keyword" placeholder="输入单号或标题" clearable />
+        <el-form-item label="任务名称">
+          <el-input v-model="searchForm.keyword" placeholder="任务名称/整改单标题" clearable />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select
-            v-model="searchForm.status"
-            placeholder="全部状态"
-            clearable
-            style="width: 140px"
-          >
-            <el-option label="待整改" value="pending" />
-            <el-option label="整改中" value="in_progress" />
-            <el-option label="已提交" value="submitted" />
+          <el-select v-model="searchForm.status" placeholder="全部状态" clearable class="status-select">
+            <el-option label="待处理" value="pending" />
+            <el-option label="进行中" value="in_progress" />
             <el-option label="已完成" value="approved" />
           </el-select>
         </el-form-item>
@@ -43,68 +29,41 @@
     </div>
 
     <el-table
+      v-loading="loading"
       :data="tableData"
+      class="clickable-table"
       style="width: 100%"
       stripe
-      size="large"
       @row-click="handleRowClick"
-      class="clickable-table"
-      v-loading="loading"
     >
-      <el-table-column prop="code" label="整改单号" width="160">
+      <el-table-column label="任务名称" min-width="260">
         <template #default="{ row }">
-          <el-tag effect="plain" type="info" class="font-mono">{{ row.code }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="title" label="整改标题" min-width="260">
-        <template #default="{ row }">
-          <span style="font-weight: 600; color: #1e293b">{{ row.title }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="source" label="来源" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.source === 'task' ? 'warning' : 'info'" effect="light" round>
-            {{ row.source === 'task' ? '检查发现' : '自查发现' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="assigneeName" label="负责人" width="120">
-        <template #default="{ row }">
-          <div style="display: flex; align-items: center">
-            <el-avatar
-              size="small"
-              style="margin-right: 8px; background: #e2e8f0; color: #64748b"
-              >{{ row.assigneeName?.charAt(0) || '-' }}</el-avatar
-            >
-            {{ row.assigneeName }}
+          <div class="task-cell">
+            <strong>{{ row.taskName || row.title }}</strong>
+            <span>{{ row.code }}</span>
           </div>
         </template>
       </el-table-column>
-      <el-table-column prop="deadline" label="截止日期" width="140">
+      <el-table-column prop="assigneeName" label="对接人" width="140" />
+      <el-table-column prop="projectName" label="所属项目" min-width="180" />
+      <el-table-column label="下达时间" width="170">
+        <template #default="{ row }">{{ row.issuedAt || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="完成时间" width="170">
+        <template #default="{ row }">{{ row.completedAt || '—' }}</template>
+      </el-table-column>
+      <el-table-column label="状态" width="110">
         <template #default="{ row }">
-          <span :class="{ 'text-danger': isOverdue(row.deadline) }">{{ row.deadline }}</span>
-          <el-tag
-            v-if="isOverdue(row.deadline)"
-            type="danger"
-            size="small"
-            effect="dark"
-            style="margin-left: 4px; border-radius: 4px"
-            >逾期</el-tag
-          >
+          <el-tag :type="statusType(row.status)" effect="light">
+            {{ statusLabel(row.status) }}
+          </el-tag>
         </template>
       </el-table-column>
-      <el-table-column prop="status" label="状态" width="120">
+      <el-table-column label="详情" width="100" fixed="right">
         <template #default="{ row }">
-          <el-tag :type="statusType(row.status)" effect="dark" size="small">{{
-            statusLabel(row.status)
-          }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="120" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" size="small" @click.stop="handleRowClick(row)"
-            >查看</el-button
-          >
+          <el-button link type="primary" size="small" @click.stop="handleRowClick(row)">
+            查看
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -112,11 +71,11 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, reactive } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 import { rectificationApi } from '@/api'
-import type { PageResult, RectificationOrder } from '@/types'
+import type { PageResult, RectificationOrder, RectStatus } from '@/types'
 
 const router = useRouter()
 const searchForm = reactive({ keyword: '', status: '' })
@@ -153,25 +112,22 @@ const handleRowClick = (row: RectificationOrder) => {
   router.push(`/rectification/detail/${row.id}`)
 }
 
-const isOverdue = (date?: string) => !!date && new Date(date) < new Date()
-
-const statusType = (val: string) => {
-  const map: any = {
-    pending: 'danger',
+const statusType = (status: RectStatus) => {
+  const map: Record<RectStatus, 'info' | 'primary' | 'success'> = {
+    pending: 'info',
     in_progress: 'primary',
-    submitted: 'warning',
     approved: 'success',
   }
-  return map[val] || 'info'
+  return map[status]
 }
-const statusLabel = (val: string) => {
-  const map: any = {
-    pending: '待整改',
-    in_progress: '整改中',
-    submitted: '已提交',
+
+const statusLabel = (status: RectStatus) => {
+  const map: Record<RectStatus, string> = {
+    pending: '待处理',
+    in_progress: '进行中',
     approved: '已完成',
   }
-  return map[val] || val
+  return map[status]
 }
 </script>
 
@@ -183,20 +139,36 @@ const statusLabel = (val: string) => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+
   .page-title {
+    margin-bottom: 4px;
+    color: $iris-text-primary;
     font-size: 24px;
     font-weight: 700;
-    color: $iris-text-primary;
-    margin-bottom: 4px;
-    letter-spacing: -0.5px;
   }
+}
+
+.status-select {
+  width: 140px;
 }
 
 .clickable-table {
   cursor: pointer;
 }
-.text-danger {
-  color: $iris-danger;
-  font-weight: 600;
+
+.task-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  strong {
+    color: $iris-text-primary;
+    font-weight: 600;
+  }
+
+  span {
+    color: $iris-text-secondary;
+    font-size: 12px;
+  }
 }
 </style>

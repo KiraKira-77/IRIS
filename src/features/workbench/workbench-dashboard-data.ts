@@ -304,9 +304,7 @@ function planActivityPrefix(status: string): string {
 
 function rectificationActivityPrefix(status: RectStatus): string {
   if (status === 'approved') return '整改已闭环'
-  if (status === 'reviewing' || status === 'submitted') return '整改待复核'
   if (status === 'in_progress') return '整改处理中'
-  if (status === 'rejected') return '整改已退回'
   return '整改待处理'
 }
 
@@ -338,23 +336,18 @@ function rectificationStatusLabel(status: RectStatus): string {
   const labels: Record<RectStatus, string> = {
     pending: '待整改',
     in_progress: '整改中',
-    submitted: '已提交',
-    reviewing: '复核中',
     approved: '已闭环',
-    rejected: '已退回',
   }
   return labels[status]
 }
 
 function rectificationStatusType(status: RectStatus): string {
   if (status === 'approved') return 'success'
-  if (status === 'rejected') return 'danger'
-  if (status === 'submitted' || status === 'reviewing') return 'warning'
   return 'primary'
 }
 
 function rectificationPriority(rectification: RectificationOrder, now: Date): 'high' | 'medium' | 'low' {
-  if (rectification.status === 'rejected' || isBeforeToday(rectification.deadline, now)) return 'high'
+  if (isBeforeToday(rectification.deadline, now)) return 'high'
   if (rectification.status === 'pending' || rectification.status === 'in_progress') return 'medium'
   return 'low'
 }

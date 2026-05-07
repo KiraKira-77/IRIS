@@ -229,14 +229,6 @@
                   >
                     {{ workOrderRiskForm.workOrderId === order.id ? '收起风险' : '承担风险' }}
                   </el-button>
-                  <el-button
-                    v-if="order.rectificationId"
-                    link
-                    type="warning"
-                    @click="router.push(`/rectification/detail/${order.rectificationId}`)"
-                  >
-                    查看整改
-                  </el-button>
                   <el-popconfirm
                     v-if="workOrderDeletable(order)"
                     title="确认删除该工单吗？"
@@ -285,14 +277,6 @@
                       @click="handleConfirmWorkOrderReview"
                     >
                       确认工单审核
-                    </el-button>
-                    <el-button
-                      v-if="order.rectificationId"
-                      link
-                      type="warning"
-                      @click="router.push(`/rectification/detail/${order.rectificationId}`)"
-                    >
-                      查看整改
                     </el-button>
                   </el-form>
                 </div>
@@ -743,15 +727,10 @@ const workOrderHandlers = computed(() =>
     })),
 )
 const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => workOrders.value)
-const workOrdersAllReviewed = computed(
-  () => visibleWorkOrders.value.length > 0 && visibleWorkOrders.value.every(workOrderReviewLocked),
-)
 const pendingNonconformingWorkOrders = computed(() =>
   visibleWorkOrders.value.filter((order) => workOrderNonconformityPending(order)),
 )
-const workOrderDispositionReady = computed(
-  () => workOrdersAllReviewed.value && pendingNonconformingWorkOrders.value.length > 0,
-)
+const workOrderDispositionReady = computed(() => pendingNonconformingWorkOrders.value.length > 0)
 const selectedWorkOrderLogRows = computed(() =>
   selectedWorkOrder.value ? workOrderLogRows(selectedWorkOrder.value) : [],
 )
@@ -1065,17 +1044,14 @@ const handleCreateWorkOrderRectification = async (order: ProjectTaskWorkOrder) =
     order.id,
   ])
   try {
-    const disposed = await taskApi.createWorkOrderRectification(
+    const created = await taskApi.createWorkOrderRectification(
       projectId.value,
       task.value.id,
       order.id,
     )
-    workOrders.value = workOrders.value.map((item) => (item.id === disposed.id ? disposed : item))
-    if (selectedWorkOrder.value?.id === disposed.id) {
-      selectedWorkOrder.value = disposed
-    }
     closeWorkOrderRisk()
     ElMessage.success('该工单整改单已生成')
+    router.push(`/rectification/detail/${created.id}`)
   } finally {
     const nextCreatingIds = new Set(workOrderRectificationCreatingIds.value)
     nextCreatingIds.delete(order.id)
@@ -1093,15 +1069,11 @@ const handleCreateAllPendingRectifications = async () => {
   ])
   try {
     for (const order of orders) {
-      const disposed = await taskApi.createWorkOrderRectification(
+      await taskApi.createWorkOrderRectification(
         projectId.value,
         task.value.id,
         order.id,
       )
-      workOrders.value = workOrders.value.map((item) => (item.id === disposed.id ? disposed : item))
-      if (selectedWorkOrder.value?.id === disposed.id) {
-        selectedWorkOrder.value = disposed
-      }
     }
     closeWorkOrderRisk()
     await loadTask()
@@ -1341,11 +1313,10 @@ const workOrderDeletable = (order: ProjectTaskWorkOrder) => !workOrderReviewLock
 
 const workOrderNonconformityPending = (order: ProjectTaskWorkOrder) =>
   workOrderReviewResultOf(order) === 'rectification_required' &&
-  !order.rectificationId &&
   !order.nonconformityDisposition
 
 const workOrderDispositionActionable = (order: ProjectTaskWorkOrder) =>
-  workOrderDispositionReady.value && workOrderNonconformityPending(order)
+  workOrderNonconformityPending(order)
 
 const nonconformityDispositionLabel = (order: ProjectTaskWorkOrder) => {
   const map: Record<string, string> = {

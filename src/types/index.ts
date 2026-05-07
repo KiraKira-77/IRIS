@@ -593,28 +593,35 @@ export interface WorkOrder {
 // 整改管理
 // ===========================
 export type RectSource = 'task' | 'manual'
-export type RectStatus =
-  | 'pending'
-  | 'in_progress'
-  | 'submitted'
-  | 'reviewing'
-  | 'approved'
-  | 'rejected'
+export type RectStatus = 'pending' | 'in_progress' | 'approved'
 export interface RectificationOrder {
   id: string
   code: string
   source: RectSource
   taskId?: string
+  taskName?: string
+  taskDescription?: string
   projectId?: string
   projectName?: string
+  checkContent?: string
+  sourceWorkOrderRecordId?: string
+  sourceOmsWorkOrderId?: string
   title: string
   description: string
   assigneeId: string
   assigneeName: string
   reviewerId: string
   reviewerName: string
+  issuedAt?: string
   status: RectStatus
   deadline: string
+  completedAt?: string
+  reviewResult?: 'approve' | 'reject'
+  rectificationOmsWorkOrderId?: string
+  rectificationOmsStatus?: string
+  rectificationOmsStatusName?: string
+  rectificationWorkOrderCreatedAt?: string
+  rectificationWorkOrderCompletedAt?: string
   attachments: Attachment[]
   reviewComment?: string
   logs: OperationLog[]
