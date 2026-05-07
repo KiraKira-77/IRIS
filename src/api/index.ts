@@ -144,6 +144,7 @@ export const projectApi = {
     request.put<Project>(`/v1/projects/${id}`, data),
   start: (id: string) => request.post<Project>(`/v1/projects/${id}/start`),
   complete: (id: string) => request.post<Project>(`/v1/projects/${id}/complete`),
+  archive: (id: string) => request.post<Project>(`/v1/projects/${id}/archive`),
   assignTasks: (
     id: string,
     data: {

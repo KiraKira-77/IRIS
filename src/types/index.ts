@@ -298,10 +298,21 @@ export interface ChecklistUpsertPayload {
 export interface Archive {
   id: string
   projectId: string
+  projectCode?: string
   projectName: string
   archiveDate: string
+  archivedBy?: string
+  archivedByName?: string
+  taskCount?: number
+  workOrderCount?: number
+  rectificationCount?: number
+  documentCount?: number
+  snapshotVersion?: string
+  snapshotJson?: string
   documents: ArchiveDocument[]
   status: 'active' | 'sealed'
+  createdAt?: string
+  updatedAt?: string
 }
 export interface ArchiveDocument {
   id: string

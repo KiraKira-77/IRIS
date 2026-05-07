@@ -32,6 +32,7 @@ const rectificationDetailSource = readFileSync(
   join(here, '../../views/rectification/detail/index.vue'),
   'utf8',
 )
+const archiveSource = readFileSync(join(here, '../../views/resource/archives/index.vue'), 'utf8')
 const apiSource = readFileSync(join(here, '../../api/index.ts'), 'utf8')
 const routerSource = readFileSync(join(here, '../../router/index.ts'), 'utf8')
 const typeSource = readFileSync(join(here, '../../types/index.ts'), 'utf8')
@@ -410,11 +411,29 @@ describe('project management data sources', () => {
 
     expect(projectApiSource).toContain('start: (id: string)')
     expect(projectApiSource).toContain('complete: (id: string)')
+    expect(projectApiSource).toContain('archive: (id: string)')
+    expect(projectApiSource).toContain('`/v1/projects/${id}/archive`')
     expect(projectApiSource).toContain('update: (id: string, data: ProjectUpsertPayload)')
     expect(projectApiSource).toContain('delete: (id: string)')
     expect(projectApiSource).not.toContain('/close')
-    expect(projectApiSource).not.toContain('/archive')
     expect(projectApiSource).not.toContain('update: (id: string, data: Partial<Project>)')
+  })
+
+  it('archives completed projects from project detail into a single project archive', () => {
+    expect(projectDetailSource).toContain('handleArchiveProject')
+    expect(projectDetailSource).toContain('projectApi.archive')
+    expect(projectDetailSource).toContain("project.status === 'completed'")
+    expect(projectDetailSource).toContain('归档项目')
+  })
+
+  it('uses real archive APIs and shows one project archive with full snapshot metadata', () => {
+    expect(archiveSource).toContain('archiveApi.list')
+    expect(archiveSource).toContain('archiveApi.detail')
+    expect(archiveSource).toContain('snapshotJson')
+    expect(archiveSource).toContain('taskCount')
+    expect(archiveSource).toContain('workOrderCount')
+    expect(archiveSource).toContain('rectificationCount')
+    expect(archiveSource).not.toContain('mockArchives')
   })
 
   it('shows a project start action on the project list for not started projects', () => {

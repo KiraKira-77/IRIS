@@ -47,6 +47,13 @@
           >
             完成项目
           </el-button>
+          <el-button
+            v-if="canManageProject && project.status === 'completed'"
+            type="warning"
+            @click="handleArchiveProject"
+          >
+            归档项目
+          </el-button>
         </div>
       </div>
 
@@ -342,6 +349,25 @@ const handleCompleteProject = async () => {
     })
     project.value = normalizeProject(await projectApi.complete(project.value.id))
     ElMessage.success('项目已完成')
+  } catch {
+    // cancelled or request failed
+  }
+}
+
+const handleArchiveProject = async () => {
+  if (!project.value) return
+  try {
+    await ElMessageBox.confirm(
+      '归档后会生成一条项目档案，包含项目、检查项、OMS 工单、整改单和附件快照，项目将不可再编辑或办理。确认归档吗？',
+      '归档项目',
+      {
+        type: 'warning',
+        confirmButtonText: '确认归档',
+        cancelButtonText: '取消',
+      },
+    )
+    project.value = normalizeProject(await projectApi.archive(project.value.id))
+    ElMessage.success('项目已归档')
   } catch {
     // cancelled or request failed
   }
