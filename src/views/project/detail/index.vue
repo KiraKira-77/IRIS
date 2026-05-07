@@ -281,6 +281,7 @@ const canEditProject = computed(() => {
 const canAssignInspectionItems = computed(() => {
   return (
     !!project.value &&
+    canManageProject.value &&
     ['not_started', 'in_progress'].includes(project.value.status) &&
     assignableMembers.value.length > 0
   )
@@ -347,7 +348,7 @@ const handleCompleteProject = async () => {
 }
 
 const handleAssignTask = async (task: CheckTask, assigneeId: string) => {
-  if (!project.value || !assigneeId) return
+  if (!canAssignInspectionItems.value || !project.value || !assigneeId) return
   const assignee = assignableMembers.value.find((member) => member.personnelId === assigneeId)
   if (!assignee) return
   assigningTaskId.value = task.id

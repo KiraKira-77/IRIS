@@ -111,10 +111,18 @@ describe('project management data sources', () => {
       '2002',
     ])
     expect(projectDetailSource).toContain('canAssignInspectionItems')
-    expect(projectDetailSource).not.toContain('v-if="canManageProject"')
+    expect(projectDetailSource).toContain(
+      "canManageProject.value &&\n    ['not_started', 'in_progress'].includes(project.value.status)",
+    )
     expect(projectDetailSource).toContain('class="assignee-select"')
     expect(projectDetailSource).toContain('label="负责人" min-width="180"')
     expect(projectDetailSource).not.toContain('style="width: 120px"')
+  })
+
+  it('does not load inspection item work orders for view-only project members', () => {
+    expect(projectTaskSource).toContain('canViewTaskWorkOrders')
+    expect(projectTaskSource).toContain('if (!canViewTaskWorkOrders.value)')
+    expect(projectTaskSource).toContain('当前用户仅可查看检查项基础信息')
   })
 
   it('does not expose batch assignment controls on project inspection items', () => {

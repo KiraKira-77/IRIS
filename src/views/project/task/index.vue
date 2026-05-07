@@ -71,7 +71,7 @@
             </div>
           </section>
 
-          <section class="section-block">
+          <section v-if="canViewTaskWorkOrders" class="section-block">
             <div class="section-heading">
               <span class="heading-mark"></span>
               <h3>工单记录</h3>
@@ -289,6 +289,14 @@
                 </div>
               </div>
             </div>
+          </section>
+          <section v-else class="section-block">
+            <el-alert
+              title="当前用户仅可查看检查项基础信息"
+              type="info"
+              show-icon
+              :closable="false"
+            />
           </section>
         </main>
 
@@ -666,6 +674,9 @@ const canHandleInspectionItem = computed(() => {
     (canManageProject.value || isCurrentInspectionItemAssignee.value)
   )
 })
+const canViewTaskWorkOrders = computed(
+  () => canManageProject.value || isCurrentInspectionItemAssignee.value,
+)
 const canOperateInspectionItem = computed(
   () => handleModeRequested.value && canHandleInspectionItem.value,
 )
@@ -812,6 +823,10 @@ const loadTask = async () => {
 
 const loadWorkOrders = async () => {
   if (!task.value || !projectId.value) {
+    return
+  }
+  if (!canViewTaskWorkOrders.value) {
+    workOrders.value = []
     return
   }
   workOrders.value =
