@@ -93,7 +93,7 @@
                   :loading="workOrderBatchRectificationCreating"
                   @click="handleCreateAllPendingRectifications"
                 >
-                  一键生成整改单
+                  为每个待处置工单生成整改单
                 </el-button>
                 <el-button
                   v-if="workOrderDispositionReady"
@@ -102,7 +102,7 @@
                   size="small"
                   @click="openAllPendingWorkOrderRisk"
                 >
-                  不生成整改单，承担风险
+                  待处置工单承担风险
                 </el-button>
               </div>
             </div>
@@ -137,7 +137,7 @@
                     :disabled="!workOrderRiskForm.reason.trim()"
                     @click="handleAcceptAllPendingWorkOrderRisk"
                   >
-                    确认不生成整改单，承担风险
+                    确认这些工单不生成整改单，承担风险
                   </el-button>
                 </el-form>
               </div>
@@ -158,6 +158,7 @@
                       v-for="item in workOrderRecordRows(order)"
                       :key="item.label"
                       class="work-order-record-field"
+                      :class="{ 'is-wide': item.wide }"
                     >
                       <label>{{ item.label }}</label>
                       <span>{{ item.value }}</span>
@@ -218,7 +219,7 @@
                     :loading="workOrderRectificationCreatingIds.has(order.id)"
                     @click="handleCreateWorkOrderRectification(order)"
                   >
-                    一键生成整改单
+                    生成该工单整改单
                   </el-button>
                   <el-button
                     v-if="workOrderDispositionActionable(order)"
@@ -776,7 +777,7 @@ const workOrderRecordRows = (order: ProjectTaskWorkOrder) => [
     ? [{ label: '处置方式', value: nonconformityDispositionLabel(order) }]
     : []),
   ...(order.nonconformityDisposition === 'risk_accepted'
-    ? [{ label: '承担风险原因', value: order.riskAcceptanceReason || '—' }]
+    ? [{ label: '承担风险原因', value: order.riskAcceptanceReason || '—', wide: true }]
     : []),
 ]
 const workOrderDetailRows = (order: ProjectTaskWorkOrder) => [
@@ -1074,7 +1075,7 @@ const handleCreateWorkOrderRectification = async (order: ProjectTaskWorkOrder) =
       selectedWorkOrder.value = disposed
     }
     closeWorkOrderRisk()
-    ElMessage.success('整改单已生成')
+    ElMessage.success('该工单整改单已生成')
   } finally {
     const nextCreatingIds = new Set(workOrderRectificationCreatingIds.value)
     nextCreatingIds.delete(order.id)
@@ -1104,7 +1105,7 @@ const handleCreateAllPendingRectifications = async () => {
     }
     closeWorkOrderRisk()
     await loadTask()
-    ElMessage.success(`已生成 ${orders.length} 个整改单`)
+    ElMessage.success(`已为 ${orders.length} 个工单生成整改单`)
   } finally {
     const nextCreatingIds = new Set(workOrderRectificationCreatingIds.value)
     orders.forEach((order) => nextCreatingIds.delete(order.id))
@@ -1128,7 +1129,7 @@ const handleAcceptWorkOrderRisk = async (order: ProjectTaskWorkOrder) => {
       selectedWorkOrder.value = disposed
     }
     closeWorkOrderRisk()
-    ElMessage.success('已记录承担风险')
+    ElMessage.success('已记录该工单承担风险')
   } finally {
     const nextRiskAcceptingIds = new Set(workOrderRiskAcceptingIds.value)
     nextRiskAcceptingIds.delete(order.id)
@@ -1694,12 +1695,11 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
   }
 
   span {
-    overflow: hidden;
     font-size: 13px;
     font-weight: 600;
     color: $iris-text-primary;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -1783,7 +1783,7 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
 
 .work-order-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
   padding: 14px 16px;
 }
@@ -1821,12 +1821,12 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
 
   > span {
     flex: 0 0 auto;
-    max-width: 220px;
-    overflow: hidden;
+    max-width: 280px;
     font-size: 13px;
     color: $iris-text-secondary;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    text-align: right;
   }
 }
 
@@ -1838,7 +1838,7 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
 
 .work-order-summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 8px;
   margin-top: 12px;
 }
@@ -1862,11 +1862,15 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
   }
 
   span {
-    overflow: hidden;
     font-size: 13px;
     color: $iris-text-primary;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  &.is-wide {
+    grid-column: 1 / -1;
   }
 }
 
@@ -1874,7 +1878,8 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: flex-end;
+  justify-content: flex-start;
+  padding-top: 10px;
 }
 
 .work-order-review-panel,
@@ -1933,12 +1938,11 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
   }
 
   span {
-    overflow: hidden;
     font-size: 13px;
     font-weight: 600;
     color: $iris-text-primary;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -2024,11 +2028,10 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
   }
 
   span {
-    overflow: hidden;
     font-size: 13px;
     color: $iris-text-primary;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.45;
+    overflow-wrap: anywhere;
   }
 }
 
