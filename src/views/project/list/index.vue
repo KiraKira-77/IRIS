@@ -138,7 +138,7 @@
                 查看
               </el-button>
               <el-button
-                v-if="row.status !== 'archived'"
+                v-if="canEditProject(row)"
                 link
                 type="primary"
                 size="small"
@@ -147,7 +147,7 @@
                 编辑
               </el-button>
               <el-button
-                v-if="row.status === 'not_started'"
+                v-if="canStartProject(row)"
                 link
                 type="success"
                 size="small"
@@ -156,7 +156,7 @@
                 启动
               </el-button>
               <el-button
-                v-if="row.status === 'not_started'"
+                v-if="canDeleteProject(row)"
                 link
                 type="danger"
                 size="small"
@@ -191,6 +191,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi } from '@/api'
 import {
+  getProjectMembers,
   normalizeProjectPage,
   projectChecklistCount,
   projectProgress,
@@ -199,9 +200,11 @@ import {
   projectStatusType,
   projectTimeText,
 } from '@/features/projects/project-data'
+import { useUserStore } from '@/stores'
 import type { Project } from '@/types'
 
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 const tableData = ref<Project[]>([])
 const searchForm = reactive({
@@ -222,9 +225,35 @@ const projectStats = computed(() => ({
   completed: tableData.value.filter((item) => item.status === 'completed').length,
 }))
 
-onMounted(() => {
-  loadProjects()
+onMounted(async () => {
+  await userStore.ensureUserInfoLoaded()
+  await loadProjects()
 })
+
+const currentUserIdentityValues = computed(() => {
+  const user = userStore.userInfo
+  return new Set([user?.id, user?.username, user?.name].map(normalizeIdentityValue).filter(Boolean))
+})
+
+const canManageProjectRow = (row: Project) => {
+  if (currentUserIdentityValues.value.has(normalizeIdentityValue(row.leaderId))) return true
+  if (currentUserIdentityValues.value.has(normalizeIdentityValue(row.leaderName))) return true
+  return getProjectMembers(row).some(
+    (member) =>
+      member.role === 'leader' &&
+      [member.personnelId, member.employeeNo, member.personnelName]
+        .map(normalizeIdentityValue)
+        .some((value) => currentUserIdentityValues.value.has(value)),
+  )
+}
+
+const canEditProject = (row: Project) => row.status !== 'archived' && canManageProjectRow(row)
+
+const canStartProject = (row: Project) =>
+  row.status === 'not_started' && canManageProjectRow(row)
+
+const canDeleteProject = (row: Project) =>
+  row.status === 'not_started' && canManageProjectRow(row)
 
 const loadProjects = async () => {
   loading.value = true
@@ -276,6 +305,7 @@ const handleRowClick = (row: Project) => {
 }
 
 const handleStartProject = async (row: Project) => {
+  if (!canStartProject(row)) return
   try {
     await ElMessageBox.confirm(`确认启动项目「${row.name}」？启动后检查项可开始办理。`, '启动项目', {
       type: 'warning',
@@ -291,6 +321,7 @@ const handleStartProject = async (row: Project) => {
 }
 
 const handleDelete = async (row: Project) => {
+  if (!canDeleteProject(row)) return
   try {
     await ElMessageBox.confirm(`确认删除项目「${row.name}」？`, '删除确认', {
       type: 'error',
@@ -303,6 +334,8 @@ const handleDelete = async (row: Project) => {
     // cancelled or request failed
   }
 }
+
+const normalizeIdentityValue = (value?: string | number | null) => String(value || '').trim()
 </script>
 
 <style lang="scss" scoped>

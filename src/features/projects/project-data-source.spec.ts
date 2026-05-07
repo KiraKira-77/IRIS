@@ -420,8 +420,8 @@ describe('project management data sources', () => {
   it('shows a project start action on the project list for not started projects', () => {
     expect(projectListSource).toContain('handleStartProject(row)')
     expect(projectListSource).toContain('projectApi.start')
-    expect(projectListSource).toContain("row.status === 'not_started'")
-    expect(projectListSource).not.toContain('canStartProject(row)')
+    expect(projectListSource).toContain('canStartProject(row)')
+    expect(projectListSource).toContain('canManageProjectRow')
     expect(projectListSource).toContain('启动')
   })
 
