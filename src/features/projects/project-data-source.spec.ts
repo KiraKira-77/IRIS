@@ -256,9 +256,18 @@ describe('project management data sources', () => {
     expect(projectTaskSource).toContain('handleReturnWorkOrder')
     expect(projectTaskSource).toContain('handleCreateWorkOrderRectification')
     expect(projectTaskSource).toContain('handleAcceptWorkOrderRisk')
+    expect(projectTaskSource).toContain('handleCreateAllPendingRectifications')
+    expect(projectTaskSource).toContain('openAllPendingWorkOrderRisk')
+    expect(projectTaskSource).toContain('workOrderDispositionReady')
+    expect(projectTaskSource).toContain('pendingNonconformingWorkOrders')
+    expect(projectTaskSource).toContain('一键生成整改单')
+    expect(projectTaskSource).toContain('不生成整改单，承担风险')
+    expect(projectTaskSource).toContain('work-order-summary-grid')
+    expect(projectTaskSource).toContain('work-order-title-block')
     expect(projectTaskSource).toContain('workOrderReturnForm')
     expect(projectTaskSource).toContain('workOrderRiskForm')
     expect(projectTaskSource).toContain('toggleWorkOrderReturn')
+    expect(projectTaskSource).not.toContain('order.reviewLocked === true &&')
     expect(projectTaskSource).toContain('workOrderReviewable(order)')
     expect(projectTaskSource).toContain('workOrderReturnable(order)')
     expect(projectTaskSource).toContain('workOrderNonconformityPending(order)')
@@ -290,6 +299,9 @@ describe('project management data sources', () => {
     )
     expect(projectTaskSource).toContain('value="rectification_required"')
     expect(projectTaskSource).not.toContain('value="nonconforming"')
+    expect(projectTaskSource.indexOf("return '待审核'")).toBeLessThan(
+      projectTaskSource.indexOf("return '不符合项'"),
+    )
   })
 
   it('uses rectification APIs instead of mock rectifications on rectification pages', () => {

@@ -75,16 +75,36 @@
             <div class="section-heading">
               <span class="heading-mark"></span>
               <h3>工单记录</h3>
-              <el-button
-                text
-                type="primary"
-                size="small"
-                :icon="View"
-                class="heading-action"
-                @click="archivePreviewVisible = true"
-              >
-                归档快照预览
-              </el-button>
+              <div class="work-order-heading-actions">
+                <el-button
+                  text
+                  type="primary"
+                  size="small"
+                  :icon="View"
+                  @click="archivePreviewVisible = true"
+                >
+                  归档快照预览
+                </el-button>
+                <el-button
+                  v-if="workOrderDispositionReady"
+                  type="warning"
+                  plain
+                  size="small"
+                  :loading="workOrderBatchRectificationCreating"
+                  @click="handleCreateAllPendingRectifications"
+                >
+                  一键生成整改单
+                </el-button>
+                <el-button
+                  v-if="workOrderDispositionReady"
+                  type="danger"
+                  plain
+                  size="small"
+                  @click="openAllPendingWorkOrderRisk"
+                >
+                  不生成整改单，承担风险
+                </el-button>
+              </div>
             </div>
             <el-empty
               v-if="visibleWorkOrders.length === 0"
@@ -92,11 +112,48 @@
               :image-size="80"
             />
             <div v-else class="work-order-list">
+              <div
+                v-if="
+                  workOrderDispositionReady &&
+                  workOrderRiskForm.workOrderId === allPendingRiskWorkOrderId
+                "
+                class="work-order-risk-panel batch-risk-panel"
+              >
+                <el-form label-position="top" class="handle-form review-form">
+                  <el-form-item label="承担风险原因">
+                    <el-input
+                      v-model="workOrderRiskForm.reason"
+                      type="textarea"
+                      :rows="3"
+                      maxlength="500"
+                      show-word-limit
+                    />
+                  </el-form-item>
+                  <el-button
+                    type="danger"
+                    plain
+                    class="submit-btn"
+                    :loading="workOrderBatchRiskAccepting"
+                    :disabled="!workOrderRiskForm.reason.trim()"
+                    @click="handleAcceptAllPendingWorkOrderRisk"
+                  >
+                    确认不生成整改单，承担风险
+                  </el-button>
+                </el-form>
+              </div>
               <div v-for="order in visibleWorkOrders" :key="order.id" class="work-order-item">
                 <div class="work-order-main">
-                  <strong>{{ workOrderDisplayTitle(order) }}</strong>
-                  <span class="work-order-code">{{ workOrderDisplayCode(order) }}</span>
-                  <div class="work-order-record-grid">
+                  <div class="work-order-title-block">
+                    <div>
+                      <strong>{{ workOrderDisplayTitle(order) }}</strong>
+                      <span class="work-order-code">{{ workOrderDisplayCode(order) }}</span>
+                    </div>
+                    <span>{{ personText(order.handlerName, order.handlerEmployeeNo) }}</span>
+                  </div>
+                  <p v-if="workOrderDescriptionText(order)" class="work-order-description">
+                    {{ workOrderDescriptionText(order) }}
+                  </p>
+                  <div class="work-order-summary-grid">
                     <div
                       v-for="item in workOrderRecordRows(order)"
                       :key="item.label"
@@ -155,7 +212,7 @@
                     {{ workOrderReturnForm.workOrderId === order.id ? '收起退回' : '退回 OMS' }}
                   </el-button>
                   <el-button
-                    v-if="workOrderNonconformityPending(order)"
+                    v-if="workOrderDispositionActionable(order)"
                     link
                     type="warning"
                     :loading="workOrderRectificationCreatingIds.has(order.id)"
@@ -164,7 +221,7 @@
                     一键生成整改单
                   </el-button>
                   <el-button
-                    v-if="workOrderNonconformityPending(order)"
+                    v-if="workOrderDispositionActionable(order)"
                     link
                     type="danger"
                     @click="toggleWorkOrderRisk(order)"
@@ -266,7 +323,7 @@
                 </div>
                 <div
                   v-if="
-                    workOrderNonconformityPending(order) &&
+                    workOrderDispositionActionable(order) &&
                     workOrderRiskForm.workOrderId === order.id
                   "
                   class="work-order-risk-panel"
@@ -557,6 +614,8 @@ const workOrderDeletingIds = ref(new Set<string>())
 const workOrderReturningIds = ref(new Set<string>())
 const workOrderRectificationCreatingIds = ref(new Set<string>())
 const workOrderRiskAcceptingIds = ref(new Set<string>())
+const workOrderBatchRectificationCreating = ref(false)
+const workOrderBatchRiskAccepting = ref(false)
 const workOrderMode = ref<WorkOrderProvider>('oms')
 const workOrderForm = ref({
   taskName: '',
@@ -582,6 +641,7 @@ const workOrderDetailVisible = ref(false)
 const selectedWorkOrder = ref<ProjectTaskWorkOrder>()
 const workOrderDetailRefreshing = ref(false)
 const archivePreviewVisible = ref(false)
+const allPendingRiskWorkOrderId = '__all_pending_nonconforming__'
 const auditResultOptions = [
   { label: '待审核', value: 'pending' },
   { label: '通过', value: 'passed' },
@@ -682,6 +742,15 @@ const workOrderHandlers = computed(() =>
     })),
 )
 const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => workOrders.value)
+const workOrdersAllReviewed = computed(
+  () => visibleWorkOrders.value.length > 0 && visibleWorkOrders.value.every(workOrderReviewLocked),
+)
+const pendingNonconformingWorkOrders = computed(() =>
+  visibleWorkOrders.value.filter((order) => workOrderNonconformityPending(order)),
+)
+const workOrderDispositionReady = computed(
+  () => workOrdersAllReviewed.value && pendingNonconformingWorkOrders.value.length > 0,
+)
 const selectedWorkOrderLogRows = computed(() =>
   selectedWorkOrder.value ? workOrderLogRows(selectedWorkOrder.value) : [],
 )
@@ -693,19 +762,16 @@ const workOrderDisplayTitle = (order: ProjectTaskWorkOrder) =>
   task.value?.taskName ||
   task.value?.checkContent ||
   workOrderDisplayCode(order)
+const workOrderDescriptionText = (order: ProjectTaskWorkOrder) =>
+  order.taskDescription || order.workOrderDescription || task.value?.taskDescription || ''
 const personText = (name?: string, employeeNo?: string) => {
   if (name && employeeNo) return `${name} (${employeeNo})`
   return name || employeeNo || '—'
 }
 const workOrderRecordRows = (order: ProjectTaskWorkOrder) => [
-  {
-    label: '任务描述',
-    value:
-      order.taskDescription || order.workOrderDescription || task.value?.taskDescription || '—',
-  },
-  { label: '工单负责人', value: personText(order.handlerName, order.handlerEmployeeNo) },
   { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
   { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
+  { label: '审核结果', value: auditResultLabel(workOrderReviewResultOf(order)) },
   ...(workOrderReviewResultOf(order) === 'rectification_required'
     ? [{ label: '处置方式', value: nonconformityDispositionLabel(order) }]
     : []),
@@ -741,6 +807,7 @@ const inspectionAuditResultText = computed(() => {
   const orders = visibleWorkOrders.value
   if (orders.length === 0) return '待生成工单'
   const results = orders.map((order) => workOrderReviewResultOf(order))
+  if (results.some((result) => result === 'pending')) return '待审核'
   if (results.includes('rectification_required')) return '不符合项'
   if (results.length > 0 && results.every((result) => result === 'passed')) return '通过'
   return '待审核'
@@ -914,9 +981,19 @@ const toggleWorkOrderReturn = (order: ProjectTaskWorkOrder) => {
 }
 
 const openWorkOrderRisk = (order: ProjectTaskWorkOrder) => {
-  if (!workOrderNonconformityPending(order)) return
+  if (!workOrderDispositionActionable(order)) return
   workOrderRiskForm.value = {
     workOrderId: order.id,
+    reason: '',
+  }
+  closeWorkOrderReview()
+  closeWorkOrderReturn()
+}
+
+const openAllPendingWorkOrderRisk = () => {
+  if (!workOrderDispositionReady.value) return
+  workOrderRiskForm.value = {
+    workOrderId: allPendingRiskWorkOrderId,
     reason: '',
   }
   closeWorkOrderReview()
@@ -981,7 +1058,7 @@ const handleReturnWorkOrder = async (order: ProjectTaskWorkOrder) => {
 }
 
 const handleCreateWorkOrderRectification = async (order: ProjectTaskWorkOrder) => {
-  if (!task.value || !projectId.value || !workOrderNonconformityPending(order)) return
+  if (!task.value || !projectId.value || !workOrderDispositionActionable(order)) return
   workOrderRectificationCreatingIds.value = new Set([
     ...workOrderRectificationCreatingIds.value,
     order.id,
@@ -1005,9 +1082,40 @@ const handleCreateWorkOrderRectification = async (order: ProjectTaskWorkOrder) =
   }
 }
 
+const handleCreateAllPendingRectifications = async () => {
+  if (!task.value || !projectId.value || !workOrderDispositionReady.value) return
+  const orders = [...pendingNonconformingWorkOrders.value]
+  workOrderBatchRectificationCreating.value = true
+  workOrderRectificationCreatingIds.value = new Set([
+    ...workOrderRectificationCreatingIds.value,
+    ...orders.map((order) => order.id),
+  ])
+  try {
+    for (const order of orders) {
+      const disposed = await taskApi.createWorkOrderRectification(
+        projectId.value,
+        task.value.id,
+        order.id,
+      )
+      workOrders.value = workOrders.value.map((item) => (item.id === disposed.id ? disposed : item))
+      if (selectedWorkOrder.value?.id === disposed.id) {
+        selectedWorkOrder.value = disposed
+      }
+    }
+    closeWorkOrderRisk()
+    await loadTask()
+    ElMessage.success(`已生成 ${orders.length} 个整改单`)
+  } finally {
+    const nextCreatingIds = new Set(workOrderRectificationCreatingIds.value)
+    orders.forEach((order) => nextCreatingIds.delete(order.id))
+    workOrderRectificationCreatingIds.value = nextCreatingIds
+    workOrderBatchRectificationCreating.value = false
+  }
+}
+
 const handleAcceptWorkOrderRisk = async (order: ProjectTaskWorkOrder) => {
   if (!task.value || !projectId.value || workOrderRiskForm.value.workOrderId !== order.id) return
-  if (!workOrderNonconformityPending(order)) return
+  if (!workOrderDispositionActionable(order)) return
   const reason = workOrderRiskForm.value.reason.trim()
   if (!reason) return
   workOrderRiskAcceptingIds.value = new Set([...workOrderRiskAcceptingIds.value, order.id])
@@ -1025,6 +1133,44 @@ const handleAcceptWorkOrderRisk = async (order: ProjectTaskWorkOrder) => {
     const nextRiskAcceptingIds = new Set(workOrderRiskAcceptingIds.value)
     nextRiskAcceptingIds.delete(order.id)
     workOrderRiskAcceptingIds.value = nextRiskAcceptingIds
+  }
+}
+
+const handleAcceptAllPendingWorkOrderRisk = async () => {
+  if (
+    !task.value ||
+    !projectId.value ||
+    !workOrderDispositionReady.value ||
+    workOrderRiskForm.value.workOrderId !== allPendingRiskWorkOrderId
+  ) {
+    return
+  }
+  const reason = workOrderRiskForm.value.reason.trim()
+  if (!reason) return
+  const orders = [...pendingNonconformingWorkOrders.value]
+  workOrderBatchRiskAccepting.value = true
+  workOrderRiskAcceptingIds.value = new Set([
+    ...workOrderRiskAcceptingIds.value,
+    ...orders.map((order) => order.id),
+  ])
+  try {
+    for (const order of orders) {
+      const disposed = await taskApi.acceptWorkOrderRisk(projectId.value, task.value.id, order.id, {
+        reason,
+      })
+      workOrders.value = workOrders.value.map((item) => (item.id === disposed.id ? disposed : item))
+      if (selectedWorkOrder.value?.id === disposed.id) {
+        selectedWorkOrder.value = disposed
+      }
+    }
+    closeWorkOrderRisk()
+    await loadTask()
+    ElMessage.success(`已记录 ${orders.length} 个工单承担风险`)
+  } finally {
+    const nextRiskAcceptingIds = new Set(workOrderRiskAcceptingIds.value)
+    orders.forEach((order) => nextRiskAcceptingIds.delete(order.id))
+    workOrderRiskAcceptingIds.value = nextRiskAcceptingIds
+    workOrderBatchRiskAccepting.value = false
   }
 }
 
@@ -1176,22 +1322,29 @@ const workOrderStatusLabel = (order: ProjectTaskWorkOrder) => {
 
 const workOrderReviewableStatusLabels = ['已完成', '已归档']
 const workOrderReturnableStatusLabels = ['已完成']
+const lockedReviewResults = ['passed', 'rectification_required']
+
+const workOrderReviewLocked = (order: ProjectTaskWorkOrder) =>
+  Boolean(order.reviewLocked) || lockedReviewResults.includes(workOrderReviewResultOf(order))
 
 const workOrderReturnable = (order: ProjectTaskWorkOrder) =>
-  !order.reviewLocked && workOrderReturnableStatusLabels.includes(workOrderStatusLabel(order))
+  !workOrderReviewLocked(order) &&
+  workOrderReturnableStatusLabels.includes(workOrderStatusLabel(order))
 
 const workOrderReviewable = (order: ProjectTaskWorkOrder) =>
   order.reviewable === true &&
-  !order.reviewLocked &&
+  !workOrderReviewLocked(order) &&
   workOrderReviewableStatusLabels.includes(workOrderStatusLabel(order))
 
-const workOrderDeletable = (order: ProjectTaskWorkOrder) => !order.reviewLocked
+const workOrderDeletable = (order: ProjectTaskWorkOrder) => !workOrderReviewLocked(order)
 
 const workOrderNonconformityPending = (order: ProjectTaskWorkOrder) =>
-  order.reviewLocked === true &&
   workOrderReviewResultOf(order) === 'rectification_required' &&
   !order.rectificationId &&
   !order.nonconformityDisposition
+
+const workOrderDispositionActionable = (order: ProjectTaskWorkOrder) =>
+  workOrderDispositionReady.value && workOrderNonconformityPending(order)
 
 const nonconformityDispositionLabel = (order: ProjectTaskWorkOrder) => {
   const map: Record<string, string> = {
@@ -1475,6 +1628,14 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
   }
 }
 
+.work-order-heading-actions {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .inspection-summary {
   padding-bottom: 14px;
 }
@@ -1605,7 +1766,7 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
 .flow-list,
 .work-order-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .flow-item,
@@ -1622,8 +1783,9 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
 
 .work-order-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, auto);
   align-items: start;
+  padding: 14px 16px;
 }
 
 .flow-item {
@@ -1639,31 +1801,54 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
 .work-order-main {
   min-width: 0;
 
-  strong,
-  span {
-    display: block;
-  }
-
   strong {
     color: $iris-text-primary;
   }
 
   .work-order-code {
+    display: block;
     margin-top: 2px;
     font-size: 12px;
     color: $iris-text-muted;
   }
 }
 
-.work-order-record-grid {
+.work-order-title-block {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+
+  > span {
+    flex: 0 0 auto;
+    max-width: 220px;
+    overflow: hidden;
+    font-size: 13px;
+    color: $iris-text-secondary;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.work-order-description {
+  margin: 8px 0 0;
+  color: $iris-text-secondary;
+  line-height: 1.55;
+}
+
+.work-order-summary-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 
 .work-order-record-field {
   min-width: 0;
+  padding: 8px 10px;
+  background: #f8fafc;
+  border: 1px solid #edf2f7;
+  border-radius: 6px;
 
   label,
   span {
@@ -1698,6 +1883,13 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
   grid-column: 1 / -1;
   padding-top: 10px;
   border-top: 1px solid #e2e8f0;
+}
+
+.batch-risk-panel {
+  padding: 12px;
+  background: #fff7f7;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
 }
 
 .provider-badge {
@@ -1979,12 +2171,17 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
   }
 
   .work-order-item,
-  .work-order-record-grid {
+  .work-order-summary-grid {
     grid-template-columns: 1fr;
   }
 
+  .work-order-heading-actions,
   .work-order-side {
     justify-content: flex-start;
+  }
+
+  .work-order-title-block {
+    display: grid;
   }
 
   .archive-summary,
