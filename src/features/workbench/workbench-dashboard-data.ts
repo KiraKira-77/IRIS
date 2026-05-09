@@ -1,4 +1,14 @@
-import type { ControlChecklist, ControlPlan, Project, RectStatus, RectificationOrder, TaskStatus } from '@/types'
+import type {
+  AlertEvent,
+  Archive,
+  ControlChecklist,
+  ControlPlan,
+  LogEntry,
+  Project,
+  RectStatus,
+  RectificationOrder,
+  TaskStatus,
+} from '@/types'
 
 export type WorkbenchCardType = 'danger' | 'warning' | 'primary' | 'info' | 'success'
 
@@ -40,7 +50,32 @@ export interface WorkbenchActivityItem {
   id: string
   title: string
   timeText: string
-  type: 'project' | 'plan' | 'checklist' | 'rectification'
+  type: 'project' | 'plan' | 'checklist' | 'rectification' | 'log'
+}
+
+export interface WorkbenchRiskItem {
+  id: string
+  title: string
+  scope: string
+  level: '高' | '中' | '低'
+}
+
+export interface WorkbenchAlertItem {
+  id: string
+  title: string
+  content: string
+  level: AlertEvent['level']
+  timeText: string
+}
+
+export interface WorkbenchCommandItem {
+  title: string
+  value: string
+}
+
+export interface WorkbenchStanceNode {
+  title: string
+  value: string
 }
 
 export interface WorkbenchDashboardData {
@@ -58,6 +93,12 @@ export interface WorkbenchDashboardData {
   }
   distribution: WorkbenchDistributionItem[]
   activities: WorkbenchActivityItem[]
+  healthScore: number
+  healthSummary: string
+  riskItems: WorkbenchRiskItem[]
+  alertItems: WorkbenchAlertItem[]
+  commandItems: WorkbenchCommandItem[]
+  stanceNodes: WorkbenchStanceNode[]
   emptyText: string
 }
 
@@ -66,6 +107,9 @@ interface BuildWorkbenchDashboardDataParams {
   plans: ControlPlan[]
   checklists: ControlChecklist[]
   rectifications?: RectificationOrder[]
+  archives?: Archive[]
+  alerts?: AlertEvent[]
+  logs?: LogEntry[]
   now?: Date
 }
 
@@ -102,6 +146,9 @@ export function buildWorkbenchDashboardData({
   plans,
   checklists,
   rectifications = [],
+  archives = [],
+  alerts = [],
+  logs = [],
   now = new Date(),
 }: BuildWorkbenchDashboardDataParams): WorkbenchDashboardData {
   const tasks = projects.flatMap((project) =>
@@ -116,11 +163,39 @@ export function buildWorkbenchDashboardData({
   const pendingRectifications = rectifications.filter(
     (rectification) => !closedRectificationStatuses.has(rectification.status),
   )
+  const closedRectifications = rectifications.filter((rectification) =>
+    closedRectificationStatuses.has(rectification.status),
+  )
   const completedTasks = tasks.filter((task) => completedTaskStatuses.has(task.status))
   const completionRate = tasks.length === 0 ? 0 : Math.round((completedTasks.length / tasks.length) * 100)
+  const rectificationCloseRate =
+    rectifications.length === 0 ? 0 : Math.round((closedRectifications.length / rectifications.length) * 100)
   const activeChecklists = checklists.filter((item) => item.status === 'active')
   const projectStatusCounts = countBy(projects, (project) => project.status)
   const pendingCount = pendingTasks.length + pendingRectifications.length
+  const criticalAlertCount = alerts.filter(
+    (alert) => alert.level === 'critical' && !alert.acknowledged,
+  ).length
+  const warningAlertCount = alerts.filter(
+    (alert) => alert.level === 'warning' && !alert.acknowledged,
+  ).length
+  const overdueRectificationCount = pendingRectifications.filter((rectification) =>
+    isBeforeToday(rectification.deadline, now),
+  ).length
+  const rejectedTaskCount = pendingTasks.filter(
+    (task) => task.status === 'rejected' || task.status === 'rectifying',
+  ).length
+  const highRiskCount = criticalAlertCount + overdueRectificationCount + rejectedTaskCount
+  const archiveDocumentCount = archives.reduce(
+    (sum, archive) => sum + (archive.documentCount ?? archive.documents?.length ?? 0),
+    0,
+  )
+  const healthScore = resolveHealthScore({
+    highRiskCount,
+    warningAlertCount,
+    pendingRectificationCount: pendingRectifications.length,
+    pendingTaskCount: pendingTasks.length,
+  })
 
   return {
     header: {
@@ -160,13 +235,66 @@ export function buildWorkbenchDashboardData({
         note: `已完成 ${completedTasks.length} / 共 ${tasks.length}`,
         type: 'success',
       },
+      {
+        title: '档案归集',
+        value: String(archives.length),
+        note: `文档 ${archiveDocumentCount} 份`,
+        type: 'info',
+      },
+      {
+        title: '整改闭环率',
+        value: `${rectificationCloseRate}%`,
+        note: `已闭环 ${closedRectifications.length} / 共 ${rectifications.length}`,
+        type: 'success',
+      },
     ],
     todoList: buildTodoList(pendingTasks, pendingRectifications, now),
     projectTrend: buildProjectTrend(projects, now),
     distribution: buildDistribution(projectStatusCounts),
-    activities: buildActivities(projects, plans, rectifications),
+    activities: buildActivities(projects, plans, rectifications, logs),
+    healthScore,
+    healthSummary: `高风险 ${highRiskCount} 项，告警 ${alerts.length} 条`,
+    riskItems: buildRiskItems({
+      alerts,
+      tasks: pendingTasks,
+      rectifications: pendingRectifications,
+      projects,
+      now,
+    }),
+    alertItems: buildAlertItems(alerts),
+    commandItems: buildCommandItems({
+      highRiskCount,
+      projects,
+      pendingRectifications,
+      archives,
+      archiveDocumentCount,
+    }),
+    stanceNodes: [
+      {
+        title: '项目执行',
+        value: `${projectStatusCounts.in_progress || 0} 个进行中`,
+      },
+      {
+        title: '整改闭环',
+        value: `${pendingRectifications.length} 个待推进`,
+      },
+      {
+        title: '档案归集',
+        value: `${archives.length} 个已归集`,
+      },
+      {
+        title: '责任动态',
+        value: `${logs.length} 条日志`,
+      },
+    ],
     emptyText:
-      projects.length === 0 && plans.length === 0 && checklists.length === 0 && rectifications.length === 0
+      projects.length === 0 &&
+      plans.length === 0 &&
+      checklists.length === 0 &&
+      rectifications.length === 0 &&
+      archives.length === 0 &&
+      alerts.length === 0 &&
+      logs.length === 0
         ? '暂无项目、计划或清单数据'
         : '',
   }
@@ -259,10 +387,136 @@ function buildDistribution(statusCounts: Record<string, number>): WorkbenchDistr
     }))
 }
 
+function buildRiskItems({
+  alerts,
+  tasks,
+  rectifications,
+  projects,
+  now,
+}: {
+  alerts: AlertEvent[]
+  tasks: Array<{
+    id: string
+    projectName: string
+    checkContent: string
+    status: TaskStatus
+  }>
+  rectifications: RectificationOrder[]
+  projects: Project[]
+  now: Date
+}): WorkbenchRiskItem[] {
+  const alertRisks = alerts
+    .filter((alert) => !alert.acknowledged && alert.level !== 'info')
+    .map((alert) => ({
+      id: `alert-${alert.id}`,
+      title: alert.title,
+      scope: alert.source || alert.content,
+      level: alert.level === 'critical' ? ('高' as const) : ('中' as const),
+      weight: alert.level === 'critical' ? 4 : 3,
+      timeText: alert.timestamp,
+    }))
+  const taskRisks = tasks
+    .filter((task) => task.status === 'rejected' || task.status === 'rectifying')
+    .map((task) => ({
+      id: `task-${task.id}`,
+      title: task.checkContent,
+      scope: task.projectName,
+      level: '高' as const,
+      weight: 3,
+      timeText: '',
+    }))
+  const rectificationRisks = rectifications.map((rectification) => ({
+    id: `rectification-${rectification.id}`,
+    title: rectification.title,
+    scope: rectification.projectName || '整改管理',
+    level: isBeforeToday(rectification.deadline, now) ? ('高' as const) : ('中' as const),
+    weight: isBeforeToday(rectification.deadline, now) ? 4 : 2,
+    timeText: rectification.updatedAt || rectification.createdAt || rectification.deadline,
+  }))
+  const delayedProjectRisks = projects
+    .filter((project) => project.status !== 'completed' && project.status !== 'archived' && isBeforeToday(project.endDate, now))
+    .map((project) => ({
+      id: `project-${project.id}`,
+      title: project.name,
+      scope: '项目进度已超过截止日期',
+      level: '中' as const,
+      weight: 2,
+      timeText: project.updatedAt || project.createdAt || project.endDate || '',
+    }))
+
+  const risks = [...alertRisks, ...taskRisks, ...rectificationRisks, ...delayedProjectRisks]
+    .sort((left, right) => right.weight - left.weight || dateValue(right.timeText) - dateValue(left.timeText))
+    .slice(0, 5)
+    .map(({ id, title, scope, level }) => ({ id, title, scope, level }))
+
+  return risks.length > 0
+    ? risks
+    : [
+        {
+          id: 'risk-empty',
+          title: '当前权限下暂无高风险记录',
+          scope: '来自项目、整改与告警数据',
+          level: '低',
+        },
+      ]
+}
+
+function buildAlertItems(alerts: AlertEvent[]): WorkbenchAlertItem[] {
+  return [...alerts]
+    .sort((left, right) => dateValue(right.timestamp) - dateValue(left.timestamp))
+    .slice(0, 5)
+    .map((alert) => ({
+      id: alert.id,
+      title: alert.title,
+      content: alert.content,
+      level: alert.level,
+      timeText: alert.timestamp,
+    }))
+}
+
+function buildCommandItems({
+  highRiskCount,
+  projects,
+  pendingRectifications,
+  archives,
+  archiveDocumentCount,
+}: {
+  highRiskCount: number
+  projects: Project[]
+  pendingRectifications: RectificationOrder[]
+  archives: Archive[]
+  archiveDocumentCount: number
+}): WorkbenchCommandItem[] {
+  const archivableProjectCount = projects.filter((project) => project.status === 'completed').length
+
+  return [
+    {
+      title: '今日建议',
+      value: highRiskCount > 0 ? `优先处理 ${highRiskCount} 个高风险` : '当前无高风险待处理',
+    },
+    {
+      title: '项目推进',
+      value: archivableProjectCount > 0 ? `${archivableProjectCount} 个项目可归档` : `${projects.length} 个项目可查看`,
+    },
+    {
+      title: '整改策略',
+      value:
+        pendingRectifications.length > 0
+          ? `${pendingRectifications.length} 个整改待推进`
+          : '整改项均已闭环或暂无数据',
+    },
+    {
+      title: '数据质量',
+      value: `${archives.length} 个档案，${archiveDocumentCount} 份文档`,
+    },
+  ]
+}
+
 function buildActivities(
   projects: Project[],
   plans: ControlPlan[],
   rectifications: RectificationOrder[],
+  logs: LogEntry[],
 ): WorkbenchActivityItem[] {
   const projectActivities = projects.map((project) => ({
     id: `project-${project.id}`,
@@ -282,8 +536,14 @@ function buildActivities(
     timeText: rectification.updatedAt || rectification.createdAt || rectification.deadline,
     type: 'rectification' as const,
   }))
+  const logActivities = logs.map((log) => ({
+    id: `log-${log.id}`,
+    title: log.message,
+    timeText: log.timestamp,
+    type: 'log' as const,
+  }))
 
-  return [...projectActivities, ...planActivities, ...rectificationActivities]
+  return [...projectActivities, ...planActivities, ...rectificationActivities, ...logActivities]
     .sort((left, right) => dateValue(right.timeText) - dateValue(left.timeText))
     .slice(0, 5)
 }
@@ -362,6 +622,28 @@ function resolveRiskLevel(pendingCount: number, projectCount: number): string {
   if (pendingCount >= 10 || projectCount >= 20) return '高'
   if (pendingCount >= 4 || projectCount >= 8) return '中'
   return '低'
+}
+
+function resolveHealthScore({
+  highRiskCount,
+  warningAlertCount,
+  pendingRectificationCount,
+  pendingTaskCount,
+}: {
+  highRiskCount: number
+  warningAlertCount: number
+  pendingRectificationCount: number
+  pendingTaskCount: number
+}): number {
+  return clamp(
+    100 - highRiskCount * 9 - warningAlertCount * 4 - pendingRectificationCount * 3 - pendingTaskCount * 2,
+    0,
+    100,
+  )
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
 }
 
 function formatFullDate(date: Date): string {

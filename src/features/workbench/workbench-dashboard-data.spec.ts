@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildWorkbenchDashboardData } from './workbench-dashboard-data'
-import type { ControlChecklist, ControlPlan, Project, RectificationOrder } from '@/types'
+import type {
+  AlertEvent,
+  Archive,
+  ControlChecklist,
+  ControlPlan,
+  LogEntry,
+  Project,
+  RectificationOrder,
+} from '@/types'
 
 const baseProject = {
   id: '7001',
@@ -65,6 +73,40 @@ const baseRectification = {
   updatedAt: '2026-04-29 10:00:00',
 } satisfies RectificationOrder
 
+const baseArchive = {
+  id: 'archive-001',
+  projectId: '7001',
+  projectCode: 'PRJ-001',
+  projectName: '权限检查',
+  archiveDate: '2026-04-30',
+  taskCount: 2,
+  workOrderCount: 1,
+  rectificationCount: 1,
+  documentCount: 3,
+  documents: [],
+  status: 'active',
+  createdAt: '2026-04-30 10:00:00',
+} satisfies Archive
+
+const baseAlert = {
+  id: 'alert-001',
+  source: 'rectification',
+  level: 'critical',
+  title: '整改临近截止',
+  content: '权限整改需要今日完成。',
+  timestamp: '2026-04-30 12:00:00',
+  acknowledged: false,
+} satisfies AlertEvent
+
+const baseLog = {
+  id: 'log-001',
+  source: 'project',
+  level: 'info',
+  message: '项目已更新',
+  timestamp: '2026-04-30 11:00:00',
+  operatorName: '张三',
+} satisfies LogEntry
+
 describe('workbench dashboard data', () => {
   it('builds dashboard summaries from real project, plan, and checklist records', () => {
     const data = buildWorkbenchDashboardData({
@@ -103,7 +145,7 @@ describe('workbench dashboard data', () => {
     expect(data.header.todayText).toBe('2026年04月30日，星期四')
     expect(data.header.pendingCount).toBe(1)
     expect(data.header.completionRateText).toBe('50%')
-    expect(data.cards.map((card) => [card.title, card.value])).toEqual([
+    expect(data.cards.slice(0, 5).map((card) => [card.title, card.value])).toEqual([
       ['待处理检查项', '1'],
       ['待整改项', '0'],
       ['进行中项目', '1'],
@@ -120,20 +162,43 @@ describe('workbench dashboard data', () => {
     ])
   })
 
-  it('includes reserved rectification items from mock data while that module is unfinished', () => {
+  it('includes real rectification, archive, alert, and log records in the cockpit model', () => {
     const data = buildWorkbenchDashboardData({
       projects: [],
       plans: [],
       checklists: [],
       rectifications: [baseRectification],
+      archives: [baseArchive],
+      alerts: [baseAlert],
+      logs: [baseLog],
       now: new Date('2026-04-30T08:00:00+08:00'),
     })
 
     expect(data.header.pendingCount).toBe(1)
+    expect(data.healthScore).toBeLessThan(100)
     expect(data.cards.find((card) => card.title === '待整改项')).toMatchObject({
       value: '1',
       note: '待闭环 1 / 共 1',
     })
+    expect(data.cards.find((card) => card.title === '档案归集')).toMatchObject({
+      value: '1',
+      note: '文档 3 份',
+    })
+    expect(data.riskItems[0]).toMatchObject({
+      title: '整改临近截止',
+      level: '高',
+    })
+    expect(data.alertItems[0]).toMatchObject({
+      title: '整改临近截止',
+      content: '权限整改需要今日完成。',
+    })
+    expect(data.commandItems.map((item) => item.title)).toContain('今日建议')
+    expect(data.stanceNodes.map((item) => item.title)).toEqual([
+      '项目执行',
+      '整改闭环',
+      '档案归集',
+      '责任动态',
+    ])
     expect(data.todoList).toEqual([
       expect.objectContaining({
         id: 'rect-001',
@@ -145,6 +210,7 @@ describe('workbench dashboard data', () => {
       }),
     ])
     expect(data.activities.map((item) => item.title)).toEqual([
+      '项目已更新',
       '整改处理中:关于资金支付流程不规范的整改',
     ])
     expect(data.emptyText).toBe('')
