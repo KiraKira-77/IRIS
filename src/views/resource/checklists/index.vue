@@ -26,10 +26,15 @@
         </div>
       </div>
       <div class="hero-actions">
-        <el-button type="primary" :icon="Plus" size="large" @click="openDialog()"
+        <el-button
+          v-if="canCreateChecklist"
+          type="primary"
+          :icon="Plus"
+          size="large"
+          @click="openDialog()"
           >新建清单</el-button
         >
-        <el-button :icon="Upload" size="large">导入模版</el-button>
+        <el-button v-if="canCreateChecklist" :icon="Upload" size="large">导入模版</el-button>
       </div>
     </section>
 
@@ -135,10 +140,20 @@
                     {{ organizationLabels(item.organizationIds).join('、') }}
                   </span>
                   <div class="item-actions">
-                    <el-button link type="primary" size="small" @click="openItemDialog(row, item, index)"
+                    <el-button
+                      v-if="getRowAccessState(row).canEdit"
+                      link
+                      type="primary"
+                      size="small"
+                      @click="openItemDialog(row, item, index)"
                       >编辑</el-button
                     >
-                    <el-button link type="danger" size="small" @click="handleDeleteItem(row, index)"
+                    <el-button
+                      v-if="getRowAccessState(row).canEdit"
+                      link
+                      type="danger"
+                      size="small"
+                      @click="handleDeleteItem(row, index)"
                       >删除</el-button
                     >
                   </div>
@@ -146,7 +161,12 @@
               </div>
               <el-empty v-else description="暂无检查项" :image-size="60" />
               <div class="detail-footer">
-                <el-button type="primary" :icon="Plus" size="small" @click="openItemDialog(row)"
+                <el-button
+                  v-if="getRowAccessState(row).canEdit"
+                  type="primary"
+                  :icon="Plus"
+                  size="small"
+                  @click="openItemDialog(row)"
                   >添加检查项</el-button
                 >
               </div>
@@ -155,7 +175,12 @@
         </el-table-column>
         <el-table-column prop="name" label="清单名称" min-width="320" show-overflow-tooltip>
           <template #default="{ row }">
-            <button class="checklist-title-button" type="button" @click="openDialog(row)">
+            <button
+              class="checklist-title-button"
+              type="button"
+              :class="{ 'is-readonly': !getRowAccessState(row).canEdit }"
+              @click="openDialog(row)"
+            >
               <span>{{ row.name }}</span>
               <small>{{ row.code }}</small>
             </button>
@@ -200,9 +225,30 @@
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
-              <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
-              <el-button link type="primary" size="small" @click="handleCopy(row)">复制</el-button>
-              <el-button link type="danger" size="small" @click="handleDelete(row)">删除</el-button>
+              <el-button
+                v-if="getRowAccessState(row).canEdit"
+                link
+                type="primary"
+                size="small"
+                @click="openDialog(row)"
+                >编辑</el-button
+              >
+              <el-button
+                v-if="getRowAccessState(row).canCreate"
+                link
+                type="primary"
+                size="small"
+                @click="handleCopy(row)"
+                >复制</el-button
+              >
+              <el-button
+                v-if="getRowAccessState(row).canDelete"
+                link
+                type="danger"
+                size="small"
+                @click="handleDelete(row)"
+                >删除</el-button
+              >
             </div>
           </template>
         </el-table-column>
@@ -286,12 +332,12 @@
           </div>
           <div class="form-grid">
             <el-form-item label="维护域" required>
-              <el-select v-model="form.ownerScopeId" placeholder="选择维护域" style="width: 100%">
-                <el-option
-                  v-for="scope in scopeOptions"
-                  :key="scope.id"
-                  :label="formatResourceScopeOptionLabel(scope)"
-                  :value="scope.id"
+                <el-select v-model="form.ownerScopeId" placeholder="选择维护域" style="width: 100%">
+                  <el-option
+                    v-for="scope in ownerScopeOptions"
+                    :key="scope.id"
+                    :label="formatResourceScopeOptionLabel(scope)"
+                    :value="scope.id"
                 />
               </el-select>
             </el-form-item>
@@ -431,6 +477,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import { checklistApi, resourceScopeApi } from '@/api'
+import { useUserStore } from '@/stores/modules/user'
 import type {
   ChecklistItem,
   ChecklistItemUpsertPayload,
@@ -449,6 +496,7 @@ import {
   optionLabel,
 } from '@/features/checklists/checklist-data'
 import { DEFAULT_RESOURCE_SCOPE_OPTIONS } from '@/features/permissions/user-access'
+import { buildChecklistAccessState } from '@/features/permissions/checklist-access'
 import {
   filterGrantScopeOptions,
   formatResourceScopeOptionLabel,
@@ -456,11 +504,25 @@ import {
   resolveResourceScopeOptions,
 } from '@/features/permissions/resource-scope-adapter'
 
+const userStore = useUserStore()
+const emptyAccessContext = {
+  isSuperAdmin: false,
+  scopePermissions: [],
+}
+const currentAccessContext = computed(() => userStore.accessContext || emptyAccessContext)
 const searchForm = reactive({ keyword: '', status: '', scopeId: '' })
 const expandedKeys = ref<string[]>([])
 const loading = ref(false)
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
 const scopeOptions = ref<ResourceScopeOption[]>([...DEFAULT_RESOURCE_SCOPE_OPTIONS])
+const editableScopeOptions = computed(() =>
+  currentAccessContext.value.isSuperAdmin
+    ? scopeOptions.value
+    : scopeOptions.value.filter((scope) => canCreateInScope(scope.id)),
+)
+const canCreateChecklist = computed(
+  () => currentAccessContext.value.isSuperAdmin || editableScopeOptions.value.length > 0,
+)
 
 const tableData = ref<ControlChecklist[]>([])
 
@@ -549,9 +611,25 @@ const form = reactive({
 const grantScopeOptions = computed(() =>
   filterGrantScopeOptions(scopeOptions.value, form.ownerScopeId),
 )
+const ownerScopeOptions = computed(() => {
+  if (!editingRow.value) {
+    return editableScopeOptions.value
+  }
+
+  const currentOwner = scopeOptions.value.find((scope) => scope.id === editingRow.value?.ownerScopeId)
+  const options = [...editableScopeOptions.value]
+  if (currentOwner && !options.some((scope) => scope.id === currentOwner.id)) {
+    options.unshift(currentOwner)
+  }
+  return options
+})
 
 const openDialog = (row?: ControlChecklist) => {
   if (row) {
+    if (!getRowAccessState(row).canEdit) {
+      ElMessage.warning('当前用户无权编辑该清单')
+      return
+    }
     editingRow.value = row
     form.code = row.code
     form.name = row.name
@@ -561,12 +639,16 @@ const openDialog = (row?: ControlChecklist) => {
     form.grantScopeIds = row.grants.map((grant) => grant.scopeId)
     form.status = row.status
   } else {
+    if (!canCreateChecklist.value) {
+      ElMessage.warning('当前用户无权新建清单')
+      return
+    }
     editingRow.value = null
     form.code = `CL-2026-${String(tableData.value.length + 1).padStart(3, '0')}`
     form.name = ''
     form.description = ''
     form.version = 'V1.0'
-    form.ownerScopeId = scopeOptions.value[0]?.id || ''
+    form.ownerScopeId = editableScopeOptions.value[0]?.id || ''
     form.grantScopeIds = []
     form.status = 'draft'
   }
@@ -574,6 +656,21 @@ const openDialog = (row?: ControlChecklist) => {
 }
 
 const handleSaveChecklist = async () => {
+  if (editingRow.value && !getRowAccessState(editingRow.value).canEdit) {
+    ElMessage.warning('当前用户无权编辑该清单')
+    return
+  }
+  if (!editingRow.value && !canCreateChecklist.value) {
+    ElMessage.warning('当前用户无权新建清单')
+    return
+  }
+  if (
+    (!editingRow.value || editingRow.value.ownerScopeId !== form.ownerScopeId) &&
+    !canCreateInScope(form.ownerScopeId)
+  ) {
+    ElMessage.warning('当前用户无权在所选维护域保存清单')
+    return
+  }
   if (!form.code.trim() || !form.name.trim() || !form.version.trim() || !form.ownerScopeId) {
     ElMessage.warning('请填写清单编号、名称、版本和维护域')
     return
@@ -619,6 +716,14 @@ const itemForm = reactive({
 })
 
 const openItemDialog = (row: ControlChecklist, item?: ChecklistItem, index?: number) => {
+  if (!getRowAccessState(row).canEdit && item) {
+    ElMessage.warning('当前用户无权编辑该清单')
+    return
+  }
+  if (!getRowAccessState(row).canEdit && !item) {
+    ElMessage.warning('当前用户无权新增检查项')
+    return
+  }
   currentChecklist.value = row
   editingItemIndex.value = typeof index === 'number' ? index : null
   itemForm.content = item?.content || ''
@@ -643,6 +748,10 @@ const handleSaveItem = async () => {
 
   const checklist = currentChecklist.value
   if (!checklist) {
+    return
+  }
+  if (!getRowAccessState(checklist).canEdit) {
+    ElMessage.warning('当前用户无权编辑该清单')
     return
   }
 
@@ -676,6 +785,10 @@ const handleCopy = (row: ControlChecklist) => {
 }
 
 const copyChecklist = async (row: ControlChecklist) => {
+  if (!getRowAccessState(row).canCreate) {
+    ElMessage.warning('当前用户无权复制该清单')
+    return
+  }
   const copy = await checklistApi.create({
     ...toChecklistPayload(row, row.items),
     code: `CL-2026-${String(pagination.total + 1).padStart(3, '0')}`,
@@ -690,6 +803,10 @@ const copyChecklist = async (row: ControlChecklist) => {
 }
 
 const handleDelete = async (row: ControlChecklist) => {
+  if (!getRowAccessState(row).canDelete) {
+    ElMessage.warning('当前用户无权删除该清单')
+    return
+  }
   try {
     await ElMessageBox.confirm(`确认删除清单「${row.name}」吗？`, '警告', {
       type: 'warning',
@@ -705,6 +822,10 @@ const handleDelete = async (row: ControlChecklist) => {
 }
 
 const handleDeleteItem = async (checklist: ControlChecklist, index: number) => {
+  if (!getRowAccessState(checklist).canEdit) {
+    ElMessage.warning('当前用户无权编辑该清单')
+    return
+  }
   try {
     await ElMessageBox.confirm('确认删除该检查项吗？', '警告', {
       type: 'warning',
@@ -765,6 +886,21 @@ const replaceChecklistInTable = (checklist: ControlChecklist) => {
     return
   }
   tableData.value.splice(index, 1, checklist)
+}
+
+const getRowAccessState = (row: ControlChecklist) =>
+  buildChecklistAccessState(row, currentAccessContext.value)
+
+const canCreateInScope = (scopeId: string) => {
+  if (currentAccessContext.value.isSuperAdmin) {
+    return true
+  }
+  const scopePermission = currentAccessContext.value.scopePermissions.find(
+    (entry) => entry.scopeId === scopeId,
+  )
+  return Boolean(
+    scopePermission?.actions.includes('create') || scopePermission?.actions.includes('manage'),
+  )
 }
 
 const scopeLabel = (scopeId: string) =>

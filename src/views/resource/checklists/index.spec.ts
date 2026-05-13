@@ -84,4 +84,33 @@ describe('checklists page actions', () => {
     expect(detailTemplate).not.toContain('class="item-field item-field-wide"')
     expect(gridStyle).toContain('grid-template-columns')
   })
+
+  it('uses the current user access context for checklist permissions', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+
+    expect(source).toContain("import { useUserStore } from '@/stores/modules/user'")
+    expect(source).toContain("from '@/features/permissions/checklist-access'")
+    expect(source).toContain('const currentAccessContext = computed')
+    expect(source).toContain('const getRowAccessState = (row: ControlChecklist)')
+  })
+
+  it('gates checklist action buttons and handlers by row permissions', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+    const openDialogStart = source.indexOf('const openDialog = (row?: ControlChecklist)')
+    const openDialogEnd = source.indexOf('const handleSaveChecklist', openDialogStart)
+    const saveStart = source.indexOf('const handleSaveChecklist = async')
+    const saveEnd = source.indexOf('// Item Dialog', saveStart)
+    const deleteStart = source.indexOf('const handleDelete = async')
+    const deleteEnd = source.indexOf('const handleDeleteItem = async', deleteStart)
+
+    expect(source).toContain('v-if="canCreateChecklist"')
+    expect(source).toContain('v-if="getRowAccessState(row).canEdit"')
+    expect(source).toContain('v-if="getRowAccessState(row).canDelete"')
+    expect(source).toContain('v-if="getRowAccessState(row).canCreate"')
+    expect(openDialogEnd).toBeGreaterThan(openDialogStart)
+    expect(source.slice(openDialogStart, openDialogEnd)).toContain('!getRowAccessState(row).canEdit')
+    expect(source.slice(openDialogStart, openDialogEnd)).toContain('!canCreateChecklist.value')
+    expect(source.slice(saveStart, saveEnd)).toContain('canCreateInScope(form.ownerScopeId)')
+    expect(source.slice(deleteStart, deleteEnd)).toContain('!getRowAccessState(row).canDelete')
+  })
 })
