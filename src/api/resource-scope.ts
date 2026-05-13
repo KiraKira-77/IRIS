@@ -6,6 +6,7 @@ import type {
   ResourceScopeUpsertPayload,
   SystemUser,
   SystemUserUpsertPayload,
+  UserResourceScopeMembershipReplacePayload,
 } from '@/types'
 
 export const resourceScopeApi = {
@@ -32,4 +33,10 @@ export const systemUserApi = {
     request.put<SystemUser>(`/v1/system/users/${id}`, data),
   delete: (id: string | number) => request.delete<void>(`/v1/system/users/${id}`),
   resetPassword: (id: string | number) => request.post<void>(`/v1/system/users/${id}/reset-password`),
+  listResourceScopeMemberships: (id: string | number) =>
+    request.get<ResourceScopeMember[]>(`/v1/system/users/${id}/resource-scope-memberships`),
+  replaceResourceScopeMemberships: (
+    id: string | number,
+    data: UserResourceScopeMembershipReplacePayload,
+  ) => request.put<void>(`/v1/system/users/${id}/resource-scope-memberships`, data),
 }

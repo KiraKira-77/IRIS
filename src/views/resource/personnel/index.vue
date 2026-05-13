@@ -3,7 +3,7 @@
     <div class="page-header">
       <div class="left">
         <h2 class="page-title">人员管理</h2>
-        <span class="page-subtitle">维护系统用户并分配角色，资源域成员请在资源域配置中维护</span>
+        <span class="page-subtitle">维护系统用户、角色和资源域权限</span>
       </div>
       <div class="right">
         <el-button type="primary" :icon="Plus" size="large" @click="openDialog()">
@@ -77,6 +77,18 @@
           <span v-if="resolveUserRoles(row).length === 0" class="empty-text">未分配</span>
         </template>
       </el-table-column>
+      <el-table-column label="资源域权限" min-width="220" show-overflow-tooltip>
+        <template #default="{ row }">
+          <span
+            :class="[
+              'resource-scope-summary',
+              { 'resource-scope-summary--empty': getUserScopeMemberships(row).length === 0 },
+            ]"
+          >
+            {{ resolveUserScopeSummary(row) }}
+          </span>
+        </template>
+      </el-table-column>
       <el-table-column prop="status" label="状态" width="110">
         <template #default="{ row }">
           <el-tag :type="row.status === 1 ? 'success' : 'info'" effect="dark" round>
@@ -85,9 +97,12 @@
         </template>
       </el-table-column>
       <el-table-column prop="remark" label="备注" min-width="220" show-overflow-tooltip />
-      <el-table-column label="操作" width="300" fixed="right">
+      <el-table-column label="操作" width="360" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
+          <el-button link type="primary" size="small" @click="openResourceScopeDialog(row)">
+            资源域权限
+          </el-button>
           <el-button link type="danger" size="small" @click="resetPassword(row)">重置密码</el-button>
           <el-button
             link
@@ -183,6 +198,58 @@
         <el-button type="primary" :loading="saving" @click="saveUser">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="resourceScopeDialogVisible"
+      :title="resourceScopeDialogUser ? `${resourceScopeDialogUser.username} - 资源域权限` : '资源域权限'"
+      width="920px"
+      destroy-on-close
+    >
+      <el-table
+        :data="resourceScopeRows"
+        v-loading="resourceScopeLoading"
+        style="width: 100%"
+        size="large"
+      >
+        <el-table-column label="资源域" min-width="220">
+          <template #default="{ row }">
+            <div class="scope-cell">
+              <strong>{{ row.scopeName }}</strong>
+              <span>{{ row.scopeCode }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 1 ? 'success' : 'info'" effect="plain">
+              {{ row.status === 1 ? '启用' : '停用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="权限" min-width="360">
+          <template #default="{ row }">
+            <el-checkbox-group v-model="row.actions" @change="syncResourceScopeActions(row)">
+              <el-checkbox label="view">查询</el-checkbox>
+              <el-checkbox label="create">创建</el-checkbox>
+              <el-checkbox label="edit">编辑</el-checkbox>
+              <el-checkbox label="delete">删除</el-checkbox>
+              <el-checkbox label="manage">管理</el-checkbox>
+            </el-checkbox-group>
+          </template>
+        </el-table-column>
+        <el-table-column label="说明" min-width="200">
+          <template #default="{ row }">
+            <el-input v-model="row.remark" placeholder="权限说明" />
+          </template>
+        </el-table-column>
+      </el-table>
+      <template #footer>
+        <el-button @click="resourceScopeDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="savingResourceScopes" @click="saveResourceScopePermissions">
+          保存权限
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -190,17 +257,45 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { roleApi, systemUserApi } from '@/api'
+import { resourceScopeApi, roleApi, systemUserApi } from '@/api'
 import { useUserStore } from '@/stores'
-import type { RoleRecord, SystemUser, SystemUserUpsertPayload } from '@/types'
+import type {
+  ResourceScope,
+  ResourceScopeMember,
+  RoleRecord,
+  ScopeAction,
+  SystemUser,
+  SystemUserUpsertPayload,
+} from '@/types'
+import {
+  createUserResourceScopeMembershipPayload,
+  formatUserResourceScopeSummary,
+  mapResourceScopeMemberToActions,
+} from '@/features/permissions/resource-scope-adapter'
+
+interface EditableUserScopeMembership {
+  scopeId: string
+  scopeCode: string
+  scopeName: string
+  status: number
+  actions: ScopeAction[]
+  remark?: string
+}
 
 const userStore = useUserStore()
 const loading = ref(false)
 const saving = ref(false)
+const resourceScopeLoading = ref(false)
+const savingResourceScopes = ref(false)
 const dialogVisible = ref(false)
+const resourceScopeDialogVisible = ref(false)
 const editingUser = ref<SystemUser | null>(null)
+const resourceScopeDialogUser = ref<SystemUser | null>(null)
 const users = ref<SystemUser[]>([])
 const roles = ref<RoleRecord[]>([])
+const resourceScopes = ref<ResourceScope[]>([])
+const resourceScopeRows = ref<EditableUserScopeMembership[]>([])
+const userScopeMembershipMap = reactive<Record<string, ResourceScopeMember[]>>({})
 
 const searchForm = reactive({
   keyword: '',
@@ -265,11 +360,34 @@ async function loadData() {
   loading.value = true
 
   try {
-    const [userList, roleList] = await Promise.all([systemUserApi.list(), roleApi.list()])
+    const [userList, roleList, scopeList] = await Promise.all([
+      systemUserApi.list(),
+      roleApi.list(),
+      resourceScopeApi.list(),
+    ])
     users.value = [...userList].sort(compareEntityIds)
     roles.value = [...roleList].sort(compareEntityIds)
+    resourceScopes.value = [...scopeList].sort(compareEntityIds)
+    await loadUserScopeMemberships(users.value)
   } finally {
     loading.value = false
+  }
+}
+
+async function loadUserScopeMemberships(userList: SystemUser[]) {
+  for (const userId of Object.keys(userScopeMembershipMap)) {
+    delete userScopeMembershipMap[userId]
+  }
+
+  const memberships = await Promise.all(
+    userList.map(async (user) => [
+      user.id,
+      await systemUserApi.listResourceScopeMemberships(user.id),
+    ] as const),
+  )
+
+  for (const [userId, userMemberships] of memberships) {
+    userScopeMembershipMap[userId] = userMemberships
   }
 }
 
@@ -323,6 +441,74 @@ async function saveUser() {
     await loadData()
   } finally {
     saving.value = false
+  }
+}
+
+async function openResourceScopeDialog(user: SystemUser) {
+  resourceScopeDialogUser.value = user
+  resourceScopeDialogVisible.value = true
+  resourceScopeLoading.value = true
+
+  try {
+    const memberships = await systemUserApi.listResourceScopeMemberships(user.id)
+    userScopeMembershipMap[user.id] = memberships
+    const membershipMap = new Map(memberships.map((membership) => [membership.scopeId, membership]))
+    resourceScopeRows.value = resourceScopes.value.map((scope) => {
+      const membership = membershipMap.get(scope.id)
+      return {
+        scopeId: scope.id,
+        scopeCode: scope.scopeCode,
+        scopeName: scope.scopeName,
+        status: scope.status,
+        actions: membership ? mapResourceScopeMemberToActions(membership) : [],
+        remark: membership?.remark || '',
+      }
+    })
+  } finally {
+    resourceScopeLoading.value = false
+  }
+}
+
+function syncResourceScopeActions(row: EditableUserScopeMembership) {
+  const actions = new Set(row.actions)
+
+  if (actions.has('manage')) {
+    row.actions = ['view', 'create', 'edit', 'delete', 'manage']
+    return
+  }
+
+  if (actions.has('create') || actions.has('edit') || actions.has('delete')) {
+    actions.add('view')
+  }
+
+  row.actions = Array.from(actions)
+}
+
+async function saveResourceScopePermissions() {
+  if (!resourceScopeDialogUser.value) {
+    return
+  }
+
+  savingResourceScopes.value = true
+
+  try {
+    await systemUserApi.replaceResourceScopeMemberships(resourceScopeDialogUser.value.id, {
+      memberships: resourceScopeRows.value
+        .filter((row) => row.actions.length > 0)
+        .map((row) =>
+          createUserResourceScopeMembershipPayload({
+            scopeId: row.scopeId,
+            actions: row.actions,
+            remark: row.remark?.trim(),
+          }),
+        ),
+    })
+    userScopeMembershipMap[resourceScopeDialogUser.value.id] =
+      await systemUserApi.listResourceScopeMemberships(resourceScopeDialogUser.value.id)
+    resourceScopeDialogVisible.value = false
+    ElMessage.success('资源域权限已保存')
+  } finally {
+    savingResourceScopes.value = false
   }
 }
 
@@ -424,6 +610,14 @@ function resolveUserRoles(user: SystemUser) {
   return (user.roleCodes || []).map((roleCode) => ({ key: `code-${roleCode}`, label: roleCode }))
 }
 
+function getUserScopeMemberships(user: SystemUser) {
+  return userScopeMembershipMap[user.id] || []
+}
+
+function resolveUserScopeSummary(user: SystemUser) {
+  return formatUserResourceScopeSummary(getUserScopeMemberships(user), resourceScopes.value)
+}
+
 function avatarColor(seed: string) {
   const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#0ea5e9', '#8b5cf6']
   return colors[seed.charCodeAt(0) % colors.length]
@@ -480,5 +674,29 @@ function compareEntityIds(left: { id: string }, right: { id: string }) {
 
 .empty-text {
   color: $iris-text-muted;
+}
+
+.resource-scope-summary {
+  color: $iris-text-primary;
+}
+
+.resource-scope-summary--empty {
+  color: $iris-text-muted;
+}
+
+.scope-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  strong {
+    color: $iris-text-primary;
+    font-weight: 600;
+  }
+
+  span {
+    color: $iris-text-muted;
+    font-size: 12px;
+  }
 }
 </style>

@@ -160,6 +160,18 @@ export interface ResourceScopeMemberUpsertPayload {
 export interface ResourceScopeMemberReplacePayload {
   members: ResourceScopeMemberUpsertPayload[]
 }
+export interface UserResourceScopeMembershipUpsertPayload {
+  scopeId: string
+  canView: boolean
+  canCreate: boolean
+  canEdit: boolean
+  canDelete: boolean
+  canManage: boolean
+  remark?: string
+}
+export interface UserResourceScopeMembershipReplacePayload {
+  memberships: UserResourceScopeMembershipUpsertPayload[]
+}
 export interface SystemUserUpsertPayload {
   tenantId: string | number
   orgId?: string | number | null

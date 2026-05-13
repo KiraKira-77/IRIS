@@ -5,6 +5,7 @@ import type {
   ResourceScopeOption,
   ScopeAction,
   ScopePermission,
+  UserResourceScopeMembershipUpsertPayload,
 } from '../../types/index.ts'
 
 export function mapResourceScopesToOptions(scopes: ResourceScope[]): ResourceScopeOption[] {
@@ -74,6 +75,41 @@ export function createResourceScopeMemberPayload(input: {
     canManage: actions.has('manage'),
     remark: input.remark,
   }
+}
+
+export function createUserResourceScopeMembershipPayload(input: {
+  scopeId: string
+  actions: ScopeAction[]
+  remark?: string
+}): UserResourceScopeMembershipUpsertPayload {
+  const actions = new Set(input.actions)
+
+  return {
+    scopeId: input.scopeId,
+    canView: actions.has('view') || actions.has('manage'),
+    canCreate: actions.has('create') || actions.has('manage'),
+    canEdit: actions.has('edit') || actions.has('manage'),
+    canDelete: actions.has('delete') || actions.has('manage'),
+    canManage: actions.has('manage'),
+    remark: input.remark,
+  }
+}
+
+export function formatUserResourceScopeSummary(
+  memberships: ResourceScopeMember[],
+  scopes: ResourceScope[],
+  visibleCount = 2,
+): string {
+  if (memberships.length === 0) {
+    return '未配置'
+  }
+
+  const scopeNameMap = new Map(scopes.map((scope) => [scope.id, scope.scopeName]))
+  const labels = memberships.map((membership) => scopeNameMap.get(membership.scopeId) || membership.scopeId)
+  const visibleLabels = labels.slice(0, visibleCount)
+  const remainingCount = labels.length - visibleLabels.length
+
+  return remainingCount > 0 ? `${visibleLabels.join('、')} +${remainingCount}` : visibleLabels.join('、')
 }
 
 export function mergeResourceScopeOptions(

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   createResourceScopeMemberPayload,
+  createUserResourceScopeMembershipPayload,
   filterGrantScopeOptions,
   filterOwnerScopeOptions,
+  formatUserResourceScopeSummary,
   formatResourceScopeOptionLabel,
   mapResourceScopeMemberToActions,
   mapResourceScopeMemberToPermission,
@@ -89,6 +91,74 @@ describe('resource scope adapter', () => {
       canManage: true,
       remark: 'finance manager',
     })
+  })
+
+  it('expands manage permission when building user membership payload', () => {
+    expect(
+      createUserResourceScopeMembershipPayload({
+        scopeId: '9001',
+        actions: ['manage'],
+        remark: 'finance manager',
+      }),
+    ).toEqual({
+      scopeId: '9001',
+      canView: true,
+      canCreate: true,
+      canEdit: true,
+      canDelete: true,
+      canManage: true,
+      remark: 'finance manager',
+    })
+  })
+
+  it('formats user resource scope membership summary', () => {
+    expect(
+      formatUserResourceScopeSummary(
+        [
+          {
+            id: '9101',
+            scopeId: '9001',
+            userId: '2002',
+            account: 'auditor',
+            username: 'Auditor',
+            canView: 1,
+            canCreate: 0,
+            canEdit: 0,
+            canDelete: 0,
+            canManage: 0,
+          },
+          {
+            id: '9102',
+            scopeId: '9002',
+            userId: '2002',
+            account: 'auditor',
+            username: 'Auditor',
+            canView: 1,
+            canCreate: 1,
+            canEdit: 1,
+            canDelete: 0,
+            canManage: 0,
+          },
+          {
+            id: '9103',
+            scopeId: '9003',
+            userId: '2002',
+            account: 'auditor',
+            username: 'Auditor',
+            canView: 1,
+            canCreate: 1,
+            canEdit: 1,
+            canDelete: 1,
+            canManage: 1,
+          },
+        ],
+        [
+          { id: '9001', tenantId: '1001', scopeCode: 'FIN', scopeName: '财务域', status: 1 },
+          { id: '9002', tenantId: '1001', scopeCode: 'IT', scopeName: 'IT域', status: 1 },
+          { id: '9003', tenantId: '1001', scopeCode: 'LEG', scopeName: '法务域', status: 1 },
+        ],
+      ),
+    ).toBe('财务域、IT域 +1')
   })
 
   it('merges scope options with primary values taking precedence', () => {
