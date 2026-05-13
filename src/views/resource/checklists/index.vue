@@ -112,33 +112,19 @@
               </div>
               <div v-if="row.items?.length" class="item-table">
                 <div class="item-table-header">
-                  <span>序号</span>
-                  <span>检查内容</span>
-                  <span>判断标准</span>
-                  <span>控制频率</span>
-                  <span>评估类</span>
-                  <span>关联组织</span>
-                  <span>操作</span>
+                  <span class="item-heading item-heading-actions">操作</span>
+                  <span class="item-heading item-heading-sequence">序号</span>
+                  <span class="item-heading item-heading-content">检查内容</span>
+                  <span class="item-heading item-heading-criterion">判断标准</span>
+                  <span class="item-heading item-heading-frequency">控制频率</span>
+                  <span class="item-heading item-heading-evaluation">评估类</span>
+                  <span class="item-heading item-heading-org">关联组织</span>
                 </div>
                 <div
                   v-for="(item, index) in row.items"
                   :key="item.id || index"
                   class="item-table-row"
                 >
-                  <span class="item-cell item-sequence">{{ index + 1 }}</span>
-                  <span class="item-cell item-cell-strong" :title="item.content">
-                    {{ item.content }}
-                  </span>
-                  <span class="item-cell" :title="item.criterion">{{ item.criterion }}</span>
-                  <span class="item-cell">{{ controlFrequencyLabel(item.controlFrequency) }}</span>
-                  <span class="item-cell">
-                    <el-tag type="info" effect="light" size="small">
-                      {{ evaluationTypeLabel(item.evaluationType) }}
-                    </el-tag>
-                  </span>
-                  <span class="item-cell" :title="organizationLabels(item.organizationIds).join('、')">
-                    {{ organizationLabels(item.organizationIds).join('、') }}
-                  </span>
                   <div class="item-actions">
                     <el-button
                       v-if="getRowAccessState(row).canEdit"
@@ -157,6 +143,22 @@
                       >删除</el-button
                     >
                   </div>
+                  <span class="item-cell item-sequence">{{ index + 1 }}</span>
+                  <span class="item-cell item-cell-strong" :title="item.content">
+                    {{ item.content }}
+                  </span>
+                  <span class="item-cell" :title="item.criterion">{{ item.criterion }}</span>
+                  <span class="item-cell item-frequency">{{
+                    controlFrequencyLabel(item.controlFrequency)
+                  }}</span>
+                  <span class="item-cell item-evaluation">
+                    <el-tag type="info" effect="light" size="small">
+                      {{ evaluationTypeLabel(item.evaluationType) }}
+                    </el-tag>
+                  </span>
+                  <span class="item-cell" :title="organizationLabels(item.organizationIds).join('、')">
+                    {{ organizationLabels(item.organizationIds).join('、') }}
+                  </span>
                 </div>
               </div>
               <el-empty v-else description="暂无检查项" :image-size="60" />
@@ -1168,8 +1170,8 @@ const statusLabel = (status: ControlChecklist['status']) =>
   .item-table-row {
     display: grid;
     grid-template-columns:
-      42px minmax(0, 1.35fr) minmax(0, 1.45fr) 78px 76px minmax(0, 0.9fr)
-      86px;
+      104px 52px minmax(0, 1.35fr) minmax(0, 1.45fr) 86px 84px
+      minmax(0, 0.9fr);
     gap: 8px;
     align-items: center;
   }
@@ -1182,6 +1184,13 @@ const statusLabel = (status: ControlChecklist['status']) =>
     color: oklch(48% 0.028 248);
     font-size: 12px;
     font-weight: 700;
+  }
+
+  .item-heading {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .item-table-row {
@@ -1213,7 +1222,26 @@ const statusLabel = (status: ControlChecklist['status']) =>
     color: oklch(50% 0.1 250);
     font-size: 12px;
     font-weight: 760;
+  }
+
+  .item-heading-sequence,
+  .item-sequence,
+  .item-heading-frequency,
+  .item-frequency,
+  .item-heading-evaluation,
+  .item-evaluation {
+    justify-self: center;
     text-align: center;
+  }
+
+  .item-evaluation {
+    display: flex;
+    justify-content: center;
+  }
+
+  .item-heading-actions,
+  .item-actions {
+    justify-self: start;
   }
 
   .item-actions {
@@ -1221,7 +1249,12 @@ const statusLabel = (status: ControlChecklist['status']) =>
     align-items: center;
     justify-content: flex-start;
     gap: 0;
+    min-width: 0;
     white-space: nowrap;
+
+    :deep(.el-button.is-link:first-child) {
+      padding-left: 0;
+    }
   }
 
   .detail-footer {
@@ -1358,8 +1391,8 @@ const statusLabel = (status: ControlChecklist['status']) =>
     .item-table-header,
     .item-table-row {
       grid-template-columns:
-        38px minmax(0, 1.15fr) minmax(0, 1.25fr) 72px 70px minmax(0, 0.8fr)
-        82px;
+        96px 46px minmax(0, 1.15fr) minmax(0, 1.25fr) 78px 76px
+        minmax(0, 0.8fr);
       gap: 6px;
     }
   }
@@ -1413,8 +1446,8 @@ const statusLabel = (status: ControlChecklist['status']) =>
     .item-table-header,
     .item-table-row {
       grid-template-columns:
-        32px minmax(0, 1.1fr) minmax(0, 1.1fr) 58px 54px minmax(0, 0.75fr)
-        68px;
+        78px 36px minmax(0, 1.1fr) minmax(0, 1.1fr) 64px 62px
+        minmax(0, 0.75fr);
       gap: 4px;
       padding-left: 6px;
       padding-right: 6px;

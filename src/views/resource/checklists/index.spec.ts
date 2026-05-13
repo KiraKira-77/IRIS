@@ -85,6 +85,42 @@ describe('checklists page actions', () => {
     expect(gridStyle).toContain('grid-template-columns')
   })
 
+  it('places checklist item actions as the first visible column', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+    const detailStart = source.indexOf('<div class="checklist-detail">')
+    const detailEnd = source.indexOf('<el-table-column prop="name"', detailStart)
+    const detailTemplate = source.slice(detailStart, detailEnd)
+    const headerStart = detailTemplate.indexOf('<div class="item-table-header">')
+    const headerEnd = detailTemplate.indexOf('</div>', headerStart)
+    const headerTemplate = detailTemplate.slice(headerStart, headerEnd)
+    const rowStart = detailTemplate.indexOf('class="item-table-row"')
+    const rowTemplate = detailTemplate.slice(rowStart)
+    const gridStyleStart = source.indexOf('.item-table-header,')
+    const gridStyleEnd = source.indexOf('}', gridStyleStart)
+    const gridStyle = source.slice(gridStyleStart, gridStyleEnd)
+
+    expect(headerTemplate.indexOf('item-heading-actions')).toBeLessThan(
+      headerTemplate.indexOf('item-heading-sequence'),
+    )
+    expect(rowTemplate.indexOf('<div class="item-actions">')).toBeLessThan(
+      rowTemplate.indexOf('<span class="item-cell item-sequence">'),
+    )
+    expect(gridStyle).toContain('grid-template-columns:\n      104px 52px')
+  })
+
+  it('uses column-specific alignment for checklist item headers and cells', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+
+    expect(source).toContain('class="item-heading item-heading-actions"')
+    expect(source).toContain('class="item-heading item-heading-sequence"')
+    expect(source).toContain('class="item-cell item-frequency"')
+    expect(source).toContain('class="item-cell item-evaluation"')
+    expect(source).toContain('.item-heading-sequence,')
+    expect(source).toContain('.item-frequency,')
+    expect(source).toContain(':deep(.el-button.is-link:first-child)')
+    expect(source).toContain('padding-left: 0')
+  })
+
   it('uses the current user access context for checklist permissions', () => {
     const source = readFileSync(sourcePath, 'utf8')
 
