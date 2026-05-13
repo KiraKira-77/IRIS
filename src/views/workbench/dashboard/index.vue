@@ -12,10 +12,10 @@
           </p>
         </div>
 
-        <aside class="fusion-score">
-          <span>综合态势指数</span>
-          <strong>{{ dashboardData.healthScore }}</strong>
-          <span>{{ dashboardData.header.riskLevel }}风险态势</span>
+        <aside class="fusion-context">
+          <span>当前权限范围</span>
+          <strong>{{ kpiCards[0]?.value || '0' }} 个项目</strong>
+          <small>{{ dashboardData.header.riskLevel }}风险，接口实时汇总</small>
         </aside>
 
         <el-button class="refresh-button" :icon="Refresh" :loading="loading" @click="loadDashboard">
@@ -88,27 +88,16 @@
               </div>
 
               <div
-                v-for="(node, index) in dashboardData.stanceNodes"
-                :key="node.title"
-                class="fusion-node"
-                :class="nodeClass(index)"
+                v-for="(metric, index) in dashboardData.stanceMetrics"
+                :key="metric.title"
+                class="stance-metric"
+                :class="[metricClass(index), `is-${metric.type}`]"
               >
-                <strong>{{ node.title }}</strong>
-                <span>{{ node.value }}</span>
+                <span>{{ metric.title }}</span>
+                <strong>{{ metric.status }}</strong>
+                <em>{{ metric.value }}</em>
+                <small>{{ metric.detail }}</small>
               </div>
-            </div>
-
-            <div class="fusion-commands">
-              <button
-                v-for="command in dashboardData.commandItems"
-                :key="command.title"
-                class="fusion-command"
-                type="button"
-                @click="openCommand(command.title)"
-              >
-                <span>{{ command.title }}</span>
-                <strong>{{ command.value }}</strong>
-              </button>
             </div>
           </main>
 
@@ -213,7 +202,6 @@ import { normalizeProjectPage } from '@/features/projects/project-data'
 import {
   buildWorkbenchDashboardData,
   type WorkbenchActivityItem,
-  type WorkbenchCommandItem,
   type WorkbenchDashboardData,
   type WorkbenchTodoItem,
 } from '@/features/workbench/workbench-dashboard-data'
@@ -339,7 +327,7 @@ function alertClass(level: AlertEvent['level']): string {
   return `is-${level}`
 }
 
-function nodeClass(index: number): string {
+function metricClass(index: number): string {
   return ['one', 'two', 'three', 'four'][index] || 'one'
 }
 
@@ -348,18 +336,6 @@ function activityIcon(type: WorkbenchActivityItem['type']) {
   if (type === 'log') return Clock
   if (type === 'plan') return Collection
   return Document
-}
-
-function openCommand(title: WorkbenchCommandItem['title']) {
-  if (title === '项目推进') {
-    router.push('/project/list')
-    return
-  }
-  if (title === '整改策略' || title === '今日建议') {
-    router.push('/rectification/list')
-    return
-  }
-  router.push('/archive/list')
 }
 
 function openTodo(todo: WorkbenchTodoItem) {
@@ -416,7 +392,6 @@ function openTodo(todo: WorkbenchTodoItem) {
 .fusion-header,
 .fusion-kpi,
 .fusion-panel,
-.fusion-command,
 .fusion-map {
   border: 1px solid oklch(80% 0.15 205 / 26%);
   border-radius: 8px;
@@ -472,7 +447,7 @@ function openTodo(todo: WorkbenchTodoItem) {
   }
 }
 
-.fusion-score {
+.fusion-context {
   width: 184px;
   justify-self: end;
   border: 1px solid oklch(80% 0.15 205 / 28%);
@@ -491,9 +466,17 @@ function openTodo(todo: WorkbenchTodoItem) {
     display: block;
     margin-top: 8px;
     color: oklch(99% 0.006 220);
-    font-size: 46px;
+    font-size: 22px;
     line-height: 1;
     text-shadow: 0 0 22px oklch(72% 0.15 205 / 28%);
+  }
+
+  small {
+    display: block;
+    margin-top: 8px;
+    color: oklch(86% 0.028 220);
+    font-size: 12px;
+    line-height: 1.45;
   }
 }
 
@@ -661,9 +644,7 @@ function openTodo(todo: WorkbenchTodoItem) {
 }
 
 .fusion-center {
-  display: grid;
-  grid-template-rows: minmax(380px, 1fr) auto;
-  gap: 14px;
+  min-width: 0;
 }
 
 .fusion-map {
@@ -768,33 +749,51 @@ function openTodo(todo: WorkbenchTodoItem) {
   }
 }
 
-.fusion-node {
+.stance-metric {
   position: absolute;
   z-index: 4;
-  min-width: 120px;
-  max-width: 132px;
+  min-width: 142px;
+  max-width: 158px;
   border: 1px solid oklch(80% 0.15 205 / 26%);
   border-radius: 8px;
-  padding: 10px;
+  padding: 11px 12px;
   background: oklch(7.5% 0.026 230 / 84%);
   box-shadow:
     inset 0 1px 0 oklch(100% 0 0 / 10%),
     0 0 22px oklch(68% 0.18 205 / 10%);
 
   strong,
-  span {
+  span,
+  small {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  strong {
-    color: oklch(98% 0.008 220);
-    font-size: 13px;
+  span {
+    color: oklch(84% 0.13 205);
+    font-size: 12px;
   }
 
-  span {
+  strong {
+    margin-top: 5px;
+    color: oklch(98% 0.008 220);
+    font-size: 15px;
+  }
+
+  em {
+    position: absolute;
+    right: 12px;
+    top: 11px;
+    color: oklch(99% 0.006 220);
+    font-size: 20px;
+    font-style: normal;
+    font-weight: 820;
+    line-height: 1;
+  }
+
+  small {
     margin-top: 5px;
     color: oklch(88% 0.026 220);
     font-size: 12px;
@@ -802,61 +801,52 @@ function openTodo(todo: WorkbenchTodoItem) {
 
   &.one {
     left: 3%;
-    top: 22%;
+    top: 12%;
   }
 
   &.two {
     right: 3%;
-    top: 22%;
+    top: 12%;
   }
 
   &.three {
     left: 3%;
-    bottom: 8%;
+    bottom: 5%;
   }
 
   &.four {
     right: 3%;
-    bottom: 8%;
+    bottom: 5%;
   }
 }
 
-.fusion-commands {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.fusion-command {
-  min-height: 84px;
-  padding: 14px;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
-    border-color 180ms cubic-bezier(0.16, 1, 0.3, 1);
-
-  &:hover,
-  &:focus-visible {
-    transform: translateY(-2px);
-    border-color: oklch(82% 0.14 205 / 58%);
-    outline: none;
-  }
+.stance-metric.is-danger {
+  border-color: oklch(62% 0.2 24 / 36%);
+  box-shadow:
+    inset 0 1px 0 oklch(100% 0 0 / 10%),
+    0 0 24px oklch(62% 0.2 24 / 14%);
 
   span,
-  strong {
-    display: block;
+  em {
+    color: oklch(76% 0.18 24);
   }
+}
 
-  span {
-    color: oklch(88% 0.026 220);
-    font-size: 12px;
+.stance-metric.is-warning {
+  border-color: oklch(76% 0.15 78 / 36%);
+
+  span,
+  em {
+    color: oklch(84% 0.14 78);
   }
+}
 
-  strong {
-    margin-top: 8px;
-    color: oklch(98% 0.008 220);
-    line-height: 1.45;
+.stance-metric.is-success {
+  border-color: oklch(70% 0.13 155 / 32%);
+
+  span,
+  em {
+    color: oklch(78% 0.13 155);
   }
 }
 
@@ -1026,7 +1016,7 @@ function openTodo(todo: WorkbenchTodoItem) {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .fusion-score,
+  .fusion-context,
   .refresh-button {
     justify-self: start;
   }
@@ -1046,12 +1036,11 @@ function openTodo(todo: WorkbenchTodoItem) {
   }
 
   .fusion-kpis,
-  .fusion-commands,
   .skeleton-kpis {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .fusion-node {
+  .stance-metric {
     position: relative;
     left: auto;
     right: auto;
@@ -1061,10 +1050,10 @@ function openTodo(todo: WorkbenchTodoItem) {
     margin: 8px;
   }
 
-  .fusion-node.one,
-  .fusion-node.two,
-  .fusion-node.three,
-  .fusion-node.four {
+  .stance-metric.one,
+  .stance-metric.two,
+  .stance-metric.three,
+  .stance-metric.four {
     left: auto;
     right: auto;
     top: auto;

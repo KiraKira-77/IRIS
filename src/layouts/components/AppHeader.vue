@@ -21,14 +21,14 @@
 
     <div class="right-panel">
       <el-tooltip content="文档中心" placement="bottom">
-        <div class="icon-btn">
+        <div class="icon-btn" @click="openDocumentCenter">
           <el-icon :size="18"><Document /></el-icon>
         </div>
       </el-tooltip>
 
       <el-tooltip content="消息通知" placement="bottom">
-        <div class="icon-btn">
-          <el-badge is-dot class="notice-badge">
+        <div class="icon-btn" @click="openMessageCenter">
+          <el-badge :hidden="unreadAlertCount === 0" is-dot class="notice-badge">
             <el-icon :size="18"><Bell /></el-icon>
           </el-badge>
         </div>
@@ -62,16 +62,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppStore, useUserStore } from '@/stores'
+import { alertApi } from '@/api'
 import { Fold, Expand, Bell, Document, CaretBottom } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
+import type { AlertEvent } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const userStore = useUserStore()
+const unreadAlertCount = ref(0)
 
 const breadcrumbs = computed(() => {
   return route.matched
@@ -95,6 +98,33 @@ const handleCommand = (command: string) => {
       router.push('/login')
     })
   }
+}
+
+onMounted(() => {
+  loadUnreadAlertCount()
+})
+
+async function loadUnreadAlertCount() {
+  try {
+    const result = await alertApi.list({ page: 1, pageSize: 100 })
+    const alerts = readAlertList(result)
+    unreadAlertCount.value = alerts.filter((item) => !item.acknowledged).length
+  } catch {
+    unreadAlertCount.value = 0
+  }
+}
+
+function readAlertList(result: { records?: AlertEvent[]; list?: AlertEvent[] }): AlertEvent[] {
+  if (Array.isArray(result.records)) return result.records
+  return Array.isArray(result.list) ? result.list : []
+}
+
+function openDocumentCenter() {
+  router.push('/resource/archives')
+}
+
+function openMessageCenter() {
+  router.push('/workbench/alerts')
 }
 </script>
 

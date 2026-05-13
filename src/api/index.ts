@@ -25,6 +25,13 @@ import type {
   LogEntry,
   Rule,
   AIModel,
+  AIModelTestResult,
+  AIModelUpsertPayload,
+  AiChatMessage,
+  AiChatMessagePayload,
+  AiChatSession,
+  AiChatTraceDetail,
+  AiChatTraceListItem,
   Tool,
   ProjectTaskWorkOrder,
 } from '@/types'
@@ -257,7 +264,23 @@ export const ruleApi = {
 
 export const modelApi = {
   list: (params?: PageQuery) => request.get<PageResult<AIModel>>('/v1/models', params),
-  update: (id: string, data: Partial<AIModel>) => request.put<AIModel>(`/v1/models/${id}`, data),
+  create: (data: AIModelUpsertPayload) => request.post<AIModel>('/v1/models', data),
+  update: (id: string, data: AIModelUpsertPayload) => request.put<AIModel>(`/v1/models/${id}`, data),
+  delete: (id: string) => request.delete<void>(`/v1/models/${id}`),
+  test: (id: string) => request.post<AIModelTestResult>(`/v1/models/${id}/test`),
+}
+
+export const aiChatApi = {
+  createSession: () => request.post<AiChatSession>('/v1/ai/chat/sessions'),
+  sendMessage: (data: AiChatMessagePayload) =>
+    request.post<AiChatMessage>('/v1/ai/chat/messages', data),
+}
+
+export const aiChatTraceApi = {
+  list: (params?: PageQuery) =>
+    request.get<PageResult<AiChatTraceListItem>>('/v1/ai/chat/traces', params),
+  detail: (traceId: string) =>
+    request.get<AiChatTraceDetail>(`/v1/ai/chat/traces/${traceId}`),
 }
 
 export const toolApi = {

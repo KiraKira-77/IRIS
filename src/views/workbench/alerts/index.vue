@@ -1,6 +1,6 @@
 <template>
   <div class="page-container iris-page">
-    <div class="iris-card page-content">
+    <div v-loading="loading" class="iris-card page-content">
       <div class="page-header">
         <div class="left">
           <h2 class="page-title">告警中心</h2>
@@ -19,7 +19,9 @@
             </el-select>
           </el-form-item>
           <el-form-item>
-            <el-button type="primary" :icon="Search">查询</el-button>
+            <el-button type="primary" :icon="Search" :loading="loading" @click="loadAlerts">
+              查询
+            </el-button>
           </el-form-item>
         </el-form>
       </div>
@@ -27,7 +29,7 @@
       <el-timeline style="padding: 20px">
         <el-timeline-item
           v-for="(alert, index) in tableData"
-          :key="index"
+          :key="alert.id || index"
           :type="levelType(alert.level)"
           :timestamp="alert.timestamp"
           placement="top"
@@ -42,10 +44,9 @@
             <div class="alert-content">{{ alert.content }}</div>
             <div class="alert-source">来源: {{ alert.source }}</div>
             <div class="alert-footer" v-if="!alert.acknowledged">
-              <el-button type="primary" link size="small">标记已读</el-button>
-              <el-button type="danger" link size="small" v-if="alert.level === 'critical'"
-                >创建工单</el-button
-              >
+              <el-button type="primary" link size="small" @click="handleAcknowledge(alert)">
+                标记已读
+              </el-button>
             </div>
           </div>
         </el-timeline-item>
@@ -55,21 +56,55 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { onMounted, ref, reactive } from 'vue'
 import { Search } from '@element-plus/icons-vue'
-import { mockAlerts } from '@/mock'
+import { ElMessage } from 'element-plus'
+import { alertApi } from '@/api'
+import type { AlertEvent } from '@/types'
+
+type BackendAlertPage = {
+  records?: AlertEvent[]
+  list?: AlertEvent[]
+  total?: number
+  pageNo?: number
+  page?: number
+  pageSize?: number
+}
 
 const searchForm = reactive({ level: '' })
-const tableData = ref(mockAlerts)
+const loading = ref(false)
+const tableData = ref<AlertEvent[]>([])
+
+const loadAlerts = async () => {
+  loading.value = true
+  try {
+    const page = (await alertApi.list({
+      page: 1,
+      pageSize: 100,
+      level: searchForm.level || undefined,
+    })) as BackendAlertPage
+    tableData.value = page.records || page.list || []
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleAcknowledge = async (alert: AlertEvent) => {
+  await alertApi.acknowledge(alert.id)
+  alert.acknowledged = true
+  ElMessage.success('已标记为已读')
+}
 
 const levelType = (val: string) => {
-  const map: any = { critical: 'danger', warning: 'warning', info: 'primary' }
+  const map: Record<string, string> = { critical: 'danger', warning: 'warning', info: 'primary' }
   return map[val] || 'info'
 }
 const levelLabel = (val: string) => {
-  const map: any = { critical: '严重', warning: '警告', info: '信息' }
+  const map: Record<string, string> = { critical: '严重', warning: '警告', info: '信息' }
   return map[val] || val
 }
+
+onMounted(loadAlerts)
 </script>
 
 <style lang="scss" scoped>

@@ -68,14 +68,12 @@ export interface WorkbenchAlertItem {
   timeText: string
 }
 
-export interface WorkbenchCommandItem {
+export interface WorkbenchStanceMetric {
   title: string
+  status: string
   value: string
-}
-
-export interface WorkbenchStanceNode {
-  title: string
-  value: string
+  detail: string
+  type: WorkbenchCardType
 }
 
 export interface WorkbenchDashboardData {
@@ -97,8 +95,7 @@ export interface WorkbenchDashboardData {
   healthSummary: string
   riskItems: WorkbenchRiskItem[]
   alertItems: WorkbenchAlertItem[]
-  commandItems: WorkbenchCommandItem[]
-  stanceNodes: WorkbenchStanceNode[]
+  stanceMetrics: WorkbenchStanceMetric[]
   emptyText: string
 }
 
@@ -163,16 +160,11 @@ export function buildWorkbenchDashboardData({
   const pendingRectifications = rectifications.filter(
     (rectification) => !closedRectificationStatuses.has(rectification.status),
   )
-  const closedRectifications = rectifications.filter((rectification) =>
-    closedRectificationStatuses.has(rectification.status),
-  )
   const completedTasks = tasks.filter((task) => completedTaskStatuses.has(task.status))
   const completionRate = tasks.length === 0 ? 0 : Math.round((completedTasks.length / tasks.length) * 100)
-  const rectificationCloseRate =
-    rectifications.length === 0 ? 0 : Math.round((closedRectifications.length / rectifications.length) * 100)
-  const activeChecklists = checklists.filter((item) => item.status === 'active')
   const projectStatusCounts = countBy(projects, (project) => project.status)
   const pendingCount = pendingTasks.length + pendingRectifications.length
+  const unacknowledgedAlertCount = alerts.filter((alert) => !alert.acknowledged).length
   const criticalAlertCount = alerts.filter(
     (alert) => alert.level === 'critical' && !alert.acknowledged,
   ).length
@@ -206,28 +198,16 @@ export function buildWorkbenchDashboardData({
     },
     cards: [
       {
-        title: '待处理检查项',
-        value: String(pendingTasks.length),
-        note: pendingTasks.length > 0 ? '需要跟进' : '暂无待处理',
-        type: 'danger',
-      },
-      {
-        title: '待整改项',
-        value: String(pendingRectifications.length),
-        note: `待闭环 ${pendingRectifications.length} / 共 ${rectifications.length}`,
-        type: 'warning',
+        title: '可见项目',
+        value: String(projects.length),
+        note: projects.length > 0 ? '当前权限范围' : '暂无可见项目',
+        type: 'primary',
       },
       {
         title: '进行中项目',
         value: String(projectStatusCounts.in_progress || 0),
-        note: `项目总数 ${projects.length}`,
+        note: projectStatusCounts.in_progress ? '正在执行' : '暂无执行中项目',
         type: 'primary',
-      },
-      {
-        title: '有效检查清单',
-        value: String(activeChecklists.length),
-        note: `检查项 ${activeChecklists.reduce((sum, item) => sum + (item.items?.length || 0), 0)}`,
-        type: 'info',
       },
       {
         title: '检查项完成率',
@@ -236,16 +216,22 @@ export function buildWorkbenchDashboardData({
         type: 'success',
       },
       {
-        title: '档案归集',
+        title: '待整改项',
+        value: String(pendingRectifications.length),
+        note: `待闭环 ${pendingRectifications.length} / 共 ${rectifications.length}`,
+        type: pendingRectifications.length > 0 ? 'warning' : 'success',
+      },
+      {
+        title: '未确认告警',
+        value: String(unacknowledgedAlertCount),
+        note: unacknowledgedAlertCount > 0 ? '需要确认' : '暂无未确认',
+        type: unacknowledgedAlertCount > 0 ? 'danger' : 'success',
+      },
+      {
+        title: '已归档',
         value: String(archives.length),
         note: `文档 ${archiveDocumentCount} 份`,
         type: 'info',
-      },
-      {
-        title: '整改闭环率',
-        value: `${rectificationCloseRate}%`,
-        note: `已闭环 ${closedRectifications.length} / 共 ${rectifications.length}`,
-        type: 'success',
       },
     ],
     todoList: buildTodoList(pendingTasks, pendingRectifications, now),
@@ -262,31 +248,17 @@ export function buildWorkbenchDashboardData({
       now,
     }),
     alertItems: buildAlertItems(alerts),
-    commandItems: buildCommandItems({
-      highRiskCount,
-      projects,
-      pendingRectifications,
-      archives,
-      archiveDocumentCount,
+    stanceMetrics: buildStanceMetrics({
+      projectStatusCounts,
+      projectCount: projects.length,
+      completedTaskCount: completedTasks.length,
+      taskCount: tasks.length,
+      completionRate,
+      pendingRectificationCount: pendingRectifications.length,
+      rectificationCount: rectifications.length,
+      unacknowledgedAlertCount,
+      alertCount: alerts.length,
     }),
-    stanceNodes: [
-      {
-        title: '项目执行',
-        value: `${projectStatusCounts.in_progress || 0} 个进行中`,
-      },
-      {
-        title: '整改闭环',
-        value: `${pendingRectifications.length} 个待推进`,
-      },
-      {
-        title: '档案归集',
-        value: `${archives.length} 个已归集`,
-      },
-      {
-        title: '责任动态',
-        value: `${logs.length} 条日志`,
-      },
-    ],
     emptyText:
       projects.length === 0 &&
       plans.length === 0 &&
@@ -474,40 +446,57 @@ function buildAlertItems(alerts: AlertEvent[]): WorkbenchAlertItem[] {
     }))
 }
 
-function buildCommandItems({
-  highRiskCount,
-  projects,
-  pendingRectifications,
-  archives,
-  archiveDocumentCount,
+function buildStanceMetrics({
+  projectStatusCounts,
+  projectCount,
+  completedTaskCount,
+  taskCount,
+  completionRate,
+  pendingRectificationCount,
+  rectificationCount,
+  unacknowledgedAlertCount,
+  alertCount,
 }: {
-  highRiskCount: number
-  projects: Project[]
-  pendingRectifications: RectificationOrder[]
-  archives: Archive[]
-  archiveDocumentCount: number
-}): WorkbenchCommandItem[] {
-  const archivableProjectCount = projects.filter((project) => project.status === 'completed').length
+  projectStatusCounts: Record<string, number>
+  projectCount: number
+  completedTaskCount: number
+  taskCount: number
+  completionRate: number
+  pendingRectificationCount: number
+  rectificationCount: number
+  unacknowledgedAlertCount: number
+  alertCount: number
+}): WorkbenchStanceMetric[] {
+  const activeProjectCount = projectStatusCounts.in_progress || 0
 
   return [
     {
-      title: '今日建议',
-      value: highRiskCount > 0 ? `优先处理 ${highRiskCount} 个高风险` : '当前无高风险待处理',
-    },
-    {
       title: '项目推进',
-      value: archivableProjectCount > 0 ? `${archivableProjectCount} 个项目可归档` : `${projects.length} 个项目可查看`,
+      status: resolveProjectStance(projectStatusCounts, projectCount),
+      value: String(activeProjectCount),
+      detail: projectCount > 0 ? `可见项目 ${projectCount}` : '暂无可见项目',
+      type: activeProjectCount > 0 ? 'primary' : 'info',
     },
     {
-      title: '整改策略',
-      value:
-        pendingRectifications.length > 0
-          ? `${pendingRectifications.length} 个整改待推进`
-          : '整改项均已闭环或暂无数据',
+      title: '检查质量',
+      status: resolveTaskQualityStance(completionRate, taskCount),
+      value: `${completionRate}%`,
+      detail: taskCount > 0 ? `已完成 ${completedTaskCount} / 共 ${taskCount}` : '暂无检查任务',
+      type: taskCount === 0 ? 'info' : completionRate >= 80 ? 'success' : 'warning',
     },
     {
-      title: '数据质量',
-      value: `${archives.length} 个档案，${archiveDocumentCount} 份文档`,
+      title: '整改压力',
+      status: resolveRectificationStance(pendingRectificationCount, rectificationCount),
+      value: String(pendingRectificationCount),
+      detail: rectificationCount > 0 ? `整改总数 ${rectificationCount}` : '暂无整改事项',
+      type: pendingRectificationCount > 0 ? 'warning' : 'success',
+    },
+    {
+      title: '告警压力',
+      status: resolveAlertStance(unacknowledgedAlertCount, alertCount),
+      value: String(unacknowledgedAlertCount),
+      detail: alertCount > 0 ? `告警总数 ${alertCount}` : '暂无告警记录',
+      type: unacknowledgedAlertCount > 0 ? 'danger' : 'success',
     },
   ]
 }
@@ -622,6 +611,29 @@ function resolveRiskLevel(pendingCount: number, projectCount: number): string {
   if (pendingCount >= 10 || projectCount >= 20) return '高'
   if (pendingCount >= 4 || projectCount >= 8) return '中'
   return '低'
+}
+
+function resolveProjectStance(statusCounts: Record<string, number>, projectCount: number): string {
+  if (projectCount === 0) return '暂无项目'
+  if ((statusCounts.in_progress || 0) > 0) return '执行中'
+  if ((statusCounts.not_started || 0) > 0) return '待启动'
+  return '平稳'
+}
+
+function resolveRectificationStance(pendingRectificationCount: number, rectificationCount: number): string {
+  if (rectificationCount === 0) return '暂无整改'
+  return pendingRectificationCount > 0 ? '待闭环' : '已闭环'
+}
+
+function resolveTaskQualityStance(completionRate: number, taskCount: number): string {
+  if (taskCount === 0) return '暂无任务'
+  if (completionRate >= 80) return '完成率高'
+  return '待提升'
+}
+
+function resolveAlertStance(unacknowledgedAlertCount: number, alertCount: number): string {
+  if (alertCount === 0) return '暂无告警'
+  return unacknowledgedAlertCount > 0 ? '需确认' : '平稳'
 }
 
 function resolveHealthScore({

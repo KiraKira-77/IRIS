@@ -683,6 +683,7 @@ export interface LogEntry {
   message: string
   detail?: string
   timestamp: string
+  operatorName?: string
 }
 
 // ===========================
@@ -710,15 +711,113 @@ export interface RuleExecution {
   executedAt: string
   duration?: number
 }
+export type AIModelProviderType = 'openai_compatible'
+export type AIModelStatus = 'online' | 'offline'
 export interface AIModel {
   id: string
   name: string
-  type: 'llm' | 'ml'
+  type: 'llm'
+  providerType: AIModelProviderType
   provider: string
-  endpoint: string
-  description: string
-  status: 'online' | 'offline'
-  config?: Record<string, unknown>
+  baseUrl: string
+  modelName: string
+  apiKeyConfigured: boolean
+  status: AIModelStatus
+  defaultModel: boolean
+  timeoutSeconds: number
+  temperature: number
+  maxTokens: number
+  remark?: string
+  createdAt?: string
+  updatedAt?: string
+}
+export interface AIModelUpsertPayload {
+  name: string
+  providerType: AIModelProviderType
+  baseUrl: string
+  modelName: string
+  apiKey?: string
+  status: AIModelStatus
+  defaultModel: boolean
+  timeoutSeconds: number
+  temperature: number
+  maxTokens: number
+  remark?: string
+}
+export interface AIModelTestResult {
+  success: boolean
+  message: string
+  latencyMs?: number
+}
+export interface AiChatCitation {
+  type: string
+  id: string
+  title: string
+  path?: string
+}
+export interface AiChatToolResult {
+  toolName: string
+  summary: string
+  citations: AiChatCitation[]
+}
+export interface AiChatMessage {
+  id: string
+  traceId?: string
+  sessionId: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  status: 'ok' | 'model_unconfigured' | 'model_offline' | 'model_config_invalid' | string
+  citations: AiChatCitation[]
+  toolResults: AiChatToolResult[]
+  latencyMs?: number
+  createdAt: string
+}
+export interface AiChatSession {
+  id: string
+  title: string
+  createdAt: string
+}
+export interface AiChatPageContext {
+  routePath: string
+  entityType?: string
+  entityId?: string
+}
+export interface AiChatMessagePayload {
+  sessionId?: string
+  message: string
+  pageContext: AiChatPageContext
+}
+export interface AiChatTraceEvent {
+  sequenceNo: number
+  eventType: string
+  eventName: string
+  status: string
+  detailJson?: string
+  elapsedMs?: number
+  createdAt?: string
+}
+export interface AiChatTraceListItem {
+  traceId: string
+  sessionId?: string
+  userId?: string
+  username?: string
+  routePath?: string
+  question: string
+  status: string
+  modelName?: string
+  toolNamesJson?: string
+  latencyMs?: number
+  createdAt?: string
+}
+export interface AiChatTraceDetail extends AiChatTraceListItem {
+  entityType?: string
+  entityId?: string
+  answer?: string
+  providerType?: string
+  citationsJson?: string
+  errorMessage?: string
+  updatedAt?: string
+  events: AiChatTraceEvent[]
 }
 export interface Tool {
   id: string

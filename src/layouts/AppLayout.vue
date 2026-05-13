@@ -10,6 +10,7 @@
           </transition>
         </router-view>
       </el-main>
+      <AiChatAssistant />
     </el-container>
   </el-container>
 </template>
@@ -19,6 +20,7 @@ import { computed } from 'vue'
 import { useAppStore } from '@/stores'
 import AppSidebar from './components/AppSidebar.vue'
 import AppHeader from './components/AppHeader.vue'
+import AiChatAssistant from '@/components/ai/AiChatAssistant.vue'
 
 const appStore = useAppStore()
 const isCollapsed = computed(() => appStore.sidebarCollapsed)

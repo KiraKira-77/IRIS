@@ -145,12 +145,19 @@ describe('workbench dashboard data', () => {
     expect(data.header.todayText).toBe('2026年04月30日，星期四')
     expect(data.header.pendingCount).toBe(1)
     expect(data.header.completionRateText).toBe('50%')
-    expect(data.cards.slice(0, 5).map((card) => [card.title, card.value])).toEqual([
-      ['待处理检查项', '1'],
-      ['待整改项', '0'],
+    expect(data.cards.map((card) => [card.title, card.value])).toEqual([
+      ['可见项目', '1'],
       ['进行中项目', '1'],
-      ['有效检查清单', '1'],
       ['检查项完成率', '50%'],
+      ['待整改项', '0'],
+      ['未确认告警', '0'],
+      ['已归档', '0'],
+    ])
+    expect(data.stanceMetrics.map((item) => [item.title, item.status, item.value])).toEqual([
+      ['项目推进', '执行中', '1'],
+      ['检查质量', '待提升', '50%'],
+      ['整改压力', '暂无整改', '0'],
+      ['告警压力', '暂无告警', '0'],
     ])
     expect(data.todoList).toEqual([
       expect.objectContaining({
@@ -180,7 +187,7 @@ describe('workbench dashboard data', () => {
       value: '1',
       note: '待闭环 1 / 共 1',
     })
-    expect(data.cards.find((card) => card.title === '档案归集')).toMatchObject({
+    expect(data.cards.find((card) => card.title === '已归档')).toMatchObject({
       value: '1',
       note: '文档 3 份',
     })
@@ -192,13 +199,14 @@ describe('workbench dashboard data', () => {
       title: '整改临近截止',
       content: '权限整改需要今日完成。',
     })
-    expect(data.commandItems.map((item) => item.title)).toContain('今日建议')
-    expect(data.stanceNodes.map((item) => item.title)).toEqual([
-      '项目执行',
-      '整改闭环',
-      '档案归集',
-      '责任动态',
+    expect(data.stanceMetrics.map((item) => [item.title, item.status, item.value])).toEqual([
+      ['项目推进', '暂无项目', '0'],
+      ['检查质量', '暂无任务', '0%'],
+      ['整改压力', '待闭环', '1'],
+      ['告警压力', '需确认', '1'],
     ])
+    expect('stanceNodes' in data).toBe(false)
+    expect('commandItems' in data).toBe(false)
     expect(data.todoList).toEqual([
       expect.objectContaining({
         id: 'rect-001',

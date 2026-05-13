@@ -158,6 +158,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '模型库', icon: 'MagicStick' },
       },
       {
+        path: 'smart/ai-logs',
+        name: 'AiLogs',
+        component: () => import('@/views/smart/ai-logs/index.vue'),
+        meta: { title: 'AI 问答日志', icon: 'DocumentChecked' },
+      },
+      {
         path: 'smart/tools',
         name: 'Tools',
         component: () => import('@/views/smart/tools/index.vue'),

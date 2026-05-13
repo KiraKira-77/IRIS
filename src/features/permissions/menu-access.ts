@@ -64,6 +64,7 @@ export const APP_MENU_GROUPS: AppMenuGroup[] = [
       { code: 'smart.analysis', label: '统计分析', path: '/smart/analysis' },
       { code: 'smart.rules', label: '规则库', path: '/smart/rules' },
       { code: 'smart.models', label: '模型库', path: '/smart/models' },
+      { code: 'smart.aiLogs', label: 'AI 问答日志', path: '/smart/ai-logs' },
       { code: 'smart.tools', label: '工具库', path: '/smart/tools' },
     ],
   },
@@ -113,6 +114,7 @@ export function buildDefaultMenuCodes(roles: string[]): string[] {
       'rectification.create',
       'smart.analysis',
       'smart.rules',
+      'smart.aiLogs',
       'system.roles',
     ]
   }
