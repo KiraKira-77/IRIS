@@ -9,6 +9,13 @@ const headerSource = readFileSync(
 )
 
 describe('app header shortcuts', () => {
+  it('applies a dedicated visual treatment on the workbench dashboard route', () => {
+    expect(headerSource).toContain(':class="{ \'is-workbench-dashboard\': isWorkbenchDashboard }"')
+    expect(headerSource).toContain('const isWorkbenchDashboard = computed')
+    expect(headerSource).toContain("route.path === '/workbench/dashboard'")
+    expect(headerSource).toContain('.app-header.is-workbench-dashboard')
+  })
+
   it('turns document center into the archive management shortcut', () => {
     expect(headerSource).toContain('@click="openDocumentCenter"')
     expect(headerSource).toContain("router.push('/resource/archives')")

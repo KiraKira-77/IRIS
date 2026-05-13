@@ -801,12 +801,12 @@ function openTodo(todo: WorkbenchTodoItem) {
 
   &.one {
     left: 3%;
-    top: 12%;
+    top: 18%;
   }
 
   &.two {
     right: 3%;
-    top: 12%;
+    top: 18%;
   }
 
   &.three {

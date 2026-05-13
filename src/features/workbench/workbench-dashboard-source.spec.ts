@@ -42,6 +42,11 @@ describe('workbench dashboard source', () => {
     expect(dashboardSource).toContain('max-width: 158px')
   })
 
+  it('keeps the top stance metrics aligned clear of the map title', () => {
+    expect(dashboardSource).toContain('&.one {\n    left: 3%;\n    top: 18%;')
+    expect(dashboardSource).toContain('&.two {\n    right: 3%;\n    top: 18%;')
+  })
+
   it('keeps bottom content focused on actionable todos and recent activities', () => {
     expect(dashboardSource).toContain('class="fusion-panel todo-panel"')
     expect(dashboardSource).toContain('class="fusion-panel activity-panel"')

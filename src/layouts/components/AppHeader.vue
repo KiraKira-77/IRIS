@@ -1,5 +1,5 @@
 <template>
-  <el-header class="app-header">
+  <el-header class="app-header" :class="{ 'is-workbench-dashboard': isWorkbenchDashboard }">
     <div class="left-panel">
       <div class="collapse-btn" @click="appStore.toggleSidebar">
         <el-icon :size="20">
@@ -75,6 +75,7 @@ const router = useRouter()
 const appStore = useAppStore()
 const userStore = useUserStore()
 const unreadAlertCount = ref(0)
+const isWorkbenchDashboard = computed(() => route.path === '/workbench/dashboard')
 
 const breadcrumbs = computed(() => {
   return route.matched
@@ -142,6 +143,53 @@ function openMessageCenter() {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
   position: relative;
   z-index: 10;
+}
+
+.app-header.is-workbench-dashboard {
+  background:
+    linear-gradient(90deg, oklch(7% 0.03 230), oklch(10% 0.04 242) 58%, oklch(7.5% 0.03 228));
+  border-bottom-color: oklch(78% 0.15 205 / 24%);
+  box-shadow:
+    inset 0 -1px 0 oklch(78% 0.14 205 / 9%),
+    0 10px 28px oklch(0% 0 0 / 18%);
+
+  .collapse-btn,
+  .icon-btn {
+    color: oklch(87% 0.03 220);
+
+    &:hover {
+      background: oklch(100% 0 0 / 8%);
+      color: oklch(84% 0.13 205);
+    }
+  }
+
+  .user-profile {
+    color: oklch(91% 0.026 220);
+
+    &:hover {
+      background: oklch(100% 0 0 / 8%);
+    }
+
+    .username {
+      color: oklch(94% 0.02 220);
+    }
+  }
+
+  :deep(.el-breadcrumb__separator) {
+    color: oklch(82% 0.05 220 / 52%);
+  }
+
+  :deep(.el-breadcrumb__inner) {
+    color: oklch(94% 0.02 220) !important;
+
+    &.is-link {
+      color: oklch(82% 0.04 220) !important;
+
+      &:hover {
+        color: oklch(84% 0.13 205) !important;
+      }
+    }
+  }
 }
 
 .left-panel {
