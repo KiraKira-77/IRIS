@@ -92,7 +92,14 @@
         </div>
         <span class="table-count">当前页 {{ tableData.length }} 条</span>
       </div>
-      <el-table :data="tableData" v-loading="loading" style="width: 100%" size="large">
+      <el-table
+        :data="tableData"
+        v-loading="loading"
+        style="width: 100%"
+        size="large"
+        :default-sort="{ prop: 'uploadDate', order: 'descending' }"
+        @sort-change="handleSortChange"
+      >
         <el-table-column prop="title" label="标准名称" min-width="320" show-overflow-tooltip>
           <template #default="{ row }">
             <button class="standard-title-button" type="button" @click="openDetail(row)">
@@ -140,7 +147,7 @@
             <el-tag type="info" effect="plain" round>{{ scopeLabel(row.ownerScopeId) }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="上传日期" width="130" sortable>
+        <el-table-column prop="uploadDate" label="上传日期" width="130" sortable="custom">
           <template #default="{ row }">
             {{ uploadDateLabel(row) }}
           </template>
@@ -711,6 +718,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadProps, UploadRawFile, UploadUserFile } from 'element-plus'
 import { resourceScopeApi, standardApi } from '@/api'
 import {
+  buildStandardListRequestParams,
   buildStandardSearchInteraction,
   buildStandardSubmitState,
   buildStandardUpsertPayload,
@@ -719,6 +727,7 @@ import {
   normalizeStandardFromApi,
   validateStandardEditorForm,
 } from '@/features/standards/standard-data'
+import type { StandardTableSortState } from '@/features/standards/standard-data'
 import {
   buildStandardVersionChanges,
   buildVersionHistoryDetailSections,
@@ -743,6 +752,7 @@ const searchForm = reactive({ keyword: '', category: '', status: '' })
 const allStandards = ref<Standard[]>([])
 const tableData = ref<Standard[]>([])
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const sortState = reactive<StandardTableSortState>({ prop: 'uploadDate', order: 'descending' })
 const userStore = useUserStore()
 const scopeOptions = ref<ResourceScopeOption[]>([...DEFAULT_RESOURCE_SCOPE_OPTIONS])
 const currentTenantId = computed(() => userStore.userInfo?.tenantId || 1001)
@@ -865,13 +875,7 @@ const loadStandards = async () => {
 
   try {
     const page = normalizeStandardPageFromApi(
-      await standardApi.list({
-        page: pagination.page,
-        pageSize: pagination.pageSize,
-        keyword: searchForm.keyword || undefined,
-        category: searchForm.category || undefined,
-        status: searchForm.status || undefined,
-      }),
+      await standardApi.list(buildStandardListRequestParams(searchForm, pagination, sortState)),
     )
     allStandards.value = page.list
     tableData.value = page.list
@@ -882,6 +886,13 @@ const loadStandards = async () => {
   } finally {
     loading.value = false
   }
+}
+
+const handleSortChange = async ({ order }: StandardTableSortState) => {
+  sortState.prop = 'uploadDate'
+  sortState.order = order === 'ascending' ? 'ascending' : 'descending'
+  pagination.page = 1
+  await loadStandards()
 }
 
 const handleSearchSubmit = async () => {

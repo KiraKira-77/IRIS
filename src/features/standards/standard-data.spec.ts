@@ -4,6 +4,7 @@ import {
   buildStandardSubmitState,
   buildStandardDraftPayload,
   buildStandardListPage,
+  buildStandardListRequestParams,
   buildStandardMutationPayload,
   buildStandardSearchInteraction,
   buildStandardUpsertPayload,
@@ -102,6 +103,38 @@ describe('standard-data', () => {
       form: { keyword: 'finance', category: 'internal', status: 'active' },
       pagination: { page: 1, pageSize: 20, total: 56 },
       shouldReload: true,
+    })
+  })
+
+  it('builds default upload-date descending list request params', () => {
+    expect(
+      buildStandardListRequestParams(
+        { keyword: '', category: '', status: '' },
+        { page: 1, pageSize: 10, total: 0 },
+      ),
+    ).toEqual({
+      page: 1,
+      pageSize: 10,
+      sortBy: 'uploadDate',
+      sortOrder: 'desc',
+    })
+  })
+
+  it('builds upload-date ascending list request params from table sort state', () => {
+    expect(
+      buildStandardListRequestParams(
+        { keyword: 'Finance', category: 'internal', status: 'active' },
+        { page: 2, pageSize: 20, total: 34 },
+        { prop: 'uploadDate', order: 'ascending' },
+      ),
+    ).toEqual({
+      page: 2,
+      pageSize: 20,
+      keyword: 'Finance',
+      category: 'internal',
+      status: 'active',
+      sortBy: 'uploadDate',
+      sortOrder: 'asc',
     })
   })
 

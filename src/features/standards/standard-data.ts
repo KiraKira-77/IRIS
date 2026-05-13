@@ -1,5 +1,6 @@
 import type {
   Attachment,
+  PageQuery,
   Standard,
   StandardCategory,
   StandardStatus,
@@ -13,6 +14,11 @@ export interface StandardListQuery {
   status: string
   page: number
   pageSize: number
+}
+
+export interface StandardTableSortState {
+  prop?: string
+  order?: 'ascending' | 'descending' | null
 }
 
 export interface StandardListPage {
@@ -114,6 +120,26 @@ export function buildStandardListPage(
     list: result.slice(start, start + query.pageSize),
     total: result.length,
   }
+}
+
+export function buildStandardListRequestParams(
+  form: StandardSearchFormValue,
+  pagination: StandardPaginationState,
+  sortState: StandardTableSortState = {},
+): PageQuery {
+  const sortOrder = sortState.order === 'ascending' ? 'asc' : 'desc'
+  const params: PageQuery = {
+    page: pagination.page,
+    pageSize: pagination.pageSize,
+    sortBy: 'uploadDate',
+    sortOrder,
+  }
+
+  if (form.keyword) params.keyword = form.keyword
+  if (form.category) params.category = form.category
+  if (form.status) params.status = form.status
+
+  return params
 }
 
 export function buildStandardSearchInteraction(
