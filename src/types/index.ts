@@ -202,7 +202,7 @@ export interface AuthCurrentUser {
 // 资源管理
 // ===========================
 export type StandardCategory = 'law' | 'system' | 'industry' | 'internal'
-export type StandardStatus = 'draft' | 'active' | 'archived'
+export type StandardStatus = 'draft' | 'active' | 'disabled' | 'archived'
 export type StandardVisibilityLevel = 'PUBLIC' | 'SCOPED'
 export interface Standard {
   id: string

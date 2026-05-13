@@ -73,7 +73,7 @@
           >
             <el-option label="生效中" value="active" />
             <el-option label="草稿" value="draft" />
-            <el-option label="已归档" value="archived" />
+            <el-option label="已停用" value="disabled" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -159,7 +159,7 @@
             }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button link type="primary" size="small" @click="openDetail(row)">查看</el-button>
@@ -178,6 +178,22 @@
                 size="small"
                 @click="openUpgradeDialog(row)"
                 >升版</el-button
+              >
+              <el-button
+                v-if="getRowAccessState(row).canEdit && row.status === 'active'"
+                link
+                type="warning"
+                size="small"
+                @click="handleDisable(row)"
+                >停用</el-button
+              >
+              <el-button
+                v-if="getRowAccessState(row).canEdit && row.status === 'disabled'"
+                link
+                type="success"
+                size="small"
+                @click="handleEnable(row)"
+                >启用</el-button
               >
               <el-button
                 v-if="getRowAccessState(row).canDelete"
@@ -693,6 +709,18 @@
             @click="handlePublishFromDrawer"
             >发布</el-button
           >
+          <el-button
+            type="warning"
+            v-if="detailAccessState?.canEdit && detailRow.status === 'active'"
+            @click="handleDisable(detailRow)"
+            >停用</el-button
+          >
+          <el-button
+            type="success"
+            v-if="detailAccessState?.canEdit && detailRow.status === 'disabled'"
+            @click="handleEnable(detailRow)"
+            >启用</el-button
+          >
         </div>
       </div>
     </el-drawer>
@@ -1030,6 +1058,10 @@ const handleSave = async (targetStatus?: Standard['status']) => {
     const currentRow = editingRow.value
     const nextStatus = targetStatus ?? currentRow?.status ?? 'draft'
     const submitState = buildStandardSubmitState(nextStatus, currentRow, today())
+    const shouldPublishSavedDraft =
+      Boolean(currentRow) && currentRow?.status === 'draft' && nextStatus === 'active'
+    const persistedStatus = shouldPublishSavedDraft ? 'draft' : submitState.status
+    const persistedPublishDate = shouldPublishSavedDraft ? null : submitState.publishDate
     let savedStandard: Standard
 
     if (currentRow) {
@@ -1038,8 +1070,8 @@ const handleSave = async (targetStatus?: Standard['status']) => {
           currentRow.id,
           buildStandardUpsertPayload(form, {
             tenantId: currentTenantId.value,
-            status: submitState.status,
-            publishDate: submitState.publishDate,
+            status: persistedStatus,
+            publishDate: persistedPublishDate,
             standardGroupId: currentRow.standardGroupId,
             versionNumber: currentRow.versionNumber,
             previousVersionId: currentRow.previousVersionId,
@@ -1061,6 +1093,9 @@ const handleSave = async (targetStatus?: Standard['status']) => {
     }
 
     const uploadedCount = await uploadPendingAttachments(savedStandard.id)
+    if (shouldPublishSavedDraft) {
+      savedStandard = normalizeStandardFromApi(await standardApi.publish(savedStandard.id))
+    }
     dialogVisible.value = false
     await loadStandards()
     updateDetailRow(savedStandard.id)
@@ -1193,6 +1228,72 @@ const handleRollback = async (targetVersion: Standard, version: string, reason: 
   }
 }
 
+const handleDisable = (row: Standard) => {
+  if (!getRowAccessState(row).canEdit || row.status !== 'active') {
+    ElMessage.warning('\u5f53\u524d\u6807\u51c6\u4e0d\u5141\u8bb8\u505c\u7528')
+    return
+  }
+
+  ElMessageBox.confirm(
+    `\u786e\u8ba4\u505c\u7528\u6807\u51c6\u300c${row.title}\u300d(${row.version}) \u5417\uff1f`,
+    '\u786e\u8ba4\u505c\u7528',
+    {
+      type: 'warning',
+      confirmButtonText: '\u505c\u7528',
+      cancelButtonText: '\u53d6\u6d88',
+    },
+  ).then(async () => {
+    loading.value = true
+
+    try {
+      const disabled = normalizeStandardFromApi(await standardApi.disable(row.id))
+      await loadStandards()
+      detailRow.value = detailRow.value?.id === disabled.id ? disabled : detailRow.value
+      if (detailRow.value) {
+        versionHistory.value = (await standardApi.versions(detailRow.value.id)).map(
+          normalizeStandardFromApi,
+        )
+      }
+      ElMessage.success('\u6807\u51c6\u5df2\u505c\u7528')
+    } finally {
+      loading.value = false
+    }
+  })
+}
+
+const handleEnable = (row: Standard) => {
+  if (!getRowAccessState(row).canEdit || row.status !== 'disabled') {
+    ElMessage.warning('\u5f53\u524d\u6807\u51c6\u4e0d\u5141\u8bb8\u542f\u7528')
+    return
+  }
+
+  ElMessageBox.confirm(
+    `\u786e\u8ba4\u542f\u7528\u6807\u51c6\u300c${row.title}\u300d(${row.version}) \u5417\uff1f`,
+    '\u786e\u8ba4\u542f\u7528',
+    {
+      type: 'warning',
+      confirmButtonText: '\u542f\u7528',
+      cancelButtonText: '\u53d6\u6d88',
+    },
+  ).then(async () => {
+    loading.value = true
+
+    try {
+      const enabled = normalizeStandardFromApi(await standardApi.enable(row.id))
+      await loadStandards()
+      detailRow.value = detailRow.value?.id === enabled.id ? enabled : detailRow.value
+      if (detailRow.value) {
+        versionHistory.value = (await standardApi.versions(detailRow.value.id)).map(
+          normalizeStandardFromApi,
+        )
+      }
+      ElMessage.success('\u6807\u51c6\u5df2\u542f\u7528')
+    } finally {
+      loading.value = false
+    }
+  })
+}
+
 const handleDelete = (row: Standard) => {
   if (!getRowAccessState(row).canDelete) {
     ElMessage.warning('\u5f53\u524d\u6807\u51c6\u4e0d\u5141\u8bb8\u5220\u9664')
@@ -1307,6 +1408,9 @@ const statusSaveMessage = (status: Standard['status'], isEditing: boolean) => {
       ? '\u6807\u51c6\u5df2\u4fee\u6539\u5e76\u5f52\u6863'
       : '\u6807\u51c6\u5df2\u5f52\u6863'
   }
+  if (status === 'disabled') {
+    return isEditing ? '\u6807\u51c6\u5df2\u4fee\u6539\u5e76\u505c\u7528' : '\u6807\u51c6\u5df2\u505c\u7528'
+  }
   return isEditing ? '\u4fee\u6539\u5df2\u4fdd\u5b58' : '\u5df2\u4fdd\u5b58\u4e3a\u8349\u7a3f'
 }
 
@@ -1350,10 +1454,17 @@ const categoryLabel = (value: string) =>
     }) as any
   )[value] || value
 const statusType = (value: string) =>
-  (({ active: 'success', draft: 'info', archived: 'warning' }) as any)[value] || 'info'
+  (({ active: 'success', draft: 'info', disabled: 'warning', archived: 'warning' }) as any)[
+    value
+  ] || 'info'
 const statusLabel = (value: string) =>
   (
-    ({ active: '\u751f\u6548\u4e2d', draft: '\u8349\u7a3f', archived: '\u5df2\u5f52\u6863' }) as any
+    ({
+      active: '\u751f\u6548\u4e2d',
+      draft: '\u8349\u7a3f',
+      disabled: '\u5df2\u505c\u7528',
+      archived: '\u5df2\u5f52\u6863',
+    }) as any
   )[value] || value
 const visibilityLabel = (value: Standard['visibilityLevel']) =>
   value === 'PUBLIC' ? '全员可见' : '域内可见'

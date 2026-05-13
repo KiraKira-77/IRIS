@@ -207,7 +207,7 @@ export function buildStandardSubmitState(
     }
   }
 
-  if (status === 'archived') {
+  if (status === 'archived' || status === 'disabled') {
     return {
       status,
       publishDate: normalizePublishDate(standard?.publishDate),

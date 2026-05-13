@@ -198,6 +198,22 @@ describe('standard-data', () => {
     })
   })
 
+  it('keeps existing publish date when disabling an active standard', () => {
+    expect(
+      buildStandardSubmitState(
+        'disabled',
+        createStandard({
+          status: 'active',
+          publishDate: '2026-04-20',
+        }),
+        '2026-04-24',
+      ),
+    ).toEqual({
+      status: 'disabled',
+      publishDate: '2026-04-20',
+    })
+  })
+
   it('formats upload date from created time when timestamp exists', () => {
     expect(formatStandardUploadDate('2026-04-24T09:15:00', '-')).toBe('2026-04-24')
   })

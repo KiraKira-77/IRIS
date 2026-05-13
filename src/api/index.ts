@@ -93,6 +93,8 @@ export const standardApi = {
   upgrade: (id: string, data: StandardUpgradePayload) =>
     request.post<Standard>(`/v1/standards/${id}/upgrade`, data),
   publish: (id: string) => request.post<Standard>(`/v1/standards/${id}/publish`),
+  disable: (id: string) => request.post<Standard>(`/v1/standards/${id}/disable`),
+  enable: (id: string) => request.post<Standard>(`/v1/standards/${id}/enable`),
   rollback: (id: string, data: StandardRollbackPayload) =>
     request.post<Standard>(`/v1/standards/${id}/rollback`, data),
   versions: (id: string) => request.get<Standard[]>(`/v1/standards/${id}/versions`),
