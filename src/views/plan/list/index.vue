@@ -30,7 +30,13 @@
         </div>
       </div>
       <div class="hero-actions">
-        <el-button type="primary" :icon="Plus" size="large" @click="router.push('/plan/create')">
+        <el-button
+          v-if="canCreatePlan"
+          type="primary"
+          :icon="Plus"
+          size="large"
+          @click="router.push('/plan/create')"
+        >
           新建年度计划
         </el-button>
       </div>
@@ -155,7 +161,7 @@
                 查看
               </el-button>
               <el-button
-                v-if="!row.parentId && row.status !== 'draft'"
+                v-if="canCreateChildPlan(row)"
                 link
                 type="success"
                 size="small"
@@ -163,7 +169,7 @@
                 >新建子计划</el-button
               >
               <el-button
-                v-if="canEditControlPlan(row)"
+                v-if="canEditRow(row)"
                 link
                 type="primary"
                 size="small"
@@ -171,7 +177,7 @@
                 >编辑</el-button
               >
               <el-button
-                v-if="row.status === 'draft'"
+                v-if="canSubmitRow(row)"
                 link
                 type="warning"
                 size="small"
@@ -179,7 +185,7 @@
                 >提交计划</el-button
               >
               <el-button
-                v-if="canDeleteControlPlan(row, allPlans)"
+                v-if="canDeleteRow(row)"
                 link
                 type="danger"
                 size="small"
@@ -200,15 +206,22 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Refresh, Search } from '@element-plus/icons-vue'
 import { planApi } from '@/api'
+import { useUserStore } from '@/stores/modules/user'
+import {
+  buildPlanAccessState,
+  filterVisiblePlans,
+  type PlanAccessContext,
+} from '@/features/permissions/plan-access'
 import {
   buildControlPlanTree,
   canDeleteControlPlan,
-  canEditControlPlan,
   normalizePlanPage,
 } from '@/features/plans/plan-data'
 import type { ControlPlan } from '@/types'
 
 const router = useRouter()
+const userStore = useUserStore()
+const emptyAccessContext: PlanAccessContext = { isSuperAdmin: false, scopePermissions: [] }
 
 const allPlans = ref<ControlPlan[]>([])
 const expandedPlanIds = ref<string[]>([])
@@ -216,9 +229,12 @@ const searchForm = reactive({ keyword: '', year: '', status: '' })
 
 type PlanTreeRow = ControlPlan & { children?: ControlPlan[] }
 
-onMounted(() => {
-  loadPlans()
+onMounted(async () => {
+  await userStore.ensureUserInfoLoaded()
+  await loadPlans()
 })
+
+const currentAccessContext = computed(() => userStore.accessContext || emptyAccessContext)
 
 const loadPlans = async () => {
   const page = normalizePlanPage(
@@ -230,11 +246,29 @@ const loadPlans = async () => {
       status: searchForm.status || undefined,
     }),
   )
-  allPlans.value = page.list
+  allPlans.value = filterVisiblePlans(page.list, currentAccessContext.value)
   expandedPlanIds.value = expandedPlanIds.value.filter((id) =>
-    page.list.some((plan) => plan.id === id),
+    allPlans.value.some((plan) => plan.id === id),
   )
 }
+
+const canCreatePlan = computed(() => {
+  if (currentAccessContext.value.isSuperAdmin) return true
+  return currentAccessContext.value.scopePermissions.some((entry) =>
+    entry.actions.some((action) => action === 'edit' || action === 'manage'),
+  )
+})
+
+const planAccess = (plan: ControlPlan) => buildPlanAccessState(plan, currentAccessContext.value)
+
+const canCreateChildPlan = (plan: ControlPlan) => planAccess(plan).canCreateChild
+
+const canEditRow = (plan: ControlPlan) => planAccess(plan).canEdit
+
+const canSubmitRow = (plan: ControlPlan) => planAccess(plan).canSubmit
+
+const canDeleteRow = (plan: ControlPlan) =>
+  planAccess(plan).canDelete && canDeleteControlPlan(plan, allPlans.value)
 
 const treeData = computed(() => {
   return buildControlPlanTree(allPlans.value)

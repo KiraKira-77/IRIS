@@ -70,10 +70,10 @@ describe('plan-data', () => {
     expect(PLAN_SUBMIT_STATUS).toBe('approved')
   })
 
-  it('allows draft and approved plans to be edited', () => {
+  it('allows draft approved and in-progress plans to be edited', () => {
     expect(canEditControlPlan(createPlan({ status: 'draft' }))).toBe(true)
     expect(canEditControlPlan(createPlan({ status: 'approved' }))).toBe(true)
-    expect(canEditControlPlan(createPlan({ status: 'in_progress' }))).toBe(false)
+    expect(canEditControlPlan(createPlan({ status: 'in_progress' }))).toBe(true)
     expect(canEditControlPlan(createPlan({ status: 'completed' }))).toBe(false)
     expect(canEditControlPlan(createPlan({ status: 'archived' }))).toBe(false)
   })

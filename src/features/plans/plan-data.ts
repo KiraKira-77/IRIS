@@ -34,7 +34,7 @@ export function createPlanUpsertPayload(payload: PlanUpsertPayload): PlanUpsertP
 }
 
 export function canEditControlPlan(plan: Pick<ControlPlan, 'status'>): boolean {
-  return plan.status === 'draft' || plan.status === 'approved'
+  return plan.status === 'draft' || plan.status === 'approved' || plan.status === 'in_progress'
 }
 
 export function canDeleteControlPlan(plan: ControlPlan, allPlans: ControlPlan[]): boolean {

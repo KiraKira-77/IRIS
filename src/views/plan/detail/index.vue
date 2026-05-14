@@ -22,18 +22,18 @@
         >
           年度主计划
         </el-tag>
+        <el-tag v-if="plan" :type="statusType(plan.status)" effect="dark" size="default">
+          {{ statusLabel(plan.status) }}
+        </el-tag>
       </div>
       <div class="header-right">
         <el-button
-          v-if="plan && canEditControlPlan(plan)"
+          v-if="canEditCurrentPlan"
           type="primary"
-          @click="router.push(`/plan/create?id=${plan.id}`)"
+          @click="goEditCurrentPlan"
         >
           编辑
         </el-button>
-        <el-tag :type="statusType(plan?.status)" effect="dark" size="large">{{
-          statusLabel(plan?.status)
-        }}</el-tag>
       </div>
     </div>
 
@@ -127,6 +127,7 @@
               >{{ childPlans.length }} 个</el-tag
             >
             <el-button
+              v-if="canCreateChildForCurrentPlan"
               type="primary"
               size="small"
               :icon="Plus"
@@ -186,7 +187,7 @@
                 查看
               </el-button>
               <el-button
-                v-if="canEditControlPlan(row)"
+                v-if="canEditChildPlan(row)"
                 link
                 type="primary"
                 size="small"
@@ -200,6 +201,7 @@
 
         <el-empty v-else description="暂无子计划" :image-size="80">
           <el-button
+            v-if="canCreateChildForCurrentPlan"
             type="primary"
             :icon="Plus"
             @click="router.push(`/plan/create?parentId=${plan.id}`)"
@@ -220,15 +222,18 @@ import { useRoute, useRouter } from 'vue-router'
 import { Back, Document, List, FolderOpened, Plus } from '@element-plus/icons-vue'
 import { checklistApi, planApi, resourceScopeApi, systemUserApi } from '@/api'
 import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
+import { buildPlanAccessState, type PlanAccessContext } from '@/features/permissions/plan-access'
 import {
-  canEditControlPlan,
   normalizePlanPage,
   sortControlPlansByPeriod,
 } from '@/features/plans/plan-data'
+import { useUserStore } from '@/stores/modules/user'
 import type { ControlChecklist, ControlPlan, ResourceScope, SystemUser } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
+const userStore = useUserStore()
+const emptyAccessContext: PlanAccessContext = { isSuperAdmin: false, scopePermissions: [] }
 
 const plan = ref<ControlPlan | null>(null)
 const allPlans = ref<ControlPlan[]>([])
@@ -246,8 +251,8 @@ const childPlans = computed(() => {
   return sortControlPlansByPeriod(allPlans.value.filter((p) => p.parentId === plan.value!.id))
 })
 
-onMounted(() => {
-  loadData()
+onMounted(async () => {
+  await loadData()
 })
 
 watch(
@@ -258,6 +263,7 @@ watch(
 )
 
 const loadData = async () => {
+  await userStore.ensureUserInfoLoaded()
   const id = route.params.id as string
   const [detail, page, scopes, checklistPage, systemUsers] = await Promise.all([
     planApi.detail(id),
@@ -271,6 +277,26 @@ const loadData = async () => {
   resourceScopes.value = scopes
   checklists.value = normalizeChecklistPageFromApi(checklistPage).list
   users.value = systemUsers
+}
+
+const currentAccessContext = computed(() => userStore.accessContext || emptyAccessContext)
+
+const currentPlanAccess = computed(() =>
+  plan.value ? buildPlanAccessState(plan.value, currentAccessContext.value) : null,
+)
+
+const canEditCurrentPlan = computed(() => Boolean(currentPlanAccess.value?.canEdit))
+
+const canCreateChildForCurrentPlan = computed(() =>
+  Boolean(currentPlanAccess.value?.canCreateChild),
+)
+
+const canEditChildPlan = (row: ControlPlan) =>
+  buildPlanAccessState(row, currentAccessContext.value).canEdit
+
+const goEditCurrentPlan = () => {
+  if (!plan.value) return
+  router.push(`/plan/create?id=${plan.value.id}`)
 }
 
 const cycleLabel = computed(() => {

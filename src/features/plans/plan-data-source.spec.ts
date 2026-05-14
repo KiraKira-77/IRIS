@@ -124,13 +124,32 @@ describe('plan related pages data sources', () => {
 
     expect(deleteButtonEnd).toBeGreaterThan(0)
     expect(deleteButtonSource).toContain('handleDelete(row)')
-    expect(deleteButtonSource).toContain('canDeleteControlPlan(row, allPlans)')
+    expect(deleteButtonSource).toContain('canDeleteRow(row)')
     expect(deleteButtonSource).not.toContain("row.status === 'draft'")
   })
 
   it('uses plan period dates when inheriting parent plan items for a sub-plan', () => {
     expect(planCreateSource).toContain('resolvePlanPeriodDateRange')
     expect(planCreateSource).toContain('applySubPlanPeriodDateRange')
+  })
+
+  it('shows plan detail status beside the title instead of beside edit actions', () => {
+    const headerLeftStart = planDetailSource.indexOf('<div class="header-left">')
+    const headerRightStart = planDetailSource.indexOf('<div class="header-right">')
+    const headerEnd = planDetailSource.indexOf('</div>\n    </div>', headerRightStart)
+    const headerLeftSource = planDetailSource.slice(headerLeftStart, headerRightStart)
+    const headerRightSource = planDetailSource.slice(headerRightStart, headerEnd)
+
+    expect(headerLeftSource).toContain('statusType(plan')
+    expect(headerLeftSource).toContain('statusLabel(plan')
+    expect(headerRightSource).toContain('编辑')
+    expect(headerRightSource).not.toContain('statusType(plan')
+    expect(headerRightSource).not.toContain('statusLabel(plan')
+  })
+
+  it('allows plan creation to proceed without inspection scope items', () => {
+    expect(planCreateSource).toContain('暂未添加检查范围，可直接进入预览后提交')
+    expect(planCreateSource).not.toContain('请至少添加一条检查范围')
   })
 
   it('sorts child plans by plan period in list and detail pages', () => {
@@ -144,12 +163,27 @@ describe('plan related pages data sources', () => {
     expect(planOverviewSource).not.toContain('const starts = plan.items.map')
   })
 
-  it('keeps plan list as a collapsed parent-child tree and allows draft or approved edits', () => {
+  it('keeps plan list as a collapsed parent-child tree and gates actions through plan access', () => {
     expect(planListSource).toContain('buildControlPlanTree')
-    expect(planListSource).toContain('canEditControlPlan(row)')
+    expect(planListSource).toContain('buildPlanAccessState')
+    expect(planListSource).toContain('useUserStore')
+    expect(planListSource).toContain('canCreatePlan')
+    expect(planListSource).toContain('canCreateChildPlan(row)')
+    expect(planListSource).toContain('canEditRow(row)')
+    expect(planListSource).toContain('canSubmitRow(row)')
+    expect(planListSource).toContain('canDeleteRow(row)')
     expect(planListSource).not.toContain('default-expand-all')
     expect(planListSource).toContain('expandedPlanIds')
     expect(planListSource).toContain('toggleChildPlans')
-    expect(planDetailSource).toContain('canEditControlPlan')
+    expect(planDetailSource).toContain('buildPlanAccessState')
+    expect(planDetailSource).toContain('canEditCurrentPlan')
+    expect(planDetailSource).toContain('canCreateChildForCurrentPlan')
+  })
+
+  it('limits plan owner scope selection to scopes the user can edit or manage', () => {
+    expect(planCreateSource).toContain('filterEditablePlanOwnerScopes')
+    expect(planCreateSource).toContain('editableOwnerScopeOptions')
+    expect(planCreateSource).toContain('ensureUserInfoLoaded')
+    expect(planCreateSource).toContain('useUserStore')
   })
 })

@@ -100,7 +100,7 @@
                 <el-form-item label="维护域" prop="ownerScopeId">
                   <el-select v-model="form.ownerScopeId" placeholder="选择维护域" style="width: 100%">
                     <el-option
-                      v-for="scope in activeResourceScopes"
+                      v-for="scope in editableOwnerScopeOptions"
                       :key="scope.id"
                       :label="scope.scopeName"
                       :value="scope.id"
@@ -192,7 +192,7 @@
             </div>
           </div>
 
-          <el-empty v-else description="暂未添加检查范围，请点击下方按钮添加" :image-size="80" />
+          <el-empty v-else description="暂未添加检查范围，可直接进入预览后提交" :image-size="80" />
 
           <!-- Add item form -->
           <el-divider />
@@ -400,6 +400,10 @@ import {
 import { checklistApi, planApi, resourceScopeApi, systemUserApi } from '@/api'
 import { normalizeChecklistPageFromApi } from '@/features/checklists/checklist-data'
 import {
+  filterEditablePlanOwnerScopes,
+  type PlanAccessContext,
+} from '@/features/permissions/plan-access'
+import {
   filterPlanAssigneeUsers,
   resolvePlanAssigneeScopeIds,
 } from '@/features/plans/plan-assignee-options'
@@ -408,6 +412,7 @@ import {
   createPlanUpsertPayload,
   resolvePlanPeriodDateRange,
 } from '@/features/plans/plan-data'
+import { useUserStore } from '@/stores/modules/user'
 import type {
   ControlChecklist,
   ControlPlan,
@@ -421,6 +426,8 @@ import type {
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
+const emptyAccessContext: PlanAccessContext = { isSuperAdmin: false, scopePermissions: [] }
 
 // ==================
 // Edit Mode & Sub-plan Mode
@@ -436,6 +443,10 @@ const checklists = ref<ControlChecklist[]>([])
 const users = ref<SystemUser[]>([])
 const assigneeScopeMembers = ref<ResourceScopeMember[]>([])
 const activeResourceScopes = computed(() => resourceScopes.value.filter((scope) => scope.status === 1))
+const currentAccessContext = computed(() => userStore.accessContext || emptyAccessContext)
+const editableOwnerScopeOptions = computed(() =>
+  filterEditablePlanOwnerScopes(resourceScopes.value, currentAccessContext.value),
+)
 
 const pageTitle = computed(() => {
   if (isEdit.value) return '编辑计划'
@@ -444,6 +455,7 @@ const pageTitle = computed(() => {
 })
 
 onMounted(async () => {
+  await userStore.ensureUserInfoLoaded()
   await Promise.all([loadResourceScopes(), loadChecklists(), loadUsers()])
   // Edit mode
   const id = route.query.id as string
@@ -656,7 +668,7 @@ const loadAssigneeScopeMembers = async (scopeIds = assigneeScopeIds.value) => {
 
 const loadResourceScopes = async () => {
   resourceScopes.value = await resourceScopeApi.list()
-  const firstScope = activeResourceScopes.value[0]
+  const firstScope = editableOwnerScopeOptions.value[0]
   if (!form.ownerScopeId && firstScope) {
     form.ownerScopeId = firstScope.id
   }
@@ -735,10 +747,6 @@ const nextStep = async () => {
     if (!basicFormRef.value) return
     const valid = await basicFormRef.value.validate().catch(() => false)
     if (!valid) return
-  }
-  if (currentStep.value === 1 && planItems.value.length === 0) {
-    ElMessage.warning('请至少添加一条检查范围')
-    return
   }
   currentStep.value++
 }
