@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { ControlPlan, PlanUpsertPayload } from '@/types'
+import type { ControlPlan, PlanUpsertPayload, Project } from '@/types'
 import {
   PLAN_SUBMIT_STATUS,
   buildControlPlanTree,
@@ -7,6 +7,7 @@ import {
   canDeleteControlPlan,
   createPlanUpsertPayload,
   normalizePlanPage,
+  resolvePlanActualExecutionRange,
   resolvePlanPeriodDateRange,
   resolveControlPlanDateRange,
   sortControlPlansByPeriod,
@@ -30,6 +31,26 @@ describe('plan-data', () => {
       createdAt: overrides.createdAt || '2026-04-27T10:00:00',
       updatedAt: overrides.updatedAt || '2026-04-27T10:00:00',
     }) satisfies ControlPlan
+
+  const createProject = (overrides: Partial<Project>) =>
+    ({
+      id: overrides.id || '7001',
+      code: overrides.code || 'PRJ-2026-001',
+      name: overrides.name || 'Project',
+      source: overrides.source || 'plan',
+      planId: overrides.planId,
+      planName: overrides.planName,
+      status: overrides.status || 'in_progress',
+      description: overrides.description,
+      startDate: overrides.startDate || '2026-01-01',
+      endDate: overrides.endDate,
+      actualStartedAt: overrides.actualStartedAt,
+      archiveCompletedAt: overrides.archiveCompletedAt,
+      checklistIds: overrides.checklistIds || [],
+      tasks: overrides.tasks || [],
+      createdAt: overrides.createdAt || '2026-01-01 00:00:00',
+      updatedAt: overrides.updatedAt || '2026-01-01 00:00:00',
+    }) satisfies Project
 
   it('normalizes backend page records into frontend list shape', () => {
     const plan = createPlan({})
@@ -192,6 +213,55 @@ describe('plan-data', () => {
     expect(resolveControlPlanDateRange(plan)).toEqual({
       start: '2026-01-01',
       end: '2026-01-31',
+    })
+  })
+
+  it('resolves actual execution from started and archived projects under a plan tree', () => {
+    const parent = createPlan({ id: 'parent' })
+    const child = createPlan({ id: 'child', parentId: 'parent' })
+    const other = createPlan({ id: 'other' })
+    const plans = [parent, child, other]
+    const projects = [
+      createProject({
+        id: 'started-parent',
+        planId: 'parent',
+        status: 'in_progress',
+        actualStartedAt: '2026-01-10 09:00:00',
+      }),
+      createProject({
+        id: 'archived-child',
+        planId: 'child',
+        status: 'archived',
+        actualStartedAt: '2026-02-01 09:00:00',
+        archiveCompletedAt: '2026-02-10 18:00:00',
+      }),
+      createProject({
+        id: 'not-started-child',
+        planId: 'child',
+        status: 'not_started',
+      }),
+      createProject({
+        id: 'other-project',
+        planId: 'other',
+        status: 'archived',
+        actualStartedAt: '2026-03-01 09:00:00',
+        archiveCompletedAt: '2026-03-10 18:00:00',
+      }),
+    ]
+
+    expect(resolvePlanActualExecutionRange(parent, plans, projects, '2026-02-15')).toEqual({
+      start: '2026-01-10',
+      end: '2026-02-15',
+      projectCount: 2,
+      activeProjectCount: 1,
+      archivedProjectCount: 1,
+    })
+    expect(resolvePlanActualExecutionRange(child, plans, projects, '2026-02-15')).toEqual({
+      start: '2026-02-01',
+      end: '2026-02-10',
+      projectCount: 1,
+      activeProjectCount: 0,
+      archivedProjectCount: 1,
     })
   })
 

@@ -1,4 +1,4 @@
-import type { PageResult, PlanCycle, PlanUpsertPayload, ControlPlan } from '@/types'
+import type { PageResult, PlanCycle, PlanUpsertPayload, ControlPlan, Project } from '@/types'
 
 export const PLAN_SUBMIT_STATUS = 'approved' as const
 
@@ -124,6 +124,83 @@ export function resolveControlPlanDateRange(
 ): { start: string; end: string } {
   const [start, end] = resolvePlanPeriodDateRange(plan.year, plan.cycle, plan.period)
   return { start, end }
+}
+
+export interface PlanActualExecutionRange {
+  start: string
+  end: string
+  projectCount: number
+  activeProjectCount: number
+  archivedProjectCount: number
+}
+
+export function resolvePlanActualExecutionRange(
+  plan: Pick<ControlPlan, 'id'>,
+  allPlans: Array<Pick<ControlPlan, 'id' | 'parentId'>>,
+  projects: Array<
+    Pick<Project, 'planId' | 'status' | 'startDate' | 'actualStartedAt' | 'archiveCompletedAt' | 'endDate'>
+  >,
+  today: string,
+): PlanActualExecutionRange | null {
+  const planIds = collectPlanAndDescendantIds(plan.id, allPlans)
+  const startedProjects = projects.filter(
+    (project) =>
+      project.planId &&
+      planIds.has(project.planId) &&
+      project.status !== 'not_started' &&
+      projectActualStartDate(project),
+  )
+
+  if (!startedProjects.length) return null
+
+  const starts = startedProjects.map((project) => projectActualStartDate(project)!)
+  const ends = startedProjects.map((project) => {
+    if (project.status === 'archived') {
+      return dateOnly(project.archiveCompletedAt) || dateOnly(project.endDate) || today
+    }
+    return today
+  })
+  const sortedEnds = ends.sort()
+
+  return {
+    start: starts.sort()[0]!,
+    end: sortedEnds[sortedEnds.length - 1]!,
+    projectCount: startedProjects.length,
+    activeProjectCount: startedProjects.filter((project) => project.status !== 'archived').length,
+    archivedProjectCount: startedProjects.filter((project) => project.status === 'archived').length,
+  }
+}
+
+function projectActualStartDate(
+  project: Pick<Project, 'status' | 'startDate' | 'actualStartedAt'>,
+): string | null {
+  return dateOnly(project.actualStartedAt) || dateOnly(project.startDate)
+}
+
+function collectPlanAndDescendantIds(
+  planId: string,
+  allPlans: Array<Pick<ControlPlan, 'id' | 'parentId'>>,
+): Set<string> {
+  const ids = new Set<string>([planId])
+  let changed = true
+
+  while (changed) {
+    changed = false
+    allPlans.forEach((plan) => {
+      if (plan.parentId && ids.has(plan.parentId) && !ids.has(plan.id)) {
+        ids.add(plan.id)
+        changed = true
+      }
+    })
+  }
+
+  return ids
+}
+
+function dateOnly(value?: string): string | null {
+  const normalized = value?.trim()
+  if (!normalized) return null
+  return normalized.slice(0, 10)
 }
 
 export function sortControlPlansByPeriod(plans: ControlPlan[]): ControlPlan[] {

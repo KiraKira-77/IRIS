@@ -52,13 +52,11 @@ describe('plan related pages data sources', () => {
     expect(projectCreateSource).toContain('systemUserApi')
     expect(planCreateSource).toContain('systemUserApi')
     expect(planDetailSource).toContain('systemUserApi')
-    expect(planOverviewSource).toContain('systemUserApi')
     expect(projectTaskSource).toContain('assignableMembers')
     expect(rectificationCreateSource).toContain('systemUserApi')
     expect(projectCreateSource).not.toContain('mockPersonnel')
     expect(planCreateSource).not.toContain('mockPersonnel')
     expect(planDetailSource).not.toContain('mockPersonnel')
-    expect(planOverviewSource).not.toContain('mockPersonnel')
     expect(projectTaskSource).not.toContain('mockPersonnel')
     expect(rectificationCreateSource).not.toContain('mockPersonnel')
   })
@@ -161,6 +159,42 @@ describe('plan related pages data sources', () => {
     expect(planOverviewSource).toContain('resolveControlPlanDateRange')
     expect(planOverviewSource).toContain('buildControlPlanTree')
     expect(planOverviewSource).not.toContain('const starts = plan.items.map')
+  })
+
+  it('does not show plan codes in the plan overview summary table', () => {
+    const summaryStart = planOverviewSource.indexOf('<!-- Plan Summary Table -->')
+    const summaryEnd = planOverviewSource.indexOf('</el-table>', summaryStart)
+    const summarySource = planOverviewSource.slice(summaryStart, summaryEnd)
+
+    expect(summaryStart).toBeGreaterThan(0)
+    expect(summarySource).not.toContain('label="计划编号"')
+    expect(summarySource).not.toContain('prop="code"')
+    expect(summarySource).not.toContain('row.code')
+  })
+
+  it('keeps plan names on their own line in the plan overview timeline', () => {
+    expect(planOverviewSource).toContain('plan-title-line')
+    expect(planOverviewSource).toContain('plan-meta-line')
+  })
+
+  it('shows only plan and child-plan rows in the plan overview timeline', () => {
+    expect(planOverviewSource).toContain('<div class="gantt-label-col">计划</div>')
+    expect(planOverviewSource).not.toContain('计划 / 检查项')
+    expect(planOverviewSource).not.toContain('v-for="item in plan.items"')
+    expect(planOverviewSource).not.toContain('item-row')
+    expect(planOverviewSource).not.toContain('item.targetScope')
+    expect(planOverviewSource).not.toContain('planPrimaryScope')
+    expect(planOverviewSource).not.toContain('planPrimaryAssigneeName')
+  })
+
+  it('loads projects to show actual execution ranges in the plan overview timeline', () => {
+    expect(planOverviewSource).toContain('projectApi.list')
+    expect(planOverviewSource).toContain('resolvePlanActualExecutionRange')
+    expect(planOverviewSource).toContain('timeline-track')
+    expect(planOverviewSource).toContain('actual-bar')
+    expect(planOverviewSource).toContain('实际执行')
+    expect(planOverviewSource).not.toContain('top: 36%')
+    expect(planOverviewSource).not.toContain('top: 67%')
   })
 
   it('keeps plan list as a collapsed parent-child tree and gates actions through plan access', () => {

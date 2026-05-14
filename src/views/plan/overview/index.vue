@@ -43,6 +43,7 @@
             <span class="legend-item"><span class="dot in_progress"></span>进行中</span>
             <span class="legend-item"><span class="dot completed"></span>已完成</span>
             <span class="legend-item"><span class="dot archived"></span>已归档</span>
+            <span class="legend-item"><span class="dot actual"></span>实际执行</span>
           </div>
         </div>
       </template>
@@ -50,7 +51,7 @@
       <div class="gantt-container" v-if="yearPlans.length">
         <!-- Month Headers -->
         <div class="gantt-header">
-          <div class="gantt-label-col">计划 / 检查项</div>
+          <div class="gantt-label-col">计划</div>
           <div class="gantt-timeline-col">
             <div class="month-cell" v-for="m in 12" :key="m">
               <span class="month-name">{{ m }}月</span>
@@ -66,35 +67,34 @@
             <div class="gantt-row plan-row" :class="{ 'child-plan-row': plan.parentId }">
               <div class="gantt-label-col">
                 <div class="plan-label">
-                  <el-tag
-                    :type="statusType(plan.status)"
-                    effect="dark"
-                    size="small"
-                    class="status-tag"
-                    >{{ statusLabel(plan.status) }}</el-tag
-                  >
-                  <el-tag
-                    v-if="!plan.parentId"
-                    size="small"
-                    type="warning"
-                    effect="dark"
-                    style="margin-right: 4px"
-                    >年度</el-tag
-                  >
-                  <el-tag v-else size="small" effect="plain" round>子计划</el-tag>
-                  <span class="plan-name" @click="router.push(`/plan/detail/${plan.id}`)">
-                    {{ plan.name }}
-                  </span>
-                  <el-button
-                    v-if="!plan.parentId && childPlanCount(plan)"
-                    class="child-toggle"
-                    link
-                    type="primary"
-                    size="small"
-                    @click.stop="toggleChildPlans(plan)"
-                  >
-                    {{ isPlanExpanded(plan) ? '收起' : `展开 ${childPlanCount(plan)}` }}
-                  </el-button>
+                  <div class="plan-title-line">
+                    <span class="plan-name" @click="router.push(`/plan/detail/${plan.id}`)">
+                      {{ plan.name }}
+                    </span>
+                    <el-button
+                      v-if="!plan.parentId && childPlanCount(plan)"
+                      class="child-toggle"
+                      link
+                      type="primary"
+                      size="small"
+                      @click.stop="toggleChildPlans(plan)"
+                    >
+                      {{ isPlanExpanded(plan) ? '收起' : `展开 ${childPlanCount(plan)}` }}
+                    </el-button>
+                  </div>
+                  <div class="plan-meta-line">
+                    <el-tag
+                      :type="statusType(plan.status)"
+                      effect="dark"
+                      size="small"
+                      class="status-tag"
+                      >{{ statusLabel(plan.status) }}</el-tag
+                    >
+                    <el-tag v-if="!plan.parentId" size="small" type="warning" effect="dark">
+                      年度
+                    </el-tag>
+                    <el-tag v-else size="small" effect="plain" round>子计划</el-tag>
+                  </div>
                 </div>
               </div>
               <div class="gantt-timeline-col">
@@ -102,52 +102,33 @@
                   <div class="grid-cell" v-for="m in 12" :key="m"></div>
                 </div>
                 <!-- Plan bar -->
-                <div
-                  class="gantt-bar plan-bar"
-                  :class="plan.status"
-                  :style="barStyle(planDateRange(plan))"
-                >
-                  <span class="bar-label">{{ plan.period }}</span>
+                <div class="timeline-track">
+                  <div
+                    class="gantt-bar plan-bar"
+                    :class="plan.status"
+                    :style="barStyle(planDateRange(plan))"
+                  >
+                    <span class="bar-label">{{ plan.period }}</span>
+                  </div>
+                  <el-tooltip
+                    v-if="actualRange(plan)"
+                    :content="actualTooltip(plan)"
+                    placement="top"
+                  >
+                    <div
+                      class="gantt-bar actual-bar"
+                      :class="{ active: actualRange(plan)?.activeProjectCount }"
+                      :style="barStyle(actualRange(plan)!)"
+                    >
+                      <span class="bar-label">实际</span>
+                    </div>
+                  </el-tooltip>
                 </div>
                 <!-- Today indicator -->
                 <div class="today-line" :style="{ left: todayPosition }"></div>
               </div>
             </div>
 
-            <!-- Item Rows -->
-            <div
-              v-for="item in plan.items"
-              :key="item.id"
-              class="gantt-row item-row"
-              :class="{ 'child-item-row': plan.parentId }"
-            >
-              <div class="gantt-label-col">
-                <div class="item-label">
-                  <span class="item-scope">{{ item.targetScope }}</span>
-                  <span class="item-assignee" v-if="item.assignee">
-                    {{ getPersonnelName(item.assignee) }}
-                  </span>
-                </div>
-              </div>
-              <div class="gantt-timeline-col">
-                <div class="timeline-grid">
-                  <div class="grid-cell" v-for="m in 12" :key="m"></div>
-                </div>
-                <div
-                  class="gantt-bar item-bar"
-                  :class="plan.status"
-                  :style="barStyle({ start: item.plannedStartDate, end: item.plannedEndDate })"
-                >
-                  <el-tooltip
-                    :content="`${item.targetScope}  ${item.plannedStartDate} ~ ${item.plannedEndDate}`"
-                    placement="top"
-                  >
-                    <span class="bar-inner"></span>
-                  </el-tooltip>
-                </div>
-                <div class="today-line" :style="{ left: todayPosition }"></div>
-              </div>
-            </div>
           </template>
         </div>
       </div>
@@ -164,14 +145,7 @@
         </div>
       </template>
       <el-table :data="summaryPlans" border stripe size="default" style="width: 100%">
-        <el-table-column prop="code" label="计划编号" width="140">
-          <template #default="{ row }">
-            <el-tag effect="plain" type="info" size="small" class="font-mono">{{
-              row.code
-            }}</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="name" label="计划名称" min-width="240">
+        <el-table-column prop="name" label="计划名称" min-width="360">
           <template #default="{ row }">
             <div class="summary-plan-name" :class="{ child: row.parentId }">
               <el-tag v-if="row.parentId" size="small" effect="plain" round>子计划</el-tag>
@@ -210,25 +184,32 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { DataLine, Grid, Calendar, CircleCheck, Clock } from '@element-plus/icons-vue'
-import { planApi, systemUserApi } from '@/api'
+import { planApi, projectApi } from '@/api'
 import {
   buildControlPlanTree,
   normalizePlanPage,
+  resolvePlanActualExecutionRange,
   resolveControlPlanDateRange,
+  type PlanActualExecutionRange,
 } from '@/features/plans/plan-data'
-import type { ControlPlan, SystemUser } from '@/types'
+import { normalizeProjectPage } from '@/features/projects/project-data'
+import type { ControlPlan, Project } from '@/types'
 
 const router = useRouter()
 const selectedYear = ref('2026')
 const plans = ref<ControlPlan[]>([])
-const users = ref<SystemUser[]>([])
+const projects = ref<Project[]>([])
 const expandedPlanIds = ref<string[]>([])
 
 onMounted(() => {
-  void Promise.all([loadPlans(), loadUsers()])
+  void loadData()
 })
 
-const onYearChange = () => loadPlans()
+const onYearChange = () => loadData()
+
+const loadData = async () => {
+  await Promise.all([loadPlans(), loadProjects()])
+}
 
 const loadPlans = async () => {
   const page = normalizePlanPage(
@@ -244,8 +225,14 @@ const loadPlans = async () => {
   )
 }
 
-const loadUsers = async () => {
-  users.value = await systemUserApi.list()
+const loadProjects = async () => {
+  const page = normalizeProjectPage(
+    await projectApi.list({
+      page: 1,
+      pageSize: 500,
+    }),
+  )
+  projects.value = page.list
 }
 
 type PlanTreeRow = ControlPlan & { children?: ControlPlan[] }
@@ -263,6 +250,26 @@ const timelinePlans = computed(() =>
     isPlanExpanded(plan) ? [plan, ...(plan.children || [])] : [plan],
   ),
 )
+
+const todayDateString = computed(() => new Date().toISOString().slice(0, 10))
+
+const actualRanges = computed<Record<string, PlanActualExecutionRange | null>>(() =>
+  Object.fromEntries(
+    yearPlans.value.map((plan) => [
+      plan.id,
+      resolvePlanActualExecutionRange(plan, yearPlans.value, projects.value, todayDateString.value),
+    ]),
+  ),
+)
+
+const actualRange = (plan: ControlPlan) => actualRanges.value[plan.id] || null
+
+const actualTooltip = (plan: ControlPlan) => {
+  const range = actualRange(plan)
+  if (!range) return ''
+  const activeText = range.activeProjectCount ? `，${range.activeProjectCount} 个未归档` : ''
+  return `实际执行 ${range.start} ~ ${range.end}，关联 ${range.projectCount} 个已启动项目${activeText}`
+}
 
 const isPlanExpanded = (plan: PlanTreeRow) => expandedPlanIds.value.includes(plan.id)
 
@@ -314,8 +321,6 @@ const statusLabel = (val: string) => {
   }
   return map[val] || val
 }
-
-const getPersonnelName = (id: string) => users.value.find((p) => p.id === id)?.username || id
 
 // Date helpers
 const yearStart = computed(() => new Date(`${selectedYear.value}-01-01`))
@@ -480,6 +485,9 @@ const barStyle = (range: { start: string; end: string }) => {
     &.archived {
       background: #64748b;
     }
+    &.actual {
+      background: #0f766e;
+    }
   }
 }
 
@@ -498,8 +506,8 @@ const barStyle = (range: { start: string; end: string }) => {
 }
 
 .gantt-label-col {
-  width: 280px;
-  min-width: 280px;
+  width: 350px;
+  min-width: 350px;
   padding: 10px 16px;
   font-size: 13px;
   font-weight: 600;
@@ -563,7 +571,7 @@ const barStyle = (range: { start: string; end: string }) => {
   }
 
   .gantt-timeline-col {
-    height: 48px;
+    height: 64px;
   }
 
   &.child-plan-row {
@@ -576,14 +584,33 @@ const barStyle = (range: { start: string; end: string }) => {
   }
 }
 
+.timeline-track {
+  position: absolute;
+  inset: 0;
+}
+
 .plan-label {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
   width: 100%;
 
-  .status-tag {
-    flex-shrink: 0;
+  .plan-title-line,
+  .plan-meta-line {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .plan-title-line {
+    gap: 10px;
+  }
+
+  .plan-meta-line {
+    gap: 7px;
+    flex-wrap: wrap;
   }
 
   .child-toggle {
@@ -592,6 +619,8 @@ const barStyle = (range: { start: string; end: string }) => {
   }
 
   .plan-name {
+    min-width: 0;
+    flex: 1;
     font-size: 14px;
     font-weight: 600;
     color: $iris-text-primary;
@@ -604,33 +633,7 @@ const barStyle = (range: { start: string; end: string }) => {
       color: $iris-primary;
     }
   }
-}
 
-.item-label {
-  padding-left: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-
-  .item-scope {
-    font-size: 13px;
-    color: $iris-text-primary;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .item-assignee {
-    font-size: 11px;
-    color: $iris-text-muted;
-  }
-}
-
-.child-item-row {
-  .item-label {
-    padding-left: 28px;
-  }
 }
 
 .summary-plan-name {
@@ -677,10 +680,11 @@ const barStyle = (range: { start: string; end: string }) => {
 }
 
 .plan-bar {
-  height: 28px;
+  height: 24px;
   display: flex;
   align-items: center;
   justify-content: center;
+  opacity: 0.42;
 
   &.draft {
     background: linear-gradient(135deg, #cbd5e1, #94a3b8);
@@ -701,35 +705,28 @@ const barStyle = (range: { start: string; end: string }) => {
   .bar-label {
     font-size: 11px;
     font-weight: 700;
-    color: white;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    color: rgba(15, 23, 42, 0.72);
+    text-shadow: none;
   }
 }
 
-.item-bar {
-  height: 20px;
+.actual-bar {
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 118, 110, 0.75);
+  border: 1px solid rgba(13, 148, 136, 0.25);
+  z-index: 2;
 
-  &.draft {
-    background: rgba(148, 163, 184, 0.35);
-  }
-  &.in_progress {
-    background: rgba(34, 197, 94, 0.35);
-  }
-  &.completed {
-    background: rgba(59, 130, 246, 0.3);
-  }
-  &.approved {
-    background: rgba(245, 158, 11, 0.3);
-  }
-  &.archived {
-    background: rgba(100, 116, 139, 0.28);
+  &.active {
+    background: rgba(5, 150, 105, 0.8);
   }
 
-  .bar-inner {
-    display: block;
-    width: 100%;
-    height: 100%;
-    border-radius: 6px;
+  .bar-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: #ffffff;
   }
 }
 
@@ -755,7 +752,4 @@ const barStyle = (range: { start: string; end: string }) => {
   }
 }
 
-.font-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
 </style>

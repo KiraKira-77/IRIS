@@ -425,6 +425,7 @@ export interface Project {
   description?: string
   startDate: string
   endDate?: string
+  actualStartedAt?: string
   leaderId?: string
   leaderName?: string
   members?: TeamMember[]
