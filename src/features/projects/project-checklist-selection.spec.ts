@@ -5,7 +5,9 @@ import {
   countGeneratedChecklistItems,
   filterVisibleProjectChecklists,
   generateProjectChecklistItems,
+  groupProjectChecklistItemsByChecklist,
   isControlFrequencyAllowedForPlanCycle,
+  paginateProjectChecklistItems,
 } from './project-checklist-selection'
 
 describe('project-checklist-selection', () => {
@@ -45,7 +47,7 @@ describe('project-checklist-selection', () => {
     ).toEqual(['checklist-a', 'checklist-extra'])
   })
 
-  it('shows all active checklists for manually created projects', () => {
+  it('shows only selected checklists for manually created projects', () => {
     const checklists = [createChecklist('checklist-a'), createChecklist('checklist-b')]
 
     expect(
@@ -53,9 +55,9 @@ describe('project-checklist-selection', () => {
         source: 'manual',
         linkedPlan: null,
         checklists,
-        selectedChecklistIds: [],
+        selectedChecklistIds: ['checklist-b'],
       }).map((item) => item.id),
-    ).toEqual(['checklist-a', 'checklist-b'])
+    ).toEqual(['checklist-b'])
   })
 
   it('shows no checklist before a plan is selected for plan-generated projects', () => {
@@ -173,6 +175,52 @@ describe('project-checklist-selection', () => {
         random: () => 0,
       }).map((item) => item.id),
     ).toEqual(['item-2', 'item-3'])
+  })
+
+  it('paginates checklist items by page and page size', () => {
+    const items = Array.from({ length: 25 }, (_, index) => ({
+      ...createChecklist('checklist-a', [{ id: `item-${index + 1}` }]).items[0]!,
+      checklistName: 'checklist-a',
+    }))
+
+    const page = paginateProjectChecklistItems(items, 2, 10)
+
+    expect(page).toEqual({
+      items: items.slice(10, 20),
+      page: 2,
+      pageSize: 10,
+      total: 25,
+    })
+  })
+
+  it('groups checklist items by their checklist', () => {
+    const items = [
+      {
+        ...createChecklist('checklist-a', [{ id: 'item-a1' }]).items[0]!,
+        checklistName: 'Checklist A',
+      },
+      {
+        ...createChecklist('checklist-b', [{ id: 'item-b1' }]).items[0]!,
+        checklistName: 'Checklist B',
+      },
+      {
+        ...createChecklist('checklist-a', [{ id: 'item-a2' }]).items[0]!,
+        checklistName: 'Checklist A',
+      },
+    ]
+
+    expect(groupProjectChecklistItemsByChecklist(items)).toEqual([
+      {
+        checklistId: 'checklist-a',
+        checklistName: 'Checklist A',
+        items: [items[0], items[2]],
+      },
+      {
+        checklistId: 'checklist-b',
+        checklistName: 'Checklist B',
+        items: [items[1]],
+      },
+    ])
   })
 })
 

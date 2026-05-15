@@ -22,6 +22,10 @@ const projectListSource = readFileSync(join(here, '../../views/project/list/inde
 const projectCreateSource = readFileSync(join(here, '../../views/project/create/index.vue'), 'utf8')
 const projectDetailSource = readFileSync(join(here, '../../views/project/detail/index.vue'), 'utf8')
 const projectTaskSource = readFileSync(join(here, '../../views/project/task/index.vue'), 'utf8')
+const projectChecklistSelectionSource = readFileSync(
+  join(here, './project-checklist-selection.ts'),
+  'utf8',
+)
 const rectificationListSource = readFileSync(
   join(here, '../../views/rectification/list/index.vue'),
   'utf8',
@@ -554,6 +558,58 @@ describe('project management data sources', () => {
     expect(projectCreateSource).toContain('openChecklistPicker')
     expect(projectCreateSource).toContain('添加检查清单')
     expect(projectCreateSource).not.toContain('v-for="cl in checklistOptions"')
+  })
+
+  it('uses the checklist picker for manually created projects', () => {
+    expect(projectCreateSource).toContain('canOpenChecklistPicker')
+    expect(projectCreateSource).toContain("form.value.source === 'manual'")
+    expect(projectCreateSource).toContain('openChecklistPicker')
+    expect(projectCreateSource).toContain('pickerChecklistOptions')
+    expect(projectChecklistSelectionSource).toContain("if (source !== 'plan')")
+    expect(projectChecklistSelectionSource).toContain('selectedIds.has(checklist.id)')
+  })
+
+  it('paginates generated checklist items but keeps grouped picker items unpaged on the create page', () => {
+    expect(projectCreateSource).toContain('checklistItemPageSize = 10')
+    expect(projectCreateSource).toContain('paginatedSelectedPreviewItems')
+    expect(projectCreateSource).toContain('v-model:current-page="previewItemPage"')
+    expect(projectCreateSource).toContain('v-model="pickerChecklistItemIds"')
+    expect(projectCreateSource).not.toContain('paginatedChecklistItemPickerOptions')
+    expect(projectCreateSource).not.toContain('v-model:current-page="pickerItemPage"')
+    expect(projectCreateSource).not.toContain('picker-pagination')
+  })
+
+  it('groups manually picked checklist items by checklist on the create page', () => {
+    expect(projectCreateSource).toContain('groupProjectChecklistItemsByChecklist')
+    expect(projectCreateSource).toContain('groupedChecklistItemPickerOptions')
+    expect(projectCreateSource).toContain('togglePickerItemGroup')
+    expect(projectCreateSource).toContain('selectedPickerItemCountInGroup')
+    expect(projectCreateSource).toContain('picker-item-group')
+  })
+
+  it('allows manually picked checklist item groups to collapse on the create page', () => {
+    expect(projectCreateSource).toContain('collapsedPickerItemGroupIds')
+    expect(projectCreateSource).toContain('isPickerItemGroupExpanded')
+    expect(projectCreateSource).toContain('togglePickerItemGroupCollapsed')
+    expect(projectCreateSource).toContain('v-show="isPickerItemGroupExpanded(group)"')
+    expect(projectCreateSource).toContain('picker-item-group-toggle')
+  })
+
+  it('keeps grouped checklist item picker scrollable after expanding groups', () => {
+    expect(projectCreateSource).toContain('class="checklist-item-picker-dialog"')
+    expect(projectCreateSource).toContain('class="checklist-item-picker-content"')
+    expect(projectCreateSource).toContain('height: min(76vh, 760px)')
+    expect(projectCreateSource).toContain('.checklist-item-picker-dialog .el-dialog__body')
+    expect(projectCreateSource).toContain('flex: 1 1 auto')
+    expect(projectCreateSource).toContain('height: 100%')
+    expect(projectCreateSource).toContain('min-height: 0')
+    expect(projectCreateSource).toContain('overflow-y: scroll')
+    expect(projectCreateSource).toContain('scrollbar-gutter: stable')
+    expect(projectCreateSource).toContain('padding: 12px 10px 16px 0')
+    expect(projectCreateSource).toContain('border-bottom: 1px solid #e5e7eb')
+    expect(projectCreateSource).toContain('flex: 0 0 auto')
+    expect(projectCreateSource).toContain('scrollbar-color: #94a3b8 #f1f5f9')
+    expect(projectCreateSource).toContain('overscroll-behavior: contain')
   })
 
   it('allows project leaders to edit projects until they are archived', () => {

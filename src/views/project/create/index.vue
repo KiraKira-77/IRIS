@@ -66,7 +66,12 @@
                   <el-tree-select
                     v-model="form.planId"
                     :data="planTreeOptions"
-                    :props="{ label: 'label', value: 'value', children: 'children', disabled: 'disabled' }"
+                    :props="{
+                      label: 'label',
+                      value: 'value',
+                      children: 'children',
+                      disabled: 'disabled',
+                    }"
                     :check-strictly="true"
                     placeholder="选择关联的计划"
                     style="width: 100%"
@@ -121,10 +126,13 @@
               <el-icon class="title-icon"><List /></el-icon>
               <span>检查清单</span>
               <el-tag effect="light" round size="small" class="count-tag"
-                >已选 {{ form.checklistIds.length }} 个清单，{{ generatedTaskCount }} 个检查项</el-tag
+                >已选 {{ form.checklistIds.length }} 个清单，{{
+                  generatedTaskCount
+                }}
+                个检查项</el-tag
               >
               <el-button
-                v-if="form.source === 'plan' && linkedPlan"
+                v-if="canOpenChecklistPicker"
                 type="primary"
                 plain
                 size="small"
@@ -167,7 +175,11 @@
               </div>
             </div>
           </el-checkbox-group>
-          <el-empty v-else description="暂无关联检查清单，可点击添加检查清单选择" :image-size="80" />
+          <el-empty
+            v-else
+            description="暂无关联检查清单，可点击添加检查清单选择"
+            :image-size="80"
+          />
 
           <div class="generation-panel">
             <div class="generation-toolbar">
@@ -189,26 +201,45 @@
               <el-button plain :icon="Plus" @click="openChecklistItemPicker">添加检查项</el-button>
             </div>
 
-            <el-table
-              v-if="selectedPreviewItems.length"
-              :data="selectedPreviewItems"
-              border
-              class="preview-table"
-            >
-              <el-table-column label="操作" width="82" fixed>
-                <template #default="{ row }">
-                  <el-button type="danger" link @click="removeChecklistItem(row.id)">移除</el-button>
-                </template>
-              </el-table-column>
-              <el-table-column prop="checklistName" label="来源清单" min-width="150" />
-              <el-table-column prop="content" label="检查内容" min-width="260" show-overflow-tooltip />
-              <el-table-column prop="criterion" label="判断标准" min-width="260" show-overflow-tooltip />
-              <el-table-column label="控制频率" width="120">
-                <template #default="{ row }">
-                  {{ controlFrequencyLabel(row.controlFrequency) }}
-                </template>
-              </el-table-column>
-            </el-table>
+            <template v-if="selectedPreviewItems.length">
+              <el-table :data="paginatedSelectedPreviewItems" border class="preview-table">
+                <el-table-column label="操作" width="82" fixed>
+                  <template #default="{ row }">
+                    <el-button type="danger" link @click="removeChecklistItem(row.id)"
+                      >移除</el-button
+                    >
+                  </template>
+                </el-table-column>
+                <el-table-column prop="checklistName" label="来源清单" min-width="150" />
+                <el-table-column
+                  prop="content"
+                  label="检查内容"
+                  min-width="260"
+                  show-overflow-tooltip
+                />
+                <el-table-column
+                  prop="criterion"
+                  label="判断标准"
+                  min-width="260"
+                  show-overflow-tooltip
+                />
+                <el-table-column label="控制频率" width="120">
+                  <template #default="{ row }">
+                    {{ controlFrequencyLabel(row.controlFrequency) }}
+                  </template>
+                </el-table-column>
+              </el-table>
+              <div class="pagination-wrapper">
+                <el-pagination
+                  v-model:current-page="previewItemPage"
+                  :page-size="checklistItemPageSize"
+                  :total="selectedPreviewItems.length"
+                  layout="total, prev, pager, next"
+                  small
+                  background
+                />
+              </div>
+            </template>
             <el-empty v-else description="请先生成或添加检查项" :image-size="80" />
           </div>
         </el-card>
@@ -238,25 +269,64 @@
           </template>
         </el-dialog>
 
-        <el-dialog v-model="checklistItemPickerVisible" title="添加检查项" width="880px">
-          <el-input
-            v-model="checklistItemPickerKeyword"
-            placeholder="搜索检查内容、判断标准或清单名称"
-            clearable
-            class="picker-search"
-          />
-          <el-checkbox-group v-model="pickerChecklistItemIds" class="picker-item-list">
-            <el-checkbox
-              v-for="item in checklistItemPickerOptions"
-              :key="item.id"
-              :value="item.id"
-              border
-              class="picker-item-row"
-            >
-              <span class="picker-item-main">{{ item.content }}</span>
-              <small>{{ item.checklistName }} · {{ controlFrequencyLabel(item.controlFrequency) }}</small>
-            </el-checkbox>
-          </el-checkbox-group>
+        <el-dialog
+          v-model="checklistItemPickerVisible"
+          title="添加检查项"
+          width="880px"
+          class="checklist-item-picker-dialog"
+        >
+          <div class="checklist-item-picker-content">
+            <el-input
+              v-model="checklistItemPickerKeyword"
+              placeholder="搜索检查内容、判断标准或清单名称"
+              clearable
+              class="picker-search"
+            />
+            <div class="picker-item-list">
+              <section
+                v-for="group in groupedChecklistItemPickerOptions"
+                :key="group.checklistId"
+                class="picker-item-group"
+              >
+                <div class="picker-item-group-header">
+                  <el-checkbox
+                    :model-value="isPickerItemGroupChecked(group)"
+                    :indeterminate="isPickerItemGroupIndeterminate(group)"
+                    @change="togglePickerItemGroup(group, $event)"
+                  >
+                    <span>{{ group.checklistName }}</span>
+                  </el-checkbox>
+                  <div class="picker-item-group-meta">
+                    <small>已选 {{ selectedPickerItemCountInGroup(group) }}/{{ group.items.length }} 项</small>
+                    <el-button
+                      text
+                      circle
+                      size="small"
+                      class="picker-item-group-toggle"
+                      :icon="isPickerItemGroupExpanded(group) ? ArrowDown : ArrowRight"
+                      @click="togglePickerItemGroupCollapsed(group)"
+                    />
+                  </div>
+                </div>
+                <el-checkbox-group
+                  v-show="isPickerItemGroupExpanded(group)"
+                  v-model="pickerChecklistItemIds"
+                  class="picker-item-group-body"
+                >
+                  <el-checkbox
+                    v-for="item in group.items"
+                    :key="item.id"
+                    :value="item.id"
+                    border
+                    class="picker-item-row"
+                  >
+                    <span class="picker-item-main">{{ item.content }}</span>
+                    <small>{{ controlFrequencyLabel(item.controlFrequency) }}</small>
+                  </el-checkbox>
+                </el-checkbox-group>
+              </section>
+            </div>
+          </div>
           <template #footer>
             <el-button @click="checklistItemPickerVisible = false">取消</el-button>
             <el-button type="primary" @click="confirmChecklistItemPicker">确认</el-button>
@@ -351,6 +421,7 @@ import {
   Delete,
   ArrowLeft,
   ArrowRight,
+  ArrowDown,
   Promotion,
   Refresh,
 } from '@element-plus/icons-vue'
@@ -365,7 +436,10 @@ import {
   collectPlanChecklistIds,
   filterVisibleProjectChecklists,
   generateProjectChecklistItems,
+  groupProjectChecklistItemsByChecklist,
   isControlFrequencyAllowedForPlanCycle,
+  paginateProjectChecklistItems,
+  type ProjectChecklistItemGroup,
   type ProjectChecklistPreviewItem,
 } from '@/features/projects/project-checklist-selection'
 import {
@@ -417,6 +491,8 @@ const generationMode = ref<ProjectChecklistGenerationMode>('full')
 const randomCount = ref(10)
 const selectedChecklistItemIds = ref<string[]>([])
 const skipNextAutoGeneration = ref(false)
+const checklistItemPageSize = 10
+const previewItemPage = ref(1)
 
 const teamMembers = ref<Array<Omit<TeamMember, 'id' | 'avatar'>>>([])
 
@@ -439,6 +515,7 @@ const pickerChecklistIds = ref<string[]>([])
 const checklistItemPickerVisible = ref(false)
 const checklistItemPickerKeyword = ref('')
 const pickerChecklistItemIds = ref<string[]>([])
+const collapsedPickerItemGroupIds = ref<string[]>([])
 type PlanTreeOption = {
   label: string
   value: string
@@ -502,6 +579,10 @@ const visibleChecklistOptions = computed(() =>
   }),
 )
 
+const canOpenChecklistPicker = computed(
+  () => form.value.source === 'manual' || (form.value.source === 'plan' && !!linkedPlan.value),
+)
+
 const pickerChecklistOptions = computed(() => {
   const keyword = checklistPickerKeyword.value.trim()
   if (!keyword) return checklistOptions.value
@@ -521,6 +602,15 @@ const selectedPreviewItems = computed(() => {
     .filter((item): item is ProjectChecklistPreviewItem => Boolean(item))
 })
 
+const paginatedSelectedPreviewItems = computed(
+  () =>
+    paginateProjectChecklistItems(
+      selectedPreviewItems.value,
+      previewItemPage.value,
+      checklistItemPageSize,
+    ).items,
+)
+
 const checklistItemPickerOptions = computed(() => {
   const keyword = checklistItemPickerKeyword.value.trim()
   if (!keyword) return allChecklistItems.value
@@ -529,10 +619,18 @@ const checklistItemPickerOptions = computed(() => {
   )
 })
 
+const groupedChecklistItemPickerOptions = computed(() =>
+  groupProjectChecklistItemsByChecklist(checklistItemPickerOptions.value),
+)
+
+const maxChecklistItemPage = (total: number) =>
+  Math.max(1, Math.ceil(total / checklistItemPageSize))
+
 const checklistItemsForProject = (checklist: ControlChecklist) =>
-  checklist.items.filter((item) =>
-    generationMode.value !== 'periodic' ||
-    isControlFrequencyAllowedForPlanCycle(item.controlFrequency, linkedPlan.value?.cycle),
+  checklist.items.filter(
+    (item) =>
+      generationMode.value !== 'periodic' ||
+      isControlFrequencyAllowedForPlanCycle(item.controlFrequency, linkedPlan.value?.cycle),
   )
 
 const countChecklistItemsForProject = (checklist: ControlChecklist) =>
@@ -552,7 +650,9 @@ const loadAvailablePlans = async () => {
 }
 
 const loadExistingPlanProjectIds = async () => {
-  const page = normalizeProjectPage(await projectApi.list({ page: 1, pageSize: 1000, source: 'plan' }))
+  const page = normalizeProjectPage(
+    await projectApi.list({ page: 1, pageSize: 1000, source: 'plan' }),
+  )
   generatedPlanIds.value = collectGeneratedPlanIds(page.list)
 }
 
@@ -602,6 +702,20 @@ watch(
       form.value.planId = ''
       generationMode.value = 'full'
     }
+  },
+)
+
+watch(
+  () => selectedPreviewItems.value.length,
+  (total) => {
+    previewItemPage.value = Math.min(previewItemPage.value, maxChecklistItemPage(total))
+  },
+)
+
+watch(
+  () => checklistItemPickerKeyword.value,
+  () => {
+    collapsedPickerItemGroupIds.value = []
   },
 )
 
@@ -688,20 +802,68 @@ const regenerateChecklistItems = () => {
     selectedChecklistIds: form.value.checklistIds,
     linkedPlan: linkedPlan.value,
   }).map((item) => item.id)
+  previewItemPage.value = 1
 }
 
 const removeChecklistItem = (id: string) => {
   selectedChecklistItemIds.value = selectedChecklistItemIds.value.filter((itemId) => itemId !== id)
 }
 
+const selectedPickerItemCountInGroup = (
+  group: ProjectChecklistItemGroup<ProjectChecklistPreviewItem>,
+) => group.items.filter((item) => pickerChecklistItemIds.value.includes(item.id)).length
+
+const isPickerItemGroupChecked = (group: ProjectChecklistItemGroup<ProjectChecklistPreviewItem>) =>
+  selectedPickerItemCountInGroup(group) === group.items.length
+
+const isPickerItemGroupIndeterminate = (
+  group: ProjectChecklistItemGroup<ProjectChecklistPreviewItem>,
+) => {
+  const selectedCount = selectedPickerItemCountInGroup(group)
+  return selectedCount > 0 && selectedCount < group.items.length
+}
+
+const isPickerItemGroupExpanded = (
+  group: ProjectChecklistItemGroup<ProjectChecklistPreviewItem>,
+) => !collapsedPickerItemGroupIds.value.includes(group.checklistId)
+
+const togglePickerItemGroupCollapsed = (
+  group: ProjectChecklistItemGroup<ProjectChecklistPreviewItem>,
+) => {
+  if (collapsedPickerItemGroupIds.value.includes(group.checklistId)) {
+    collapsedPickerItemGroupIds.value = collapsedPickerItemGroupIds.value.filter(
+      (id) => id !== group.checklistId,
+    )
+    return
+  }
+  collapsedPickerItemGroupIds.value = [...collapsedPickerItemGroupIds.value, group.checklistId]
+}
+
+const togglePickerItemGroup = (
+  group: ProjectChecklistItemGroup<ProjectChecklistPreviewItem>,
+  checked: string | number | boolean,
+) => {
+  const nextIds = new Set(pickerChecklistItemIds.value)
+  group.items.forEach((item) => {
+    if (checked) {
+      nextIds.add(item.id)
+    } else {
+      nextIds.delete(item.id)
+    }
+  })
+  pickerChecklistItemIds.value = Array.from(nextIds)
+}
+
 const openChecklistItemPicker = () => {
   pickerChecklistItemIds.value = [...selectedChecklistItemIds.value]
   checklistItemPickerKeyword.value = ''
+  collapsedPickerItemGroupIds.value = []
   checklistItemPickerVisible.value = true
 }
 
 const confirmChecklistItemPicker = () => {
   selectedChecklistItemIds.value = [...pickerChecklistItemIds.value]
+  previewItemPage.value = 1
   const selectedItems = allChecklistItems.value.filter((item) =>
     selectedChecklistItemIds.value.includes(item.id),
   )
@@ -776,7 +938,8 @@ const handleSubmit = async () => {
     return
   }
 
-  const plan = linkedPlan.value || availablePlans.value.find((item) => item.id === form.value.planId)
+  const plan =
+    linkedPlan.value || availablePlans.value.find((item) => item.id === form.value.planId)
   try {
     const payload = buildProjectUpsertPayload({
       name: form.value.name,
@@ -903,15 +1066,125 @@ const handleSubmit = async () => {
   width: 100%;
 }
 
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+:deep(.checklist-item-picker-dialog) {
+  height: min(76vh, 760px);
+  max-height: calc(100vh - 72px);
+  display: flex;
+  flex-direction: column;
+}
+
+:deep(.checklist-item-picker-dialog .el-dialog__header),
+:deep(.checklist-item-picker-dialog .el-dialog__footer) {
+  flex: 0 0 auto;
+}
+
+:deep(.checklist-item-picker-dialog .el-dialog__footer) {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 16px;
+}
+
+:deep(.checklist-item-picker-dialog .el-dialog__body) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: 16px;
+}
+
+.checklist-item-picker-content {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .picker-item-list {
-  max-height: 480px;
-  overflow: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: scroll;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 10px 16px 0;
+  border-top: 1px solid #e5e7eb;
+  border-bottom: 1px solid #e5e7eb;
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    background: #94a3b8;
+    border-radius: 8px;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 8px;
+  }
+}
+
+.picker-item-group {
+  flex: 0 0 auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+
+.picker-item-group-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f8fafc;
+
+  :deep(.el-checkbox__label) {
+    font-weight: 600;
+    color: $iris-text-primary;
+  }
+
+}
+
+.picker-item-group-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+
+  small {
+    color: $iris-text-muted;
+    white-space: nowrap;
+  }
+}
+
+.picker-item-group-toggle {
+  color: $iris-text-muted;
+}
+
+.picker-item-group-body {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 10px;
+  gap: 8px;
+  padding: 10px;
+  background: #fff;
 }
 
 .picker-item-row {
+  flex: 0 0 auto;
   width: 100%;
   height: auto;
   margin-right: 0;

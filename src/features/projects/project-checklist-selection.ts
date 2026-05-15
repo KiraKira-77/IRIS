@@ -11,6 +11,19 @@ export interface ProjectChecklistPreviewItem extends ChecklistItem {
   checklistName: string
 }
 
+export interface ProjectChecklistItemPage<T> {
+  items: T[]
+  page: number
+  pageSize: number
+  total: number
+}
+
+export interface ProjectChecklistItemGroup<T> {
+  checklistId: string
+  checklistName: string
+  items: T[]
+}
+
 const PLAN_CYCLE_RANK: Record<PlanCycle, number> = {
   monthly: 4,
   quarterly: 5,
@@ -51,10 +64,11 @@ export function filterVisibleProjectChecklists({
   checklists: ControlChecklist[]
   selectedChecklistIds: string[]
 }): ControlChecklist[] {
-  if (source !== 'plan') return checklists
+  const selectedIds = new Set(selectedChecklistIds)
+  if (source !== 'plan') return checklists.filter((checklist) => selectedIds.has(checklist.id))
   if (!linkedPlan) return []
 
-  const visibleIds = new Set([...collectPlanChecklistIds(linkedPlan), ...selectedChecklistIds])
+  const visibleIds = new Set([...collectPlanChecklistIds(linkedPlan), ...selectedIds])
   return checklists.filter((checklist) => visibleIds.has(checklist.id))
 }
 
@@ -127,6 +141,46 @@ export function generateProjectChecklistItems({
   if (count >= candidates.length) return candidates
 
   return shuffleItems(candidates, random).slice(0, count)
+}
+
+export function paginateProjectChecklistItems<T>(
+  items: T[],
+  page: number,
+  pageSize: number,
+): ProjectChecklistItemPage<T> {
+  const safePageSize = Math.max(1, Math.floor(pageSize))
+  const total = items.length
+  const maxPage = Math.max(1, Math.ceil(total / safePageSize))
+  const safePage = Math.min(Math.max(1, Math.floor(page)), maxPage)
+  const start = (safePage - 1) * safePageSize
+
+  return {
+    items: items.slice(start, start + safePageSize),
+    page: safePage,
+    pageSize: safePageSize,
+    total,
+  }
+}
+
+export function groupProjectChecklistItemsByChecklist<
+  T extends Pick<ProjectChecklistPreviewItem, 'checklistId' | 'checklistName'>,
+>(items: T[]): ProjectChecklistItemGroup<T>[] {
+  const groups = new Map<string, ProjectChecklistItemGroup<T>>()
+
+  items.forEach((item) => {
+    const existing = groups.get(item.checklistId)
+    if (existing) {
+      existing.items.push(item)
+      return
+    }
+    groups.set(item.checklistId, {
+      checklistId: item.checklistId,
+      checklistName: item.checklistName,
+      items: [item],
+    })
+  })
+
+  return Array.from(groups.values())
 }
 
 function collectCandidateChecklistItems({
