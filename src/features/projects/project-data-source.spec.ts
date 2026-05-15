@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildProjectUpsertPayload,
+  collectGeneratedPlanIds,
   filterProjectMemberUsers,
   getAssignableProjectMembers,
   normalizeProjectPage,
@@ -535,6 +536,15 @@ describe('project management data sources', () => {
     expect(projectCreateSource).toContain('buildControlPlanTree')
     expect(projectCreateSource).toContain(':check-strictly="true"')
     expect(projectCreateSource).not.toContain('v-for="p in availablePlans"')
+  })
+
+  it('prevents creating multiple projects from the same plan on the create page', () => {
+    expect(collectGeneratedPlanIds([{ planId: '9001' }, { planId: '' }, { planId: '9002' }])).toEqual(
+      new Set(['9001', '9002']),
+    )
+    expect(projectCreateSource).toContain('generatedPlanIds')
+    expect(projectCreateSource).toContain('该计划已生成项目，不能重复生成')
+    expect(projectCreateSource).toContain('loadExistingPlanProjectIds')
   })
 
   it('limits plan-generated project checklists to plan items until users add more', () => {

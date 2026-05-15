@@ -366,6 +366,8 @@ export interface ControlPlan {
   items: PlanItem[]
   parentId?: string // 父计划ID（子计划才有）
   children?: ControlPlan[] // 子计划列表（前端展示用）
+  generatedProjectId?: string
+  generatedProjectName?: string
   createdBy: string
   approvedBy?: string
   createdAt: string

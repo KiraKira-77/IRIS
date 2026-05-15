@@ -153,8 +153,28 @@
             </el-tag>
           </template>
         </el-table-column>
+        <el-table-column label="项目生成" width="110" align="center">
+          <template #default="{ row }">
+            <el-tooltip
+              v-if="row.generatedProjectId"
+              :content="generatedProjectTooltip(row)"
+              placement="top"
+            >
+              <el-tag
+                size="small"
+                type="success"
+                effect="light"
+                class="generated-project-tag"
+                @click.stop="openGeneratedProject(row)"
+              >
+                已生成
+              </el-tag>
+            </el-tooltip>
+            <el-tag v-else size="small" type="info" effect="plain">未生成</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="updatedAt" label="更新时间" width="140" />
-        <el-table-column label="操作" width="260" fixed="right">
+        <el-table-column label="操作" width="320" fixed="right">
           <template #default="{ row }">
             <div class="row-actions">
               <el-button link type="primary" size="small" @click="router.push(`/plan/detail/${row.id}`)">
@@ -167,6 +187,14 @@
                 size="small"
                 @click="router.push(`/plan/create?parentId=${row.id}`)"
                 >新建子计划</el-button
+              >
+              <el-button
+                v-if="canGenerateProject(row)"
+                link
+                type="success"
+                size="small"
+                @click="handleGenerateProject(row)"
+                >生成项目</el-button
               >
               <el-button
                 v-if="canEditRow(row)"
@@ -269,6 +297,24 @@ const canSubmitRow = (plan: ControlPlan) => planAccess(plan).canSubmit
 
 const canDeleteRow = (plan: ControlPlan) =>
   planAccess(plan).canDelete && canDeleteControlPlan(plan, allPlans.value)
+
+const canGenerateProject = (plan: PlanTreeRow) =>
+  canEditRow(plan) &&
+  (plan.status === 'approved' || plan.status === 'in_progress') &&
+  !plan.generatedProjectId &&
+  !plan.children?.length
+
+const generatedProjectTooltip = (plan: ControlPlan) =>
+  `已生成项目：${plan.generatedProjectName || '未命名项目'}，点击查看项目详情`
+
+const openGeneratedProject = (plan: ControlPlan) => {
+  if (!plan.generatedProjectId) return
+  router.push(`/project/detail/${plan.generatedProjectId}`)
+}
+
+const handleGenerateProject = (row: ControlPlan) => {
+  router.push(`/project/create?planId=${row.id}`)
+}
 
 const treeData = computed(() => {
   return buildControlPlanTree(allPlans.value)
@@ -625,6 +671,11 @@ const statusLabel = (val: string) => {
   justify-content: center;
   gap: 6px;
   min-width: 64px;
+}
+
+.generated-project-tag {
+  cursor: pointer;
+  user-select: none;
 }
 
 .text-muted {

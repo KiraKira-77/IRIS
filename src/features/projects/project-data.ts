@@ -52,6 +52,10 @@ export function normalizeProject(project: Project): Project {
   }
 }
 
+export function collectGeneratedPlanIds(projects: Array<Pick<Project, 'planId'>>): Set<string> {
+  return new Set(projects.map((project) => project.planId).filter((id): id is string => Boolean(id)))
+}
+
 export function getProjectMembers(project: Pick<Project, 'members' | 'team'>): TeamMember[] {
   return project.members || project.team || []
 }

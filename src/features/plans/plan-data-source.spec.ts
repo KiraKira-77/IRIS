@@ -214,6 +214,38 @@ describe('plan related pages data sources', () => {
     expect(planDetailSource).toContain('canCreateChildForCurrentPlan')
   })
 
+  it('shows a generate project action for eligible ungenerated plans in the plan list', () => {
+    expect(planListSource).toContain('canGenerateProject(row)')
+    expect(planListSource).toContain('handleGenerateProject(row)')
+    expect(planListSource).toContain("plan.status === 'approved' || plan.status === 'in_progress'")
+    expect(planListSource).toContain('!plan.generatedProjectId')
+    expect(planListSource).toContain('!plan.children?.length')
+    expect(planListSource).toContain('`/project/create?planId=${row.id}`')
+    expect(projectCreateSource).toContain('route.query.planId')
+  })
+
+  it('shows whether a plan has already generated a project in the plan list', () => {
+    expect(typeSource).toContain('generatedProjectId?: string')
+    expect(typeSource).toContain('generatedProjectName?: string')
+    expect(planListSource).toContain('label="项目生成"')
+    expect(planListSource).toContain('generatedProjectId')
+    expect(planListSource).toContain('generatedProjectName')
+    expect(planListSource).toContain('/project/detail/')
+    expect(planListSource).toContain('未生成')
+  })
+
+  it('keeps generated project information compact in the plan list', () => {
+    const projectColumnStart = planListSource.indexOf('label="项目生成"')
+    const projectColumnEnd = planListSource.indexOf('<el-table-column prop="updatedAt"', projectColumnStart)
+    const projectColumnSource = planListSource.slice(projectColumnStart, projectColumnEnd)
+
+    expect(projectColumnSource).toContain('width="110"')
+    expect(projectColumnSource).toContain('el-tooltip')
+    expect(projectColumnSource).toContain('generatedProjectTooltip(row)')
+    expect(projectColumnSource).toContain('openGeneratedProject(row)')
+    expect(projectColumnSource).not.toContain('generated-project-link')
+  })
+
   it('limits plan owner scope selection to scopes the user can edit or manage', () => {
     expect(planCreateSource).toContain('filterEditablePlanOwnerScopes')
     expect(planCreateSource).toContain('editableOwnerScopeOptions')

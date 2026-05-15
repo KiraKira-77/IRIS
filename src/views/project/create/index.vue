@@ -370,9 +370,11 @@ import {
 } from '@/features/projects/project-checklist-selection'
 import {
   buildProjectUpsertPayload,
+  collectGeneratedPlanIds,
   filterProjectMemberUsers,
   getProjectMembers,
   normalizeProject,
+  normalizeProjectPage,
 } from '@/features/projects/project-data'
 import type {
   ControlChecklist,
@@ -428,6 +430,7 @@ const basicRules: FormRules = {
 // Options
 // ==================
 const availablePlans = ref<ControlPlan[]>([])
+const generatedPlanIds = ref<Set<string>>(new Set())
 const checklistOptions = ref<ControlChecklist[]>([])
 const users = ref<SystemUser[]>([])
 const checklistPickerVisible = ref(false)
@@ -447,7 +450,11 @@ const personnelOptions = computed(() => {
   return filterProjectMemberUsers(users.value)
 })
 
-const canAssociatePlan = (plan: ControlPlan) => ['approved', 'in_progress'].includes(plan.status)
+const isPlanAlreadyGenerated = (planId?: string) =>
+  !isEditMode.value && !!planId && generatedPlanIds.value.has(planId)
+
+const canAssociatePlan = (plan: ControlPlan) =>
+  ['approved', 'in_progress'].includes(plan.status) && !isPlanAlreadyGenerated(plan.id)
 
 const planTreeOptions = computed<PlanTreeOption[]>(() =>
   buildControlPlanTree(availablePlans.value)
@@ -464,7 +471,9 @@ const buildPlanTreeOption = (plan: ControlPlan): PlanTreeOption | null => {
   if (!selectable && children.length === 0) return null
 
   return {
-    label: plan.parentId ? plan.name : `${plan.name}（主计划）`,
+    label: `${plan.parentId ? plan.name : `${plan.name}（主计划）`}${
+      isPlanAlreadyGenerated(plan.id) ? '（已生成项目）' : ''
+    }`,
     value: plan.id,
     disabled: !selectable || children.length > 0,
     children: children.length ? children : undefined,
@@ -542,6 +551,11 @@ const loadAvailablePlans = async () => {
   availablePlans.value = page.list
 }
 
+const loadExistingPlanProjectIds = async () => {
+  const page = normalizeProjectPage(await projectApi.list({ page: 1, pageSize: 1000, source: 'plan' }))
+  generatedPlanIds.value = collectGeneratedPlanIds(page.list)
+}
+
 const loadChecklistOptions = async () => {
   const page = normalizeChecklistPageFromApi(
     await checklistApi.list({ page: 1, pageSize: 100, status: 'active' }),
@@ -561,6 +575,12 @@ const pruneUnavailableTeamMembers = () => {
 }
 
 const onPlanChange = async (planId: string) => {
+  if (isPlanAlreadyGenerated(planId)) {
+    ElMessage.warning('该计划已生成项目，不能重复生成')
+    form.value.planId = ''
+    linkedPlan.value = null
+    return
+  }
   const plan = availablePlans.value.find((p) => p.id === planId) || (await planApi.detail(planId))
   if (plan) {
     linkedPlan.value = plan
@@ -699,7 +719,12 @@ const confirmChecklistItemPicker = () => {
 // Init from planId query
 // ==================
 onMounted(async () => {
-  await Promise.all([loadAvailablePlans(), loadChecklistOptions(), loadPersonnelOptions()])
+  await Promise.all([
+    loadAvailablePlans(),
+    loadExistingPlanProjectIds(),
+    loadChecklistOptions(),
+    loadPersonnelOptions(),
+  ])
   if (projectId.value) {
     await loadProjectForEdit(projectId.value)
     return
@@ -744,6 +769,10 @@ const handleSubmit = async () => {
   }
   if (!validMembers.some((member) => member.role === 'leader')) {
     ElMessage.warning('请设置一名项目负责人')
+    return
+  }
+  if (form.value.source === 'plan' && isPlanAlreadyGenerated(form.value.planId)) {
+    ElMessage.warning('该计划已生成项目，不能重复生成')
     return
   }
 

@@ -12,6 +12,9 @@ describe('api error messages', () => {
     expect(resolveApiErrorMessage('PROJECT_CHECKLIST_ITEMS_REQUIRED', 'project requires checklist items')).toBe(
       '请选择包含检查项的检查清单',
     )
+    expect(resolveApiErrorMessage('PROJECT_PLAN_ALREADY_GENERATED', 'PROJECT_PLAN_ALREADY_GENERATED')).toBe(
+      '该计划已生成项目，不能重复生成',
+    )
   })
 
   it('keeps readable Chinese backend messages and hides raw error codes', () => {
