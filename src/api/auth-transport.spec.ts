@@ -25,6 +25,7 @@ describe('auth transport helpers', () => {
     ).toEqual({
       ok: true,
       unauthorized: false,
+      code: 'OK',
       data: { token: 'abc' },
       message: 'success',
     })
@@ -41,6 +42,7 @@ describe('auth transport helpers', () => {
     ).toEqual({
       ok: false,
       unauthorized: true,
+      code: 'UNAUTHORIZED',
       data: null,
       message: 'authentication required',
     })
@@ -56,6 +58,7 @@ describe('auth transport helpers', () => {
     ).toEqual({
       ok: true,
       unauthorized: false,
+      code: '200',
       data: { id: 1 },
       message: 'ok',
     })

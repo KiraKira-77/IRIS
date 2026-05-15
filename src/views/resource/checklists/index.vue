@@ -171,6 +171,20 @@
                   @click="openItemDialog(row)"
                   >添加检查项</el-button
                 >
+                <el-button
+                  v-if="getRowAccessState(row).canEdit"
+                  :icon="Upload"
+                  size="small"
+                  @click="openImportDialog(row)"
+                  >批量导入</el-button
+                >
+                <el-button
+                  v-if="getRowAccessState(row).canEdit"
+                  :icon="Download"
+                  size="small"
+                  @click="downloadImportTemplate"
+                  >下载模板</el-button
+                >
               </div>
             </div>
           </template>
@@ -472,12 +486,152 @@
         <el-button type="primary" @click="handleSaveItem">保存</el-button>
       </template>
     </el-drawer>
+
+    <!-- 批量导入检查项抽屉 -->
+    <el-drawer
+      v-model="importDialogVisible"
+      size="760px"
+      class="checklist-editor-drawer"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="editor-header">
+          <div>
+            <span class="editor-kicker">检查项</span>
+            <h3>批量导入检查项</h3>
+          </div>
+          <el-tag v-if="importChecklist" effect="plain" round>{{ importChecklist.name }}</el-tag>
+        </div>
+      </template>
+
+      <div class="import-panel">
+        <section class="form-section">
+          <div class="form-section-heading">
+            <span>01</span>
+            <div>
+              <h4>导入文件</h4>
+            </div>
+          </div>
+          <el-upload
+            drag
+            action="#"
+            accept=".xlsx"
+            :show-file-list="false"
+            :auto-upload="false"
+            :on-change="handleImportFileChange"
+          >
+            <el-icon class="import-upload-icon"><Upload /></el-icon>
+            <div class="el-upload__text">拖拽 Excel 到此处，或点击选择文件</div>
+            <template #tip>
+              <div class="el-upload__tip">
+                请使用模板列：序号、检查内容、判断标准、控制频率、评估类、关联组织；支持中文或
+                value，导入后保存为系统编码。
+              </div>
+            </template>
+          </el-upload>
+          <div v-if="importFileName" class="import-file-name">{{ importFileName }}</div>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section-heading">
+            <span>02</span>
+            <div>
+              <h4>导入方式</h4>
+            </div>
+          </div>
+          <el-radio-group v-model="importMode">
+            <el-radio-button value="append">追加导入</el-radio-button>
+            <el-radio-button value="replace">覆盖现有检查项</el-radio-button>
+          </el-radio-group>
+        </section>
+
+        <section class="form-section">
+          <div class="import-preview-heading">
+            <div class="form-section-heading">
+              <span>03</span>
+              <div>
+                <h4>导入预览</h4>
+              </div>
+            </div>
+            <div class="import-summary">
+              <el-tag effect="light" type="success">有效 {{ importValidCount }} 条</el-tag>
+              <el-tag effect="light" :type="importErrorCount > 0 ? 'danger' : 'info'"
+                >错误 {{ importErrorCount }} 条</el-tag
+              >
+            </div>
+          </div>
+          <el-table
+            :data="importPreviewRows"
+            size="small"
+            max-height="320"
+            empty-text="上传文件后显示预览"
+          >
+            <el-table-column prop="rowNumber" label="Excel行" width="82" />
+            <el-table-column label="检查内容" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.item?.content || row.raw['检查内容'] }}</template>
+            </el-table-column>
+            <el-table-column label="判断标准" min-width="180" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.item?.criterion || row.raw['判断标准'] }}</template>
+            </el-table-column>
+            <el-table-column label="控制频率" min-width="110" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{
+                  row.item?.controlFrequency
+                    ? controlFrequencyLabel(row.item?.controlFrequency)
+                    : row.raw['控制频率']
+                }}
+              </template>
+            </el-table-column>
+            <el-table-column label="评估类" min-width="120" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{
+                  row.item?.evaluationType
+                    ? evaluationTypeLabel(row.item?.evaluationType)
+                    : row.raw['评估类']
+                }}
+              </template>
+            </el-table-column>
+            <el-table-column label="关联组织" min-width="160" show-overflow-tooltip>
+              <template #default="{ row }">
+                {{
+                  row.item?.organizationIds
+                    ? organizationLabels(row.item?.organizationIds || []).join('、')
+                    : row.raw['关联组织']
+                }}
+              </template>
+            </el-table-column>
+            <el-table-column label="状态" width="86">
+              <template #default="{ row }">
+                <el-tag :type="row.status === 'valid' ? 'success' : 'danger'" effect="light">
+                  {{ row.status === 'valid' ? '有效' : '错误' }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="错误说明" min-width="220" show-overflow-tooltip>
+              <template #default="{ row }">{{ row.errors.join('；') || '-' }}</template>
+            </el-table-column>
+          </el-table>
+        </section>
+      </div>
+
+      <template #footer>
+        <el-button @click="importDialogVisible = false">取消</el-button>
+        <el-button :icon="Download" @click="downloadImportTemplate">下载模板</el-button>
+        <el-button
+          type="primary"
+          :loading="importSubmitting"
+          :disabled="!importCanConfirm"
+          @click="confirmImportItems"
+          >确认导入</el-button
+        >
+      </template>
+    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
+import { Download, Plus, Refresh, Search, Upload } from '@element-plus/icons-vue'
 import { checklistApi, resourceScopeApi } from '@/api'
 import { useUserStore } from '@/stores/modules/user'
 import type {
@@ -488,6 +642,7 @@ import type {
   ResourceScopeOption,
 } from '@/types'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadFile } from 'element-plus'
 import {
   CHECKLIST_ORGANIZATION_OPTIONS,
   CONTROL_FREQUENCY_OPTIONS,
@@ -497,6 +652,16 @@ import {
   normalizeChecklistPageFromApi,
   optionLabel,
 } from '@/features/checklists/checklist-data'
+import {
+  CHECKLIST_ITEM_IMPORT_HEADERS,
+  buildChecklistItemImportTemplateValidationRules,
+  buildChecklistItemImportTemplateRows,
+  findDuplicateChecklistImportItems,
+  mergeChecklistImportItems,
+  parseChecklistItemImportRows,
+  type ChecklistItemImportMode,
+  type ChecklistItemImportResult,
+} from '@/features/checklists/checklist-import'
 import { DEFAULT_RESOURCE_SCOPE_OPTIONS } from '@/features/permissions/user-access'
 import { buildChecklistAccessState } from '@/features/permissions/checklist-access'
 import {
@@ -780,6 +945,206 @@ const handleSaveItem = async () => {
   currentChecklist.value = updated
   ElMessage.success(editingItemIndex.value === null ? '检查项已添加' : '检查项已保存')
   itemDialogVisible.value = false
+}
+
+// Item Import
+const importDialogVisible = ref(false)
+const importChecklist = ref<ControlChecklist | null>(null)
+const importMode = ref<ChecklistItemImportMode>('append')
+const importResult = ref<ChecklistItemImportResult | null>(null)
+const importFileName = ref('')
+const importSubmitting = ref(false)
+const importPreviewRows = computed(() => importResult.value?.rows || [])
+const importValidCount = computed(() => importResult.value?.validItems.length || 0)
+const importErrorCount = computed(() => importResult.value?.errorCount || 0)
+const importCanConfirm = computed(
+  () => Boolean(importChecklist.value) && importValidCount.value > 0 && importErrorCount.value === 0,
+)
+const loadExcel = () => import('exceljs')
+
+const openImportDialog = (row: ControlChecklist) => {
+  if (!getRowAccessState(row).canEdit) {
+    ElMessage.warning('当前用户无权编辑该清单')
+    return
+  }
+  importChecklist.value = row
+  importMode.value = 'append'
+  importResult.value = null
+  importFileName.value = ''
+  importDialogVisible.value = true
+}
+
+const handleImportFileChange = async (file: UploadFile) => {
+  const rawFile = file.raw
+  if (!rawFile) {
+    ElMessage.warning('请选择可读取的 Excel 文件')
+    return
+  }
+
+  try {
+    const ExcelJS = await loadExcel()
+    const buffer = await rawFile.arrayBuffer()
+    const workbook = new ExcelJS.Workbook()
+    await workbook.xlsx.load(buffer as unknown as Parameters<typeof workbook.xlsx.load>[0])
+    const sheet = workbook.worksheets[0]
+    if (!sheet) {
+      ElMessage.warning('导入文件没有可读取的工作表')
+      return false
+    }
+    const rows = readChecklistImportRowsFromSheet(sheet)
+    importResult.value = parseChecklistItemImportRows(rows)
+    importFileName.value = rawFile.name || file.name
+    if (importResult.value.rows.length === 0) {
+      ElMessage.warning('导入文件没有检查项数据')
+    }
+  } catch {
+    importResult.value = null
+    importFileName.value = ''
+    ElMessage.error('导入文件解析失败，请检查文件格式')
+  }
+}
+
+const confirmImportItems = async () => {
+  const checklist = importChecklist.value
+  if (!checklist || !importResult.value) {
+    ElMessage.warning('请先上传导入文件')
+    return
+  }
+  if (!getRowAccessState(checklist).canEdit) {
+    ElMessage.warning('当前用户无权编辑该清单')
+    return
+  }
+  if (importResult.value.errorCount > 0) {
+    ElMessage.warning('请先修正错误行后再导入')
+    return
+  }
+  if (importResult.value.validItems.length === 0) {
+    ElMessage.warning('没有可导入的检查项')
+    return
+  }
+  const duplicates = findDuplicateChecklistImportItems(
+    checklist.items || [],
+    importResult.value.validItems,
+    importMode.value,
+  )
+  if (duplicates.length > 0) {
+    ElMessage.warning('导入内容存在重复检查项，请调整后再导入')
+    return
+  }
+
+  try {
+    if (importMode.value === 'replace') {
+      await ElMessageBox.confirm('覆盖后将替换当前清单全部检查项，确认继续吗？', '提示', {
+        type: 'warning',
+        confirmButtonText: '确认覆盖',
+        cancelButtonText: '取消',
+      })
+    }
+    importSubmitting.value = true
+    const items = mergeChecklistImportItems(
+      checklist.items || [],
+      importResult.value.validItems,
+      importMode.value,
+    )
+    const updated = normalizeChecklistFromApi(
+      await checklistApi.update(checklist.id, toChecklistPayload(checklist, items)),
+    )
+    replaceChecklistInTable(updated)
+    currentChecklist.value = updated
+    importChecklist.value = updated
+    importDialogVisible.value = false
+    ElMessage.success(`已导入 ${importResult.value.validItems.length} 条检查项`)
+  } catch (error) {
+    if (error === 'cancel' || error === 'close') {
+      return
+    }
+    ElMessage.error('批量导入失败，请稍后重试')
+  } finally {
+    importSubmitting.value = false
+  }
+}
+
+const downloadImportTemplate = async () => {
+  const ExcelJS = await loadExcel()
+  const workbook = new ExcelJS.Workbook()
+  const sheet = workbook.addWorksheet('检查项导入模板')
+  sheet.addRow([...CHECKLIST_ITEM_IMPORT_HEADERS])
+  buildChecklistItemImportTemplateRows().forEach((row) => {
+    sheet.addRow(CHECKLIST_ITEM_IMPORT_HEADERS.map((header) => row[header]))
+  })
+  applyChecklistImportTemplateValidation(sheet)
+  sheet.columns.forEach((column) => {
+    column.width = 18
+  })
+  const data = await workbook.xlsx.writeBuffer()
+  const blob = new Blob([data], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '检查项导入模板.xlsx'
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+const applyChecklistImportTemplateValidation = (sheet: import('exceljs').Worksheet) => {
+  const validationRowStart = 2
+  const validationRowEnd = 200
+
+  buildChecklistItemImportTemplateValidationRules().forEach((rule) => {
+    const columnIndex = CHECKLIST_ITEM_IMPORT_HEADERS.indexOf(rule.header) + 1
+    if (columnIndex < 1) {
+      return
+    }
+
+    for (let rowIndex = validationRowStart; rowIndex <= validationRowEnd; rowIndex += 1) {
+      const cell = sheet.getCell(rowIndex, columnIndex)
+      if (rule.type === 'list') {
+        cell.dataValidation = {
+          type: 'list',
+          allowBlank: false,
+          formulae: [`"${rule.values.join(',')}"`],
+          showErrorMessage: true,
+          errorStyle: 'error',
+          errorTitle: '请选择有效值',
+          error: `请从下拉列表选择：${rule.values.join('、')}`,
+        }
+      } else {
+        cell.dataValidation = {
+          type: 'custom',
+          allowBlank: false,
+          formulae: ['TRUE'],
+          showInputMessage: true,
+          promptTitle: '关联组织',
+          prompt: rule.prompt,
+        }
+      }
+    }
+  })
+}
+
+const readChecklistImportRowsFromSheet = (
+  sheet: import('exceljs').Worksheet,
+): Record<string, unknown>[] => {
+  const headerByColumn = new Map<number, string>()
+  sheet.getRow(1).eachCell({ includeEmpty: true }, (cell, colNumber) => {
+    const header = cell.text.trim()
+    if (header) {
+      headerByColumn.set(colNumber, header)
+    }
+  })
+
+  const rows: Record<string, unknown>[] = []
+  for (let rowNumber = 2; rowNumber <= sheet.rowCount; rowNumber += 1) {
+    const row = sheet.getRow(rowNumber)
+    const record: Record<string, unknown> = {}
+    headerByColumn.forEach((header, colNumber) => {
+      record[header] = row.getCell(colNumber).text.trim()
+    })
+    rows.push(record)
+  }
+  return rows
 }
 
 const handleCopy = (row: ControlChecklist) => {
@@ -1260,6 +1625,7 @@ const statusLabel = (status: ControlChecklist['status']) =>
   .detail-footer {
     display: flex;
     justify-content: flex-start;
+    gap: 8px;
     margin-top: 14px;
     padding-top: 14px;
     border-top: 1px solid oklch(91% 0.014 248);
@@ -1334,6 +1700,43 @@ const statusLabel = (status: ControlChecklist['status']) =>
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.import-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.import-upload-icon {
+  margin-top: 10px;
+  font-size: 28px;
+  color: oklch(50% 0.1 250);
+}
+
+.import-file-name {
+  margin-top: 10px;
+  font-size: 13px;
+  color: oklch(35% 0.04 248);
+}
+
+.import-preview-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+
+  .form-section-heading {
+    margin-bottom: 0;
+  }
+}
+
+.import-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 :deep(.checklist-editor-drawer) {

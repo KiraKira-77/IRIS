@@ -11,6 +11,7 @@ import {
   projectChecklistCount,
   projectProgress,
   projectStatusLabel,
+  shouldReturnToProjectListAfterDetailLoadError,
   workOrderProviderLabel,
 } from './project-data'
 import type { PageResult, Project, SystemUser } from '@/types'
@@ -32,7 +33,10 @@ const rectificationDetailSource = readFileSync(
   join(here, '../../views/rectification/detail/index.vue'),
   'utf8',
 )
-const archiveSource = readFileSync(join(here, '../../views/resource/archives/index.vue'), 'utf8')
+const archiveSource = [
+  readFileSync(join(here, '../../views/resource/archives/index.vue'), 'utf8'),
+  readFileSync(join(here, '../../views/resource/archives/detail/index.vue'), 'utf8'),
+].join('\n')
 const logCenterSource = readFileSync(join(here, '../../views/workbench/logs/index.vue'), 'utf8')
 const alertCenterSource = readFileSync(join(here, '../../views/workbench/alerts/index.vue'), 'utf8')
 const modelLibrarySource = readFileSync(join(here, '../../views/smart/models/index.vue'), 'utf8')
@@ -515,12 +519,31 @@ describe('project management data sources', () => {
     expect(projectListSource).not.toContain('>项目启动</el-button>')
   })
 
+  it('returns to the project list when detail loading is rejected by project permission', () => {
+    expect(
+      shouldReturnToProjectListAfterDetailLoadError(new Error('当前用户无权查看该项目')),
+    ).toBe(true)
+    expect(shouldReturnToProjectListAfterDetailLoadError(new Error('项目不存在或已被删除'))).toBe(
+      false,
+    )
+    expect(projectDetailSource).toContain('router.replace')
+  })
+
   it('shows associated plans as a parent-child tree in project creation', () => {
     expect(projectCreateSource).toContain('el-tree-select')
     expect(projectCreateSource).toContain('planTreeOptions')
     expect(projectCreateSource).toContain('buildControlPlanTree')
     expect(projectCreateSource).toContain(':check-strictly="true"')
     expect(projectCreateSource).not.toContain('v-for="p in availablePlans"')
+  })
+
+  it('limits plan-generated project checklists to plan items until users add more', () => {
+    expect(projectCreateSource).toContain('visibleChecklistOptions')
+    expect(projectCreateSource).toContain('filterVisibleProjectChecklists')
+    expect(projectCreateSource).toContain('collectPlanChecklistIds')
+    expect(projectCreateSource).toContain('openChecklistPicker')
+    expect(projectCreateSource).toContain('添加检查清单')
+    expect(projectCreateSource).not.toContain('v-for="cl in checklistOptions"')
   })
 
   it('allows project leaders to edit projects until they are archived', () => {

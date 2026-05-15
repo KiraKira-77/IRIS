@@ -8,6 +8,7 @@ import type {
 import { ElMessage } from 'element-plus'
 import type { ApiResponse } from '@/types'
 import { buildAuthorizationHeader, buildLoginRedirectPath, parseApiResult } from './auth-transport'
+import { resolveApiErrorMessage } from './error-message'
 
 const TOKEN_STORAGE_KEY = 'iris_token'
 
@@ -30,13 +31,12 @@ service.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     const result = parseApiResult(response.data)
     if (!result.ok) {
-      if (result.message) {
-        ElMessage.error(result.message)
-      }
+      const message = resolveApiErrorMessage(result.code, result.message)
+      ElMessage.error(message)
       if (result.unauthorized) {
         handleUnauthorized()
       }
-      return Promise.reject(new Error(result.message || '请求失败'))
+      return Promise.reject(new Error(message))
     }
     return result.data as unknown as AxiosResponse
   },
@@ -46,8 +46,10 @@ service.interceptors.response.use(
       handleUnauthorized()
     }
 
-    const message =
-      (!result.ok && result.message) || error.response?.data?.message || error.message || '网络错误'
+    const message = resolveApiErrorMessage(
+      result.code,
+      (!result.ok && result.message) || error.response?.data?.message || error.message,
+    )
     ElMessage.error(message)
     return Promise.reject(new Error(message))
   },

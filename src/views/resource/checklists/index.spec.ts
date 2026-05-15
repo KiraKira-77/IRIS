@@ -149,4 +149,81 @@ describe('checklists page actions', () => {
     expect(source.slice(saveStart, saveEnd)).toContain('canCreateInScope(form.ownerScopeId)')
     expect(source.slice(deleteStart, deleteEnd)).toContain('!getRowAccessState(row).canDelete')
   })
+
+  it('adds a permission-gated batch import entry to checklist items', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+    const detailStart = source.indexOf('<div class="checklist-detail">')
+    const detailEnd = source.indexOf('<el-table-column prop="name"', detailStart)
+    const detailTemplate = source.slice(detailStart, detailEnd)
+    const footerStart = detailTemplate.indexOf('<div class="detail-footer">')
+    const footerTemplate = detailTemplate.slice(footerStart)
+
+    expect(footerTemplate).toContain('@click="openImportDialog(row)"')
+    expect(footerTemplate).toContain('@click="downloadImportTemplate"')
+    expect(footerTemplate).toContain('批量导入')
+    expect(footerTemplate).toContain('下载模板')
+    expect(footerTemplate).toContain('v-if="getRowAccessState(row).canEdit"')
+  })
+
+  it('renders the checklist item import drawer with mode, upload, preview, and confirm handling', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+
+    expect(source).toContain('v-model="importDialogVisible"')
+    expect(source).toContain('批量导入检查项')
+    expect(source).toContain('v-model="importMode"')
+    expect(source).toContain('追加导入')
+    expect(source).toContain('覆盖现有检查项')
+    expect(source).toContain('accept=".xlsx"')
+    expect(source).not.toContain('accept=".xlsx,.xls"')
+    expect(source).toContain(':on-change="handleImportFileChange"')
+    expect(source).toContain(':data="importPreviewRows"')
+    expect(source).toContain('label="Excel行"')
+    expect(source).not.toContain('label="行号"')
+    expect(source).toContain('@click="confirmImportItems"')
+  })
+
+  it('shows mapped frequency, evaluation type, and organizations in the import preview', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+    const drawerStart = source.indexOf('v-model="importDialogVisible"')
+    const drawerEnd = source.indexOf('</el-drawer>', drawerStart)
+    const drawerTemplate = source.slice(drawerStart, drawerEnd)
+
+    expect(drawerTemplate).toContain('label="控制频率"')
+    expect(drawerTemplate).toContain('controlFrequencyLabel(row.item?.controlFrequency)')
+    expect(drawerTemplate).toContain("row.raw['控制频率']")
+    expect(drawerTemplate).toContain('label="评估类"')
+    expect(drawerTemplate).toContain('evaluationTypeLabel(row.item?.evaluationType)')
+    expect(drawerTemplate).toContain("row.raw['评估类']")
+    expect(drawerTemplate).toContain('label="关联组织"')
+    expect(drawerTemplate).toContain('organizationLabels(row.item?.organizationIds || [])')
+    expect(drawerTemplate).toContain("row.raw['关联组织']")
+    expect(drawerTemplate).toContain('保存为系统编码')
+  })
+
+  it('wires checklist item import helpers and permission checks', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+    const openImportStart = source.indexOf('const openImportDialog = (row: ControlChecklist)')
+    const openImportEnd = source.indexOf('const handleImportFileChange', openImportStart)
+    const confirmStart = source.indexOf('const confirmImportItems = async')
+    const confirmEnd = source.indexOf('const handleCopy', confirmStart)
+
+    expect(source).toContain("from '@/features/checklists/checklist-import'")
+    expect(source.slice(openImportStart, openImportEnd)).toContain('!getRowAccessState(row).canEdit')
+    expect(source.slice(confirmStart, confirmEnd)).toContain('mergeChecklistImportItems')
+    expect(source.slice(confirmStart, confirmEnd)).toContain('findDuplicateChecklistImportItems')
+    expect(source.slice(confirmStart, confirmEnd)).toContain('导入内容存在重复检查项')
+    expect(source.slice(confirmStart, confirmEnd)).toContain('checklistApi.update')
+    expect(source.slice(confirmStart, confirmEnd)).toContain('toChecklistPayload(checklist, items)')
+  })
+
+  it('shows an error message when checklist item import save fails', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+    const confirmStart = source.indexOf('const confirmImportItems = async')
+    const confirmEnd = source.indexOf('const downloadImportTemplate', confirmStart)
+    const confirmSource = source.slice(confirmStart, confirmEnd)
+
+    expect(confirmSource).toContain('catch (error)')
+    expect(confirmSource).toContain('ElMessage.error')
+    expect(confirmSource).toContain('批量导入失败')
+  })
 })

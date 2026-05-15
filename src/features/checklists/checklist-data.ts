@@ -53,6 +53,7 @@ export const CONTROL_FREQUENCY_OPTIONS = [
   { label: '每周', value: 'weekly' },
   { label: '每月', value: 'monthly' },
   { label: '每季度', value: 'quarterly' },
+  { label: '每半年度', value: 'half-yearly' },
   { label: '每年度', value: 'yearly' },
 ]
 

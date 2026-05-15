@@ -455,6 +455,7 @@ export interface TeamMember {
   avatar?: string
 }
 export type WorkOrderProvider = 'oms'
+export type ProjectChecklistGenerationMode = 'full' | 'periodic' | 'random'
 export type TaskStatus =
   | 'pending'
   | 'in_progress'
@@ -551,6 +552,9 @@ export interface ProjectUpsertPayload {
   leaderId: string
   leaderName: string
   checklistIds: string[]
+  checklistGenerationMode?: 'full' | 'periodic' | 'random'
+  randomCount?: number
+  checklistItemIds?: string[]
   members: Array<Omit<TeamMember, 'id' | 'avatar'>>
 }
 export type TaskAction =

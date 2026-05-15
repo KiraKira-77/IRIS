@@ -34,7 +34,7 @@
 
     <el-row v-loading="loading" :gutter="16">
       <el-col v-for="archive in archives" :key="archive.id" :xs="24" :sm="12" :lg="8">
-        <div class="archive-card" @click="openDrawer(archive)">
+        <div class="archive-card" @click="openArchiveDetail(archive)">
           <div class="card-top">
             <div class="icon-circle" :class="archive.status">
               <el-icon :size="22">
@@ -59,111 +59,25 @@
     </el-row>
 
     <el-empty v-if="!loading && archives.length === 0" description="暂无项目档案" :image-size="120" />
-
-    <el-drawer v-model="drawerVisible" title="项目档案详情" size="720px" destroy-on-close>
-      <div v-if="selectedArchive" class="drawer-content" v-loading="detailLoading">
-        <el-descriptions :column="2" border>
-          <el-descriptions-item label="项目名称">{{ selectedArchive.projectName }}</el-descriptions-item>
-          <el-descriptions-item label="项目编号">{{ selectedArchive.projectCode || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="归档时间">{{ selectedArchive.archiveDate || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="归档人">{{ selectedArchive.archivedByName || '—' }}</el-descriptions-item>
-          <el-descriptions-item label="检查项">{{ selectedArchive.taskCount || 0 }}</el-descriptions-item>
-          <el-descriptions-item label="OMS工单">{{ selectedArchive.workOrderCount || 0 }}</el-descriptions-item>
-          <el-descriptions-item label="整改单">{{ selectedArchive.rectificationCount || 0 }}</el-descriptions-item>
-          <el-descriptions-item label="附件">{{ selectedArchive.documentCount || selectedArchive.documents?.length || 0 }}</el-descriptions-item>
-        </el-descriptions>
-
-        <el-tabs class="archive-tabs">
-          <el-tab-pane label="检查项">
-            <el-table :data="snapshotTasks" size="small" border>
-              <el-table-column prop="checkContent" label="检查项" min-width="220" show-overflow-tooltip />
-              <el-table-column prop="assigneeName" label="负责人" width="120" />
-              <el-table-column prop="status" label="状态" width="110">
-                <template #default="{ row }">{{ taskStatusLabel(row.status) }}</template>
-              </el-table-column>
-              <el-table-column prop="completedAt" label="完成时间" width="170" />
-            </el-table>
-          </el-tab-pane>
-          <el-tab-pane label="OMS工单">
-            <el-table :data="snapshotWorkOrders" size="small" border>
-              <el-table-column prop="omsWorkOrderId" label="OMS工单号" min-width="150" />
-              <el-table-column prop="workOrderTitle" label="工单标题" min-width="180" show-overflow-tooltip />
-              <el-table-column prop="handlerName" label="处理人" width="120" />
-              <el-table-column prop="omsStatusName" label="OMS状态" width="120" />
-              <el-table-column prop="irisReviewStatus" label="审核结果" width="120" />
-            </el-table>
-          </el-tab-pane>
-          <el-tab-pane label="整改单">
-            <el-table :data="snapshotRectifications" size="small" border>
-              <el-table-column prop="rectificationCode" label="整改单号" min-width="140" />
-              <el-table-column prop="title" label="标题" min-width="180" show-overflow-tooltip />
-              <el-table-column prop="assigneeName" label="负责人" width="120" />
-              <el-table-column prop="status" label="状态" width="110" />
-              <el-table-column prop="reviewResult" label="审核结果" width="120" />
-            </el-table>
-          </el-tab-pane>
-          <el-tab-pane label="附件">
-            <el-table :data="selectedArchive.documents || []" size="small" border>
-              <el-table-column type="index" label="#" width="50" />
-              <el-table-column prop="category" label="分类" width="130" />
-              <el-table-column prop="name" label="文件名" min-width="240" show-overflow-tooltip />
-              <el-table-column label="操作" width="120" fixed="right">
-                <template #default="{ row }">
-                  <div v-if="archiveDocumentDownloadItems(row).length" class="archive-downloads">
-                    <el-link
-                      v-for="item in archiveDocumentDownloadItems(row)"
-                      :key="item.url"
-                      :href="item.url"
-                      :download="item.name"
-                      target="_blank"
-                      type="primary"
-                      :underline="false"
-                    >
-                      <el-icon><Download /></el-icon>
-                      <span>下载</span>
-                    </el-link>
-                  </div>
-                  <el-text v-else type="info" size="small">暂无地址</el-text>
-                </template>
-              </el-table-column>
-            </el-table>
-          </el-tab-pane>
-        </el-tabs>
-      </div>
-    </el-drawer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { Search, FolderOpened, Lock, Download } from '@element-plus/icons-vue'
+import { onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { Search, FolderOpened, Lock } from '@element-plus/icons-vue'
 import { archiveApi } from '@/api'
-import { taskStatusLabel } from '@/features/projects/project-data'
-import type { Archive, ArchiveDocument, Attachment, PageResult } from '@/types'
+import type { Archive, PageResult } from '@/types'
 
 type ArchivePage = PageResult<Archive> & {
   records?: Archive[]
   pageNo?: number
 }
 
-type ProjectArchiveSnapshot = {
-  tasks?: Array<Record<string, string>>
-  workOrders?: Array<Record<string, string>>
-  rectifications?: Array<Record<string, string>>
-}
-
-type ArchiveAttachment = Partial<Attachment> & Record<string, unknown>
-type ArchiveDownloadItem = {
-  name: string
-  url: string
-}
-
+const router = useRouter()
 const searchForm = reactive({ keyword: '', status: '' })
 const loading = ref(false)
-const detailLoading = ref(false)
 const archives = ref<Archive[]>([])
-const drawerVisible = ref(false)
-const selectedArchive = ref<Archive | null>(null)
 
 onMounted(() => {
   loadArchives()
@@ -184,59 +98,8 @@ const loadArchives = async () => {
   }
 }
 
-const openDrawer = async (archive: Archive) => {
-  drawerVisible.value = true
-  selectedArchive.value = archive
-  detailLoading.value = true
-  try {
-    selectedArchive.value = await archiveApi.detail(archive.id)
-  } finally {
-    detailLoading.value = false
-  }
-}
-
-const archiveSnapshot = computed<ProjectArchiveSnapshot>(() => {
-  if (!selectedArchive.value?.snapshotJson) return {}
-  try {
-    return JSON.parse(selectedArchive.value.snapshotJson) as ProjectArchiveSnapshot
-  } catch {
-    return {}
-  }
-})
-
-const snapshotTasks = computed(() => archiveSnapshot.value.tasks || [])
-const snapshotWorkOrders = computed(() => archiveSnapshot.value.workOrders || [])
-const snapshotRectifications = computed(() => archiveSnapshot.value.rectifications || [])
-
-const archiveDocumentDownloadItems = (document: ArchiveDocument): ArchiveDownloadItem[] => {
-  const attachments = (document.attachments || []) as ArchiveAttachment[]
-  return attachments
-    .map((attachment, index) => {
-      const url = firstText(
-        attachment.minioUrl,
-        attachment.url,
-        attachment.fileUrl,
-        attachment.attachmentUrl,
-        attachment.downloadUrl,
-      )
-      if (!url) return null
-      return {
-        url,
-        name:
-          firstText(
-            attachment.originalFileName,
-            attachment.name,
-            attachment.fileName,
-            document.name,
-          ) || `附件${index + 1}`,
-      }
-    })
-    .filter((item): item is ArchiveDownloadItem => Boolean(item))
-}
-
-const firstText = (...values: unknown[]) => {
-  const matched = values.find((value) => typeof value === 'string' && value.trim())
-  return typeof matched === 'string' ? matched.trim() : ''
+const openArchiveDetail = (archive: Archive) => {
+  router.push(`/resource/archives/detail/${archive.id}`)
 }
 </script>
 
@@ -328,21 +191,4 @@ const firstText = (...values: unknown[]) => {
   color: $iris-text-secondary;
 }
 
-.archive-tabs {
-  margin-top: 18px;
-}
-
-.archive-downloads {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 6px;
-
-  .el-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    line-height: 1;
-  }
-}
 </style>

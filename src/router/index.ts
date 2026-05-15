@@ -64,6 +64,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '档案管理', icon: 'FolderChecked' },
       },
       {
+        path: 'resource/archives/detail/:id',
+        name: 'ArchiveDetail',
+        component: () => import('@/views/resource/archives/detail/index.vue'),
+        meta: { title: '项目档案详情', icon: 'FolderChecked', hidden: true },
+      },
+      {
         path: 'resource/personnel',
         name: 'Personnel',
         component: () => import('@/views/resource/personnel/index.vue'),

@@ -232,6 +232,7 @@ import {
   projectStatusLabel,
   projectStatusType,
   projectTimeText,
+  shouldReturnToProjectListAfterDetailLoadError,
   taskStatusLabel,
   taskStatusType,
 } from '@/features/projects/project-data'
@@ -257,6 +258,12 @@ const loadProject = async () => {
   loading.value = true
   try {
     project.value = normalizeProject(await projectApi.detail(route.params.id as string))
+  } catch (error) {
+    if (shouldReturnToProjectListAfterDetailLoadError(error)) {
+      await router.replace('/project/list')
+      return
+    }
+    project.value = undefined
   } finally {
     loading.value = false
   }

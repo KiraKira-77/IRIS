@@ -2,6 +2,7 @@ import { isSuperAdminUser } from '@/features/plans/plan-assignee-options'
 import type {
   PageResult,
   Project,
+  ProjectChecklistGenerationMode,
   ProjectStatus,
   ProjectUpsertPayload,
   SystemUser,
@@ -27,6 +28,9 @@ export interface ProjectCreateForm {
   startDate: string
   endDate?: string
   checklistIds: string[]
+  checklistGenerationMode?: ProjectChecklistGenerationMode
+  randomCount?: number
+  checklistItemIds?: string[]
   members: Array<Omit<TeamMember, 'id' | 'avatar'>>
 }
 
@@ -114,6 +118,10 @@ export function projectStatusType(status?: string): string {
   return types[status as ProjectStatus] || 'info'
 }
 
+export function shouldReturnToProjectListAfterDetailLoadError(error: unknown): boolean {
+  return error instanceof Error && error.message === '当前用户无权查看该项目'
+}
+
 export function taskStatusLabel(status?: string): string {
   const labels: Record<string, string> = {
     pending: '待办',
@@ -173,6 +181,9 @@ export function buildProjectUpsertPayload(form: ProjectCreateForm): ProjectUpser
     leaderId: leader.personnelId,
     leaderName: leader.personnelName,
     checklistIds: form.checklistIds,
+    checklistGenerationMode: form.checklistGenerationMode,
+    randomCount: form.randomCount,
+    checklistItemIds: form.checklistItemIds,
     members: form.members,
   }
 }

@@ -1,6 +1,7 @@
 export interface ParsedApiResult<T> {
   ok: boolean
   unauthorized: boolean
+  code?: string
   data: T | null
   message: string
 }
@@ -38,6 +39,7 @@ export function parseApiResult<T>(payload: unknown): ParsedApiResult<T> {
     return {
       ok: result.success,
       unauthorized: !result.success && result.code === 'UNAUTHORIZED',
+      code: result.code,
       data: (result.data ?? null) as T | null,
       message: result.message || '',
     }
@@ -54,6 +56,7 @@ export function parseApiResult<T>(payload: unknown): ParsedApiResult<T> {
     return {
       ok: numericCode === 0 || numericCode === 200,
       unauthorized: numericCode === 401,
+      code: String(result.code),
       data: (result.data ?? null) as T | null,
       message: result.message || '',
     }
@@ -62,6 +65,7 @@ export function parseApiResult<T>(payload: unknown): ParsedApiResult<T> {
   return {
     ok: true,
     unauthorized: false,
+    code: undefined,
     data: (payload as T) ?? null,
     message: '',
   }
