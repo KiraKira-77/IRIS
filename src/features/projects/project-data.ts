@@ -1,5 +1,6 @@
 import { isSuperAdminUser } from '@/features/plans/plan-assignee-options'
 import type {
+  CheckTask,
   PageResult,
   Project,
   ProjectChecklistGenerationMode,
@@ -68,6 +69,16 @@ export function getAssignableProjectMembers<T extends Pick<TeamMember, 'role'>>(
   members: readonly T[],
 ): T[] {
   return members.filter((member) => member.role === 'leader' || member.role === 'auditor')
+}
+
+export function projectTaskContactText(task: Pick<CheckTask, 'contactName' | 'workOrders'>): string {
+  const contactName = task.contactName?.trim()
+  if (contactName) return contactName
+
+  const handlerNames = Array.from(
+    new Set((task.workOrders || []).map((order) => order.handlerName?.trim()).filter(Boolean)),
+  )
+  return handlerNames.length > 0 ? handlerNames.join('、') : '—'
 }
 
 export const WORK_ORDER_PROVIDER_OPTIONS: Array<{

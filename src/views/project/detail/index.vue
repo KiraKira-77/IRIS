@@ -149,9 +149,9 @@
                 <el-tag v-else size="small" type="info" effect="light">待分配</el-tag>
               </template>
             </el-table-column>
-            <el-table-column label="对接人" width="130">
+            <el-table-column label="对接人" min-width="160" show-overflow-tooltip>
               <template #default="{ row }">
-                {{ row.contactName || '—' }}
+                {{ projectTaskContactText(row) }}
               </template>
             </el-table-column>
             <el-table-column prop="status" label="状态" width="120">
@@ -231,6 +231,7 @@ import {
   projectSourceLabel,
   projectStatusLabel,
   projectStatusType,
+  projectTaskContactText,
   projectTimeText,
   shouldReturnToProjectListAfterDetailLoadError,
   taskStatusLabel,

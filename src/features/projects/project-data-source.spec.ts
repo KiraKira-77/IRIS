@@ -12,6 +12,7 @@ import {
   projectChecklistCount,
   projectProgress,
   projectStatusLabel,
+  projectTaskContactText,
   shouldReturnToProjectListAfterDetailLoadError,
   workOrderProviderLabel,
 } from './project-data'
@@ -262,6 +263,20 @@ describe('project management data sources', () => {
     expect(projectTaskSource).not.toContain("workOrderMode === 'manual'")
   })
 
+  it('displays generated work order handlers as the task contact fallback', () => {
+    expect(
+      projectTaskContactText({
+        workOrders: [
+          { id: '8001', projectId: '7001', taskId: '7201', handlerName: '张三' },
+          { id: '8002', projectId: '7001', taskId: '7201', handlerName: '李四' },
+          { id: '8003', projectId: '7001', taskId: '7201', handlerName: '张三' },
+        ],
+      }),
+    ).toBe('张三、李四')
+    expect(projectTaskContactText({ contactName: '王五', workOrders: [] })).toBe('王五')
+    expect(projectTaskContactText({ workOrders: [] })).toBe('—')
+    expect(projectDetailSource).toContain('projectTaskContactText(row)')
+  })
   it('reviews OMS work orders through task APIs without exposing local work orders', () => {
     expect(apiSource).not.toContain('createLocalWorkOrders')
     expect(apiSource).not.toContain('work-orders/local')
