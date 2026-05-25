@@ -32,6 +32,12 @@ service.interceptors.response.use(
     const result = parseApiResult(response.data)
     if (!result.ok) {
       const message = resolveApiErrorMessage(result.code, result.message)
+      logApiError(message, {
+        ...requestContext(response.config),
+        status: response.status,
+        code: result.code,
+        response: response.data,
+      })
       ElMessage.error(message)
       if (result.unauthorized) {
         handleUnauthorized()
@@ -50,6 +56,13 @@ service.interceptors.response.use(
       result.code,
       (!result.ok && result.message) || error.response?.data?.message || error.message,
     )
+    logApiError(message, {
+      ...requestContext(error.config),
+      status: error.response?.status,
+      code: result.code,
+      response: error.response?.data,
+      error,
+    })
     ElMessage.error(message)
     return Promise.reject(new Error(message))
   },
@@ -88,5 +101,18 @@ function handleUnauthorized() {
   const loginRedirectPath = buildLoginRedirectPath(window.location)
   if (`${window.location.pathname}${window.location.search}` !== loginRedirectPath) {
     window.location.href = loginRedirectPath
+  }
+}
+
+function logApiError(message: string, context: Record<string, unknown>) {
+  console.error('[IRIS API ERROR]', message, context)
+}
+
+function requestContext(config?: AxiosRequestConfig) {
+  return {
+    method: config?.method,
+    url: config?.url,
+    params: config?.params,
+    data: config?.data,
   }
 }

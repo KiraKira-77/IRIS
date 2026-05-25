@@ -875,20 +875,29 @@ const handleCreateWorkOrders = async () => {
     workOrderHandlers.value.length === 0
   )
     return
+  const payload = {
+    title: workOrderForm.value.taskName.trim() || undefined,
+    description: workOrderForm.value.taskDescription.trim() || undefined,
+    taskName: workOrderForm.value.taskName.trim() || undefined,
+    taskDescription: workOrderForm.value.taskDescription.trim() || undefined,
+    issuedAt: workOrderForm.value.issuedAt || undefined,
+    handlers: workOrderHandlers.value,
+  }
   workOrderSubmitting.value = true
   try {
-    await taskApi.createWorkOrders(project.value.id, task.value.id, {
-      title: workOrderForm.value.taskName.trim() || undefined,
-      description: workOrderForm.value.taskDescription.trim() || undefined,
-      taskName: workOrderForm.value.taskName.trim() || undefined,
-      taskDescription: workOrderForm.value.taskDescription.trim() || undefined,
-      issuedAt: workOrderForm.value.issuedAt || undefined,
-      handlers: workOrderHandlers.value,
-    })
+    await taskApi.createWorkOrders(project.value.id, task.value.id, payload)
     ElMessage.success('工单已生成')
     await loadTask()
     resetWorkOrderForm()
     await loadWorkOrders()
+  } catch (error) {
+    console.error('create OMS work orders failed', {
+      projectId: project.value.id,
+      taskId: task.value.id,
+      handlers: workOrderHandlers.value,
+      payload,
+      error,
+    })
   } finally {
     workOrderSubmitting.value = false
   }
