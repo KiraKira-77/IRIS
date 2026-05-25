@@ -21,6 +21,11 @@ export interface ApiResponse<T = unknown> {
   data: T
   success?: boolean
 }
+export interface OmsUser {
+  userId: string
+  userCode: string
+  userName: string
+}
 export interface Attachment {
   id: string
   name: string

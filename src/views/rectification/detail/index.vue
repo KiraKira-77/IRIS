@@ -260,14 +260,18 @@
                     v-model="workOrderForm.handlerId"
                     placeholder="请选择工单负责人"
                     filterable
-                    :loading="projectLoading"
+                    remote
+                    reserve-keyword
+                    clearable
+                    :remote-method="searchOmsUsers"
+                    :loading="omsUserLoading"
                     style="width: 100%"
                   >
                     <el-option
-                      v-for="member in assignableMembers"
-                      :key="member.personnelId"
-                      :label="`${member.personnelName} (${member.employeeNo})`"
-                      :value="member.personnelId"
+                      v-for="user in omsUserOptions"
+                      :key="user.userId"
+                      :label="omsUserLabel(user)"
+                      :value="user.userId"
                     />
                   </el-select>
                 </el-form-item>
@@ -393,14 +397,14 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { Back, Refresh } from '@element-plus/icons-vue'
-import { projectApi, rectificationApi } from '@/api'
+import { omsApi, projectApi, rectificationApi } from '@/api'
 import {
   getAssignableProjectMembers,
   getProjectMembers,
   normalizeProject,
 } from '@/features/projects/project-data'
 import { useUserStore } from '@/stores'
-import type { Project, RectificationOrder, RectStatus } from '@/types'
+import type { OmsUser, Project, RectificationOrder, RectStatus } from '@/types'
 
 type ReviewAction = 'approve' | 'reject'
 
@@ -429,6 +433,9 @@ const rectification = ref<RectificationOrder>()
 const project = ref<Project>()
 const detailLoading = ref(false)
 const projectLoading = ref(false)
+const omsUserOptions = ref<OmsUser[]>([])
+const omsUserLoading = ref(false)
+const omsUserSearchSeq = ref(0)
 const actionLoading = ref(false)
 const returnDialogVisible = ref(false)
 const returnReason = ref('')
@@ -664,7 +671,17 @@ const assignableMembers = computed(() =>
 )
 
 const selectedWorkOrderHandler = computed(() =>
-  assignableMembers.value.find((member) => member.personnelId === workOrderForm.value.handlerId),
+  selectedOmsUser.value
+    ? {
+        personnelId: selectedOmsUser.value.userId,
+        employeeNo: selectedOmsUser.value.userCode,
+        personnelName: selectedOmsUser.value.userName,
+      }
+    : undefined,
+)
+
+const selectedOmsUser = computed(() =>
+  omsUserOptions.value.find((user) => user.userId === workOrderForm.value.handlerId),
 )
 
 const currentUserIdentityValues = computed(() => {
@@ -763,17 +780,39 @@ const auditRows = computed(() => {
 const resetWorkOrderForm = () => {
   const current = rectification.value
   if (!current) return
-  const matchedHandler = assignableMembers.value.find(
-    (member) =>
-      normalizeIdentityValue(member.personnelId) === normalizeIdentityValue(current.assigneeId) ||
-      normalizeIdentityValue(member.personnelName) === normalizeIdentityValue(current.assigneeName),
-  )
   workOrderForm.value = {
     taskName: current.title || current.taskName || '',
     taskDescription: current.description || current.taskDescription || '',
-    handlerId: matchedHandler?.personnelId || '',
+    handlerId: '',
   }
 }
+
+const searchOmsUsers = async (keyword: string) => {
+  const normalizedKeyword = keyword.trim()
+  if (!normalizedKeyword) {
+    omsUserOptions.value = []
+    return
+  }
+  const seq = omsUserSearchSeq.value + 1
+  omsUserSearchSeq.value = seq
+  omsUserLoading.value = true
+  try {
+    const users = await omsApi.searchUsers({
+      keyword: normalizedKeyword,
+      page: 1,
+      pageSize: 20,
+    })
+    if (seq === omsUserSearchSeq.value) {
+      omsUserOptions.value = users
+    }
+  } finally {
+    if (seq === omsUserSearchSeq.value) {
+      omsUserLoading.value = false
+    }
+  }
+}
+
+const omsUserLabel = (user: OmsUser) => `${user.userName} (${user.userCode})`
 
 const handleCreateWorkOrder = async () => {
   const handler = selectedWorkOrderHandler.value

@@ -1,5 +1,6 @@
 import { isSuperAdminUser } from '@/features/plans/plan-assignee-options'
 import type {
+  ControlPlan,
   CheckTask,
   PageResult,
   Project,
@@ -55,6 +56,22 @@ export function normalizeProject(project: Project): Project {
 
 export function collectGeneratedPlanIds(projects: Array<Pick<Project, 'planId'>>): Set<string> {
   return new Set(projects.map((project) => project.planId).filter((id): id is string => Boolean(id)))
+}
+
+export function resolvePlanProjectDateRange(
+  plan: Pick<ControlPlan, 'items'>,
+  fallbackStartDate: string,
+): { startDate: string; endDate: string } {
+  const startDates = plan.items
+    .map((item) => normalizeProjectDate(item.plannedStartDate))
+    .filter(Boolean)
+  const endDates = plan.items.map((item) => normalizeProjectDate(item.plannedEndDate)).filter(Boolean)
+  const sortedEndDates = endDates.sort()
+
+  return {
+    startDate: startDates.length ? startDates.sort()[0]! : fallbackStartDate,
+    endDate: sortedEndDates.length ? sortedEndDates[sortedEndDates.length - 1]! : '',
+  }
 }
 
 export function getProjectMembers(project: Pick<Project, 'members' | 'team'>): TeamMember[] {
@@ -201,4 +218,8 @@ export function buildProjectUpsertPayload(form: ProjectCreateForm): ProjectUpser
     checklistItemIds: form.checklistItemIds,
     members: form.members,
   }
+}
+
+function normalizeProjectDate(value?: string): string {
+  return value?.trim().slice(0, 10) || ''
 }

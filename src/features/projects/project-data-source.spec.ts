@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
+import * as projectData from './project-data'
 import {
   buildProjectUpsertPayload,
   collectGeneratedPlanIds,
@@ -177,9 +178,15 @@ describe('project management data sources', () => {
     expect(projectTaskSource).not.toContain('contactUserOptions')
     expect(projectTaskSource).not.toContain('systemUserApi.list')
     expect(projectTaskSource).not.toContain('filterProjectMemberUsers(systemUsers.value)')
+    expect(projectTaskSource).toContain('omsApi.searchUsers')
+    expect(projectTaskSource).not.toContain("searchOmsUsers('')")
+    expect(projectTaskSource).not.toContain('v-for="member in assignableMembers"')
     expect(projectTaskSource).toContain('handlerEmployeeNo')
     expect(projectTaskSource).toContain('taskApi.createWorkOrders')
     expect(projectTaskSource).toContain('handlers: workOrderHandlers.value')
+    expect(projectTaskSource).toContain('catch (error)')
+    expect(projectTaskSource).toContain('console.error')
+    expect(projectTaskSource).toContain('create OMS work orders failed')
     expect(projectTaskSource).not.toContain('contactName: selectedWorkOrderContact.value?.username')
     expect(projectTaskSource).toContain('issuedAt: workOrderForm.value.issuedAt')
     expect(projectTaskSource).not.toContain('completedAt: workOrderForm.value.completedAt')
@@ -187,6 +194,7 @@ describe('project management data sources', () => {
     expect(projectTaskSource).toContain('normalizeDateText(currentTask.issuedAt)')
     expect(projectTaskSource).toContain('value-format="YYYY-MM-DD"')
     expect(projectTaskSource).not.toContain('issuedAt: normalizeDateTimeText(currentTask.issuedAt)')
+    expect(projectTaskSource).not.toContain("normalizeDateTimeText(order.completedAt) || '待完成'")
     expect(projectTaskSource).toContain("project.value.status === 'in_progress'")
     expect(projectDetailSource).toContain(
       'currentUserIdentityValues.value.has(normalizeIdentityValue(task.assigneeId))',
@@ -277,6 +285,7 @@ describe('project management data sources', () => {
     expect(projectTaskContactText({ workOrders: [] })).toBe('—')
     expect(projectDetailSource).toContain('projectTaskContactText(row)')
   })
+
   it('reviews OMS work orders through task APIs without exposing local work orders', () => {
     expect(apiSource).not.toContain('createLocalWorkOrders')
     expect(apiSource).not.toContain('work-orders/local')
@@ -376,6 +385,9 @@ describe('project management data sources', () => {
     expect(rectificationDetailSource).toContain('workOrderForm.taskName')
     expect(rectificationDetailSource).toContain('workOrderForm.taskDescription')
     expect(rectificationDetailSource).toContain('workOrderForm.handlerId')
+    expect(rectificationDetailSource).toContain('omsApi.searchUsers')
+    expect(rectificationDetailSource).not.toContain("searchOmsUsers('')")
+    expect(rectificationDetailSource).not.toContain('v-for="member in assignableMembers"')
     expect(rectificationDetailSource).toContain('projectApi.detail')
     expect(rectificationDetailSource).toContain('getAssignableProjectMembers')
     expect(rectificationDetailSource).toContain('const canOperateRectification = computed')
@@ -566,6 +578,43 @@ describe('project management data sources', () => {
     expect(projectCreateSource).toContain('loadExistingPlanProjectIds')
   })
 
+  it('derives plan-generated project dates from plan item ranges', () => {
+    const resolvePlanProjectDateRange = (projectData as Record<string, unknown>)
+      .resolvePlanProjectDateRange as
+      | ((
+          plan: {
+            items: Array<{
+              plannedStartDate: string
+              plannedEndDate: string
+            }>
+          },
+          fallbackStartDate: string,
+        ) => { startDate: string; endDate: string })
+      | undefined
+
+    expect(resolvePlanProjectDateRange).toBeTypeOf('function')
+    expect(
+      resolvePlanProjectDateRange?.(
+        {
+          items: [
+            {
+              plannedStartDate: '2026-07-10',
+              plannedEndDate: '2026-07-20',
+            },
+            {
+              plannedStartDate: '2026-07-01',
+              plannedEndDate: '2026-07-31',
+            },
+          ],
+        },
+        '2026-05-22',
+      ),
+    ).toEqual({
+      startDate: '2026-07-01',
+      endDate: '2026-07-31',
+    })
+  })
+
   it('limits plan-generated project checklists to plan items until users add more', () => {
     expect(projectCreateSource).toContain('visibleChecklistOptions')
     expect(projectCreateSource).toContain('filterVisibleProjectChecklists')
@@ -573,6 +622,14 @@ describe('project management data sources', () => {
     expect(projectCreateSource).toContain('openChecklistPicker')
     expect(projectCreateSource).toContain('添加检查清单')
     expect(projectCreateSource).not.toContain('v-for="cl in checklistOptions"')
+  })
+
+  it('makes the whole checklist card clickable when selecting checklists', () => {
+    const cardStart = projectCreateSource.indexOf('class="checklist-card"')
+    const cardEnd = projectCreateSource.indexOf('<el-checkbox', cardStart)
+    const cardSource = projectCreateSource.slice(cardStart, cardEnd)
+
+    expect(cardSource).toContain('@click="toggleChecklist(cl.id)"')
   })
 
   it('uses the checklist picker for manually created projects', () => {

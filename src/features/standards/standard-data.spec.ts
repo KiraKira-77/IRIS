@@ -394,6 +394,17 @@ describe('standard-data', () => {
       standardGroupId: 'group-1',
       standardCode: 'STD-FIN-001',
       version: 'V2.0',
+      attachments: [
+        {
+          id: 'file-1',
+          name: 'baseline.pdf',
+          url: '/files/baseline.pdf',
+          size: 1024,
+          type: 'application/pdf',
+          uploadedBy: 'Platform Administrator',
+          uploadedAt: '2026-04-24',
+        },
+      ],
     })
 
     expect(
@@ -412,6 +423,64 @@ describe('standard-data', () => {
         current,
       ),
     ).toEqual(['请选择分类', '当前标准组已存在相同版本号'])
+  })
+
+  it('requires at least one attachment before submitting a standard', () => {
+    expect(
+      validateStandardEditorForm(
+        {
+          standardCode: 'STD-FIN-001',
+          title: 'Finance Control Baseline',
+          category: 'internal',
+          version: 'V1.0',
+          description: '',
+          visibilityLevel: 'PUBLIC',
+          ownerScopeId: '9001',
+          grantScopeIds: [],
+        },
+        [],
+        null,
+        {
+          existingAttachmentCount: 0,
+          pendingAttachmentCount: 0,
+        },
+      ),
+    ).toEqual(['请上传附件'])
+  })
+
+  it('accepts existing attachments when editing a standard', () => {
+    expect(
+      validateStandardEditorForm(
+        {
+          standardCode: 'STD-FIN-001',
+          title: 'Finance Control Baseline',
+          category: 'internal',
+          version: 'V1.0',
+          description: '',
+          visibilityLevel: 'PUBLIC',
+          ownerScopeId: '9001',
+          grantScopeIds: [],
+        },
+        [],
+        createStandard({
+          attachments: [
+            {
+              id: 'file-1',
+              name: 'baseline.pdf',
+              url: '/files/baseline.pdf',
+              size: 1024,
+              type: 'application/pdf',
+              uploadedBy: 'Platform Administrator',
+              uploadedAt: '2026-04-24',
+            },
+          ],
+        }),
+        {
+          existingAttachmentCount: 1,
+          pendingAttachmentCount: 0,
+        },
+      ),
+    ).toEqual([])
   })
 
   it('builds mutation payload without tags', () => {

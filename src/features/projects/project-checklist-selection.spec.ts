@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ControlChecklist, ControlPlan } from '@/types'
+import * as checklistSelection from './project-checklist-selection'
 import {
   collectPlanChecklistIds,
   countGeneratedChecklistItems,
@@ -220,6 +221,27 @@ describe('project-checklist-selection', () => {
         checklistName: 'Checklist B',
         items: [items[1]],
       },
+    ])
+  })
+
+  it('returns only selected items for a checklist card summary', () => {
+    const getSelectedChecklistItems = (checklistSelection as Record<string, unknown>)
+      .getSelectedChecklistItems as
+      | ((
+          checklist: ControlChecklist,
+          selectedChecklistItemIds: string[],
+        ) => ControlChecklist['items'])
+      | undefined
+    const checklist = createChecklist('checklist-a', [
+      { id: 'item-1' },
+      { id: 'item-2' },
+      { id: 'item-3' },
+      { id: 'item-4' },
+    ])
+
+    expect(getSelectedChecklistItems).toBeTypeOf('function')
+    expect(getSelectedChecklistItems?.(checklist, ['item-2']).map((item) => item.id)).toEqual([
+      'item-2',
     ])
   })
 })

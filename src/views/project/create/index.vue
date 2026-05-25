@@ -154,22 +154,27 @@
               :key="cl.id"
               class="checklist-card"
               :class="{ active: form.checklistIds.includes(cl.id) }"
+              @click="toggleChecklist(cl.id)"
             >
               <el-checkbox :value="cl.id" :label="cl.id" style="display: none" />
-              <div class="cl-content" @click="toggleChecklist(cl.id)">
+              <div class="cl-content">
                 <div class="cl-header">
                   <span class="cl-name">{{ cl.name }}</span>
-                  <el-tag size="small" effect="light" type="success"
-                    >{{ countChecklistItemsForProject(cl) }} 项</el-tag
-                  >
+                  <el-tag size="small" effect="light" type="success">
+                    {{ selectedChecklistItemCountForProject(cl) }} 项
+                  </el-tag>
                 </div>
                 <div class="cl-items">
-                  <div v-for="item in previewChecklistItems(cl)" :key="item.id" class="cl-item-row">
+                  <div
+                    v-for="item in previewSelectedChecklistItems(cl)"
+                    :key="item.id"
+                    class="cl-item-row"
+                  >
                     <el-icon><CircleCheck /></el-icon>
                     <span>{{ item.content }}</span>
                   </div>
-                  <div v-if="countChecklistItemsForProject(cl) > 3" class="cl-more">
-                    ... 还有 {{ countChecklistItemsForProject(cl) - 3 }} 项
+                  <div v-if="selectedChecklistItemCountForProject(cl) > 3" class="cl-more">
+                    ... 还有 {{ selectedChecklistItemCountForProject(cl) - 3 }} 项
                   </div>
                 </div>
               </div>
@@ -436,8 +441,8 @@ import {
   collectPlanChecklistIds,
   filterVisibleProjectChecklists,
   generateProjectChecklistItems,
+  getSelectedChecklistItems,
   groupProjectChecklistItemsByChecklist,
-  isControlFrequencyAllowedForPlanCycle,
   paginateProjectChecklistItems,
   type ProjectChecklistItemGroup,
   type ProjectChecklistPreviewItem,
@@ -449,6 +454,7 @@ import {
   getProjectMembers,
   normalizeProject,
   normalizeProjectPage,
+  resolvePlanProjectDateRange,
 } from '@/features/projects/project-data'
 import type {
   ControlChecklist,
@@ -626,18 +632,14 @@ const groupedChecklistItemPickerOptions = computed(() =>
 const maxChecklistItemPage = (total: number) =>
   Math.max(1, Math.ceil(total / checklistItemPageSize))
 
-const checklistItemsForProject = (checklist: ControlChecklist) =>
-  checklist.items.filter(
-    (item) =>
-      generationMode.value !== 'periodic' ||
-      isControlFrequencyAllowedForPlanCycle(item.controlFrequency, linkedPlan.value?.cycle),
-  )
+const selectedChecklistItemsForProject = (checklist: ControlChecklist) =>
+  getSelectedChecklistItems(checklist, selectedChecklistItemIds.value)
 
-const countChecklistItemsForProject = (checklist: ControlChecklist) =>
-  checklistItemsForProject(checklist).length
+const selectedChecklistItemCountForProject = (checklist: ControlChecklist) =>
+  selectedChecklistItemsForProject(checklist).length
 
-const previewChecklistItems = (checklist: ControlChecklist) =>
-  checklistItemsForProject(checklist).slice(0, 3)
+const previewSelectedChecklistItems = (checklist: ControlChecklist) =>
+  selectedChecklistItemsForProject(checklist).slice(0, 3)
 
 const controlFrequencyLabel = (value: string) => optionLabel(CONTROL_FREQUENCY_OPTIONS, value)
 
@@ -687,6 +689,9 @@ const onPlanChange = async (planId: string) => {
     pruneUnavailableTeamMembers()
     if (!isEditMode.value) {
       form.value.name = `${plan.name} - 执行项目`
+      const dateRange = resolvePlanProjectDateRange(plan, today())
+      form.value.startDate = dateRange.startDate
+      form.value.endDate = dateRange.endDate
     }
     generationMode.value = 'periodic'
     // Auto-select checklists from plan items
@@ -896,7 +901,6 @@ onMounted(async () => {
     form.value.source = 'plan'
     form.value.planId = planId
     await onPlanChange(planId)
-    form.value.startDate = today()
   }
 })
 

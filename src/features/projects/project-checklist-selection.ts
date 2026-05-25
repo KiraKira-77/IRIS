@@ -110,6 +110,14 @@ export function countGeneratedChecklistItems({
   }, 0)
 }
 
+export function getSelectedChecklistItems(
+  checklist: Pick<ControlChecklist, 'items'>,
+  selectedChecklistItemIds: string[],
+): ControlChecklist['items'] {
+  const selectedIds = new Set(selectedChecklistItemIds)
+  return checklist.items.filter((item) => selectedIds.has(item.id))
+}
+
 export function generateProjectChecklistItems({
   mode,
   randomCount,

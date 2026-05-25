@@ -376,17 +376,20 @@
                     placeholder="选择工单负责人"
                     style="width: 100%"
                     filterable
+                    remote
+                    reserve-keyword
+                    clearable
+                    :remote-method="searchOmsUsers"
+                    :loading="omsUserLoading"
                   >
                     <el-option
-                      v-for="member in assignableMembers"
-                      :key="member.personnelId"
-                      :label="`${member.personnelName} (${member.employeeNo})`"
-                      :value="member.personnelId"
+                      v-for="user in omsUserOptions"
+                      :key="user.userId"
+                      :label="omsUserLabel(user)"
+                      :value="user.userId"
                     >
-                      <span>{{ member.personnelName }}</span>
-                      <span class="option-meta"
-                        >{{ member.employeeNo }} · {{ roleLabel(member.role) }}</span
-                      >
+                      <span>{{ user.userName }}</span>
+                      <span class="option-meta">{{ user.userCode }}</span>
                     </el-option>
                   </el-select>
                 </el-form-item>
@@ -518,7 +521,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back, Connection, Delete as DeleteIcon, View } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
-import { checklistApi, projectApi, rectificationApi, taskApi } from '@/api'
+import { checklistApi, omsApi, projectApi, rectificationApi, taskApi } from '@/api'
 import {
   CONTROL_FREQUENCY_OPTIONS,
   EVALUATION_TYPE_OPTIONS,
@@ -542,6 +545,7 @@ import type {
   Project,
   ProjectTaskWorkOrder,
   RectificationOrder,
+  OmsUser,
   WorkOrderProvider,
 } from '@/types'
 
@@ -564,6 +568,9 @@ const task = ref<CheckTask>()
 const project = ref<Project>()
 const checklistOptions = ref<ControlChecklist[]>([])
 const workOrders = ref<ProjectTaskWorkOrder[]>([])
+const omsUserOptions = ref<OmsUser[]>([])
+const omsUserLoading = ref(false)
+const omsUserSearchSeq = ref(0)
 const workOrderSubmitting = ref(false)
 const workOrderDeletingIds = ref(new Set<string>())
 const workOrderReturningIds = ref(new Set<string>())
@@ -692,13 +699,18 @@ const inspectionItemHandleTip = computed(() => {
   return '当前状态不能办理'
 })
 const workOrderHandlers = computed(() =>
-  assignableMembers.value
-    .filter((member) => member.personnelId === workOrderForm.value.handlerId)
-    .map((member) => ({
-      handlerId: member.personnelId,
-      handlerEmployeeNo: normalizeIdentityValue(member.employeeNo),
-      handlerName: member.personnelName,
-    })),
+  selectedOmsUser.value
+    ? [
+        {
+          handlerId: selectedOmsUser.value.userId,
+          handlerEmployeeNo: normalizeIdentityValue(selectedOmsUser.value.userCode),
+          handlerName: selectedOmsUser.value.userName,
+        },
+      ]
+    : [],
+)
+const selectedOmsUser = computed(() =>
+  omsUserOptions.value.find((user) => user.userId === workOrderForm.value.handlerId),
 )
 const visibleWorkOrders = computed<ProjectTaskWorkOrder[]>(() => workOrders.value)
 const selectedWorkOrderLogRows = computed(() =>
@@ -720,7 +732,7 @@ const personText = (name?: string, employeeNo?: string) => {
 }
 const workOrderRecordRows = (order: ProjectTaskWorkOrder) => [
   { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
-  { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
+  { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '—' },
   { label: '审核结果', value: auditResultLabel(workOrderReviewResultOf(order)) },
   ...(workOrderReviewResultOf(order) === 'rectification_required'
     ? [{ label: '处置方式', value: nonconformityDispositionLabel(order) }]
@@ -738,7 +750,7 @@ const workOrderDetailRows = (order: ProjectTaskWorkOrder) => [
   },
   { label: '工单负责人', value: personText(order.handlerName, order.handlerEmployeeNo) },
   { label: '下达时间', value: normalizeDateText(order.issuedAt) || '—' },
-  { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '待完成' },
+  { label: '完成时间', value: normalizeDateTimeText(order.completedAt) || '—' },
   { label: '工单状态', value: workOrderStatusLabel(order) },
   { label: '审核结果', value: auditResultLabel(workOrderReviewResultOf(order)) },
   ...(workOrderReviewResultOf(order) === 'rectification_required'
@@ -852,20 +864,40 @@ const loadTaskRectifications = async () => {
 const resetWorkOrderForm = () => {
   const currentTask = task.value
   if (!currentTask) return
-  const assignee = assignableMembers.value.find(
-    (member) =>
-      normalizeIdentityValue(member.personnelId) ===
-        normalizeIdentityValue(currentTask.assigneeId) ||
-      normalizeIdentityValue(member.personnelName) ===
-        normalizeIdentityValue(currentTask.assigneeName),
-  )
   workOrderForm.value = {
     taskName: currentTask.taskName || currentTask.checkContent,
     taskDescription: currentTask.taskDescription || currentTask.checkCriterion,
     issuedAt: normalizeDateText(currentTask.issuedAt),
-    handlerId: assignee?.personnelId || '',
+    handlerId: '',
   }
 }
+
+const searchOmsUsers = async (keyword: string) => {
+  const normalizedKeyword = keyword.trim()
+  if (!normalizedKeyword) {
+    omsUserOptions.value = []
+    return
+  }
+  const seq = omsUserSearchSeq.value + 1
+  omsUserSearchSeq.value = seq
+  omsUserLoading.value = true
+  try {
+    const users = await omsApi.searchUsers({
+      keyword: normalizedKeyword,
+      page: 1,
+      pageSize: 20,
+    })
+    if (seq === omsUserSearchSeq.value) {
+      omsUserOptions.value = users
+    }
+  } finally {
+    if (seq === omsUserSearchSeq.value) {
+      omsUserLoading.value = false
+    }
+  }
+}
+
+const omsUserLabel = (user: OmsUser) => `${user.userName} (${user.userCode})`
 
 const handleCreateWorkOrders = async () => {
   if (

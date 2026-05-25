@@ -110,57 +110,72 @@
               <div class="detail-header">
                 <h4>检查项列表 ({{ row.items?.length || 0 }})</h4>
               </div>
-              <div v-if="row.items?.length" class="item-table">
-                <div class="item-table-header">
-                  <span class="item-heading item-heading-actions">操作</span>
-                  <span class="item-heading item-heading-sequence">序号</span>
-                  <span class="item-heading item-heading-content">检查内容</span>
-                  <span class="item-heading item-heading-criterion">判断标准</span>
-                  <span class="item-heading item-heading-frequency">控制频率</span>
-                  <span class="item-heading item-heading-evaluation">评估类</span>
-                  <span class="item-heading item-heading-org">关联组织</span>
-                </div>
-                <div
-                  v-for="(item, index) in row.items"
-                  :key="item.id || index"
-                  class="item-table-row"
-                >
-                  <div class="item-actions">
-                    <el-button
-                      v-if="getRowAccessState(row).canEdit"
-                      link
-                      type="primary"
-                      size="small"
-                      @click="openItemDialog(row, item, index)"
-                      >编辑</el-button
-                    >
-                    <el-button
-                      v-if="getRowAccessState(row).canEdit"
-                      link
-                      type="danger"
-                      size="small"
-                      @click="handleDeleteItem(row, index)"
-                      >删除</el-button
-                    >
+              <template v-if="row.items?.length">
+                <div class="item-table">
+                  <div class="item-table-header">
+                    <span class="item-heading item-heading-actions">操作</span>
+                    <span class="item-heading item-heading-sequence">序号</span>
+                    <span class="item-heading item-heading-content">检查内容</span>
+                    <span class="item-heading item-heading-criterion">判断标准</span>
+                    <span class="item-heading item-heading-frequency">控制频率</span>
+                    <span class="item-heading item-heading-evaluation">评估类</span>
+                    <span class="item-heading item-heading-org">关联组织</span>
                   </div>
-                  <span class="item-cell item-sequence">{{ index + 1 }}</span>
-                  <span class="item-cell item-cell-strong" :title="item.content">
-                    {{ item.content }}
-                  </span>
-                  <span class="item-cell" :title="item.criterion">{{ item.criterion }}</span>
-                  <span class="item-cell item-frequency">{{
-                    controlFrequencyLabel(item.controlFrequency)
-                  }}</span>
-                  <span class="item-cell item-evaluation">
-                    <el-tag type="info" effect="light" size="small">
-                      {{ evaluationTypeLabel(item.evaluationType) }}
-                    </el-tag>
-                  </span>
-                  <span class="item-cell" :title="organizationLabels(item.organizationIds).join('、')">
-                    {{ organizationLabels(item.organizationIds).join('、') }}
-                  </span>
+                  <div
+                    v-for="(item, index) in paginatedChecklistItems(row)"
+                    :key="item.id || index"
+                    class="item-table-row"
+                  >
+                    <div class="item-actions">
+                      <el-button
+                        v-if="getRowAccessState(row).canEdit"
+                        link
+                        type="primary"
+                        size="small"
+                        @click="openItemDialog(row, item, getChecklistItemIndex(row, index))"
+                        >编辑</el-button
+                      >
+                      <el-button
+                        v-if="getRowAccessState(row).canEdit"
+                        link
+                        type="danger"
+                        size="small"
+                        @click="handleDeleteItem(row, getChecklistItemIndex(row, index))"
+                        >删除</el-button
+                      >
+                    </div>
+                    <span class="item-cell item-sequence">{{
+                      getChecklistItemSequence(row, index)
+                    }}</span>
+                    <span class="item-cell item-cell-strong" :title="item.content">
+                      {{ item.content }}
+                    </span>
+                    <span class="item-cell" :title="item.criterion">{{ item.criterion }}</span>
+                    <span class="item-cell item-frequency">{{
+                      controlFrequencyLabel(item.controlFrequency)
+                    }}</span>
+                    <span class="item-cell item-evaluation">
+                      <el-tag type="info" effect="light" size="small">
+                        {{ evaluationTypeLabel(item.evaluationType) }}
+                      </el-tag>
+                    </span>
+                    <span class="item-cell" :title="organizationLabels(item.organizationIds).join('、')">
+                      {{ organizationLabels(item.organizationIds).join('、') }}
+                    </span>
+                  </div>
                 </div>
-              </div>
+                <div v-if="(row.items?.length || 0) > checklistItemPageSize" class="item-pagination">
+                  <el-pagination
+                    :current-page="getChecklistItemPage(row)"
+                    :page-size="checklistItemPageSize"
+                    :total="row.items?.length || 0"
+                    layout="total, prev, pager, next"
+                    small
+                    background
+                    @current-change="(page: number) => handleChecklistItemPageChange(row, page)"
+                  />
+                </div>
+              </template>
               <el-empty v-else description="暂无检查项" :image-size="60" />
               <div class="detail-footer">
                 <el-button
@@ -681,6 +696,8 @@ const searchForm = reactive({ keyword: '', status: '', scopeId: '' })
 const expandedKeys = ref<string[]>([])
 const loading = ref(false)
 const pagination = reactive({ page: 1, pageSize: 10, total: 0 })
+const checklistItemPageSize = 10
+const checklistItemPageMap = reactive<Record<string, number>>({})
 const scopeOptions = ref<ResourceScopeOption[]>([...DEFAULT_RESOURCE_SCOPE_OPTIONS])
 const editableScopeOptions = computed(() =>
   currentAccessContext.value.isSuperAdmin
@@ -728,6 +745,7 @@ const loadChecklists = async () => {
       }),
     )
     tableData.value = page.list
+    resetChecklistItemPages()
     pagination.total = page.total
     pagination.page = page.page
     pagination.pageSize = page.pageSize
@@ -761,6 +779,37 @@ const handlePageSizeChange = async (pageSize: number) => {
 }
 const handleExpandChange = (row: any, expandedRows: any[]) => {
   expandedKeys.value = expandedRows.map((r: any) => r.id)
+  if (expandedKeys.value.includes(row.id)) {
+    checklistItemPageMap[row.id] = 1
+  }
+}
+
+const resetChecklistItemPages = () => {
+  Object.keys(checklistItemPageMap).forEach((key) => {
+    delete checklistItemPageMap[key]
+  })
+}
+
+const getChecklistItemPage = (row: ControlChecklist) => {
+  const total = row.items?.length || 0
+  const maxPage = Math.max(1, Math.ceil(total / checklistItemPageSize))
+  const page = checklistItemPageMap[row.id] || 1
+  return Math.min(Math.max(1, page), maxPage)
+}
+
+const getChecklistItemIndex = (row: ControlChecklist, pageIndex: number) =>
+  (getChecklistItemPage(row) - 1) * checklistItemPageSize + pageIndex
+
+const getChecklistItemSequence = (row: ControlChecklist, pageIndex: number) =>
+  getChecklistItemIndex(row, pageIndex) + 1
+
+const paginatedChecklistItems = (row: ControlChecklist) => {
+  const start = getChecklistItemIndex(row, 0)
+  return (row.items || []).slice(start, start + checklistItemPageSize)
+}
+
+const handleChecklistItemPageChange = (row: ControlChecklist, page: number) => {
+  checklistItemPageMap[row.id] = page
 }
 
 // Checklist Dialog
@@ -1566,6 +1615,12 @@ const statusLabel = (status: ControlChecklist['status']) =>
     &:last-child {
       border-bottom: 0;
     }
+  }
+
+  .item-pagination {
+    display: flex;
+    justify-content: flex-start;
+    padding-top: 12px;
   }
 
   .item-cell {

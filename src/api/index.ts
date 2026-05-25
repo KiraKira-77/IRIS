@@ -34,6 +34,7 @@ import type {
   AiChatTraceListItem,
   Tool,
   ProjectTaskWorkOrder,
+  OmsUser,
 } from '@/types'
 
 type WorkOrderCreatePayload = {
@@ -215,6 +216,11 @@ export const taskApi = {
     ),
   deleteWorkOrder: (projectId: string, taskId: string, workOrderId: string) =>
     request.delete(`/v1/projects/${projectId}/tasks/${taskId}/work-orders/${workOrderId}`),
+}
+
+export const omsApi = {
+  searchUsers: (params: { keyword?: string; page?: number; pageSize?: number }) =>
+    request.get<OmsUser[]>('/v1/oms/users', params),
 }
 
 export const rectificationApi = {

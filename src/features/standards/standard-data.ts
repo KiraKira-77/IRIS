@@ -102,6 +102,11 @@ export interface StandardSubmitState {
   publishDate: string | null
 }
 
+export interface StandardEditorValidationOptions {
+  existingAttachmentCount?: number
+  pendingAttachmentCount?: number
+}
+
 export function buildStandardListPage(
   standards: Standard[],
   query: StandardListQuery,
@@ -303,11 +308,15 @@ export function validateStandardEditorForm(
   form: StandardEditorFormValue,
   standards: Standard[],
   editingRow: Standard | null,
+  options: StandardEditorValidationOptions = {},
 ): string[] {
   const errors: string[] = []
   const standardCode = form.standardCode.trim()
   const title = form.title.trim()
   const version = form.version.trim()
+  const attachmentCount =
+    (options.existingAttachmentCount ?? editingRow?.attachments.length ?? 0) +
+    (options.pendingAttachmentCount ?? 0)
 
   if (!standardCode) {
     errors.push('请输入标准编号')
@@ -326,6 +335,9 @@ export function validateStandardEditorForm(
   }
   if (!form.ownerScopeId.trim()) {
     errors.push('请选择维护域')
+  }
+  if (attachmentCount <= 0) {
+    errors.push('请上传附件')
   }
 
   const duplicatedCode = standards.some(

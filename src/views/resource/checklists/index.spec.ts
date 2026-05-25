@@ -121,6 +121,27 @@ describe('checklists page actions', () => {
     expect(source).toContain('padding-left: 0')
   })
 
+  it('paginates expanded checklist items per checklist', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+    const detailStart = source.indexOf('<div class="checklist-detail">')
+    const detailEnd = source.indexOf('<el-table-column prop="name"', detailStart)
+    const detailTemplate = source.slice(detailStart, detailEnd)
+
+    expect(detailTemplate).toContain('paginatedChecklistItems(row)')
+    expect(detailTemplate).toContain('getChecklistItemSequence(row, index)')
+    expect(detailTemplate).toContain('class="item-pagination"')
+    expect(detailTemplate).toContain(':total="row.items?.length || 0"')
+    expect(detailTemplate).toContain('layout="total, prev, pager, next"')
+    expect(source).toContain('const checklistItemPageSize = 10')
+    expect(source).toContain('const checklistItemPageMap = reactive<Record<string, number>>({})')
+    expect(source).toContain('const paginatedChecklistItems = (row: ControlChecklist)')
+    expect(source).toContain('const handleChecklistItemPageChange = (row: ControlChecklist, page: number)')
+    const paginationStyleStart = source.indexOf('.item-pagination {')
+    const paginationStyleEnd = source.indexOf('}', paginationStyleStart)
+    const paginationStyle = source.slice(paginationStyleStart, paginationStyleEnd)
+    expect(paginationStyle).toContain('justify-content: flex-start')
+  })
+
   it('uses the current user access context for checklist permissions', () => {
     const source = readFileSync(sourcePath, 'utf8')
 

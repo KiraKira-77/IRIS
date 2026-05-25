@@ -1,0 +1,575 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>计划一览合并时间轴预览</title>
+    <style>
+      :root {
+        --page: oklch(97.5% 0.006 248);
+        --panel: oklch(99% 0.004 248);
+        --line: oklch(91% 0.014 248);
+        --text: oklch(24% 0.035 248);
+        --muted: oklch(52% 0.03 248);
+        --blue: oklch(60% 0.18 255);
+        --green: oklch(62% 0.18 148);
+        --green-soft: oklch(85% 0.08 150);
+        --amber: oklch(74% 0.16 78);
+        --amber-soft: oklch(88% 0.08 80);
+        --gray: oklch(62% 0.035 250);
+        --gray-soft: oklch(86% 0.02 250);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family:
+          Inter,
+          "PingFang SC",
+          "Microsoft YaHei",
+          system-ui,
+          sans-serif;
+        background: var(--page);
+        color: var(--text);
+      }
+
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 300px 1fr;
+      }
+
+      .sidebar {
+        background: oklch(20% 0.035 258);
+        color: oklch(94% 0.01 248);
+        padding: 22px 20px;
+      }
+
+      .brand {
+        font-size: 26px;
+        font-weight: 760;
+        margin-bottom: 54px;
+      }
+
+      .nav-item {
+        height: 58px;
+        padding: 0 22px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        color: oklch(77% 0.025 250);
+        font-size: 18px;
+      }
+
+      .nav-item.active {
+        color: oklch(98% 0.006 248);
+        background: oklch(58% 0.2 260);
+        font-weight: 700;
+      }
+
+      main {
+        min-width: 0;
+      }
+
+      .topbar {
+        height: 80px;
+        background: var(--panel);
+        border-bottom: 1px solid var(--line);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 34px 0 40px;
+        box-shadow: 0 2px 14px oklch(50% 0.03 248 / 7%);
+      }
+
+      .crumb {
+        color: var(--muted);
+        font-size: 18px;
+      }
+
+      .content {
+        padding: 28px;
+      }
+
+      .hero {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        margin-bottom: 22px;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 28px;
+        line-height: 1.2;
+      }
+
+      .subtitle {
+        margin: 0;
+        color: var(--muted);
+        font-size: 15px;
+      }
+
+      .switcher {
+        display: flex;
+        gap: 10px;
+        padding: 5px;
+        background: oklch(94.5% 0.014 248);
+        border-radius: 10px;
+      }
+
+      .switcher span {
+        padding: 8px 14px;
+        border-radius: 8px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .switcher .active {
+        background: var(--panel);
+        color: var(--blue);
+        box-shadow: 0 1px 6px oklch(50% 0.03 248 / 12%);
+      }
+
+      .timeline-card {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 12px 28px oklch(45% 0.035 248 / 7%);
+      }
+
+      .card-head {
+        height: 72px;
+        padding: 0 26px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .card-title {
+        font-size: 20px;
+        font-weight: 760;
+      }
+
+      .legend {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        color: oklch(42% 0.035 248);
+        font-size: 14px;
+      }
+
+      .legend i {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 4px;
+        margin-right: 6px;
+        vertical-align: -1px;
+      }
+
+      .legend .plan {
+        background: var(--green-soft);
+      }
+
+      .legend .actual {
+        background: var(--green);
+      }
+
+      .timeline {
+        display: grid;
+        grid-template-columns: 380px minmax(980px, 1fr);
+        overflow-x: auto;
+      }
+
+      .months,
+      .label-head {
+        height: 52px;
+        border-bottom: 1px solid var(--line);
+        background: oklch(98% 0.006 248);
+        position: sticky;
+        top: 0;
+        z-index: 2;
+      }
+
+      .label-head {
+        left: 0;
+        z-index: 3;
+        padding: 16px 22px;
+        font-weight: 700;
+        border-right: 1px solid var(--line);
+      }
+
+      .months {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+      }
+
+      .month {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: oklch(34% 0.035 248);
+        font-weight: 700;
+        border-right: 1px solid var(--line);
+      }
+
+      .label-cell,
+      .bar-cell {
+        min-height: 76px;
+        border-bottom: 1px solid oklch(93% 0.012 248);
+      }
+
+      .label-cell {
+        position: sticky;
+        left: 0;
+        z-index: 1;
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+        padding: 14px 18px;
+      }
+
+      .plan-row .label-cell,
+      .plan-row .bar-cell {
+        min-height: 88px;
+        background: oklch(98% 0.007 248);
+      }
+
+      .label-top {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .plan-name {
+        flex: 1;
+        min-width: 0;
+        color: oklch(24% 0.04 248);
+        font-size: 19px;
+        font-weight: 760;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .toggle {
+        color: var(--blue);
+        font-size: 14px;
+        font-weight: 700;
+        flex-shrink: 0;
+      }
+
+      .meta {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted);
+        font-size: 14px;
+        white-space: nowrap;
+      }
+
+      .tag {
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 7px;
+        display: inline-flex;
+        align-items: center;
+        font-size: 13px;
+        font-weight: 700;
+        color: oklch(99% 0.004 248);
+      }
+
+      .tag.green {
+        background: var(--green);
+      }
+
+      .tag.amber {
+        background: var(--amber);
+      }
+
+      .tag.blue {
+        color: var(--blue);
+        background: oklch(94% 0.035 255);
+        border: 1px solid oklch(82% 0.08 255);
+      }
+
+      .tag.gray {
+        background: var(--gray);
+      }
+
+      .detail-label {
+        padding-left: 36px;
+      }
+
+      .detail-title {
+        color: oklch(29% 0.036 248);
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .detail-sub {
+        margin-top: 5px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .bar-cell {
+        position: relative;
+        background:
+          repeating-linear-gradient(
+            to right,
+            transparent 0,
+            transparent calc(8.333% - 1px),
+            oklch(92.5% 0.012 248) calc(8.333% - 1px),
+            oklch(92.5% 0.012 248) 8.333%
+          ),
+          var(--panel);
+      }
+
+      .plan-row .bar-cell {
+        background:
+          repeating-linear-gradient(
+            to right,
+            transparent 0,
+            transparent calc(8.333% - 1px),
+            oklch(91.5% 0.014 248) calc(8.333% - 1px),
+            oklch(91.5% 0.014 248) 8.333%
+          ),
+          oklch(98% 0.007 248);
+      }
+
+      .track {
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 50%;
+        height: 34px;
+        transform: translateY(-50%);
+      }
+
+      .bar {
+        position: absolute;
+        top: 50%;
+        transform: translateY(-50%);
+        border-radius: 8px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: oklch(99% 0.004 248);
+        font-size: 13px;
+        font-weight: 760;
+        overflow: hidden;
+      }
+
+      .plan-base {
+        background: var(--green-soft);
+        color: oklch(38% 0.08 148);
+      }
+
+      .actual {
+        height: 28px;
+        top: 50%;
+        background: var(--green);
+        border-radius: 8px 0 0 8px;
+        color: transparent;
+        z-index: 2;
+      }
+
+      .actual::after {
+        content: "实际执行";
+        position: absolute;
+        left: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: oklch(99% 0.004 248);
+        font-size: 12px;
+        font-weight: 760;
+        white-space: nowrap;
+      }
+
+      .archived {
+        background: var(--gray-soft);
+        color: oklch(40% 0.03 248);
+      }
+
+      .today {
+        position: absolute;
+        left: 37%;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: oklch(63% 0.2 28);
+        z-index: 5;
+      }
+
+      .today::before {
+        content: "";
+        position: absolute;
+        top: 11px;
+        left: -4px;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: oklch(63% 0.2 28);
+      }
+
+      .note {
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">IRIS Platform</div>
+        <div class="nav-item">工作台</div>
+        <div class="nav-item">资源管理</div>
+        <div class="nav-item">计划编制</div>
+        <div class="nav-item">计划管理</div>
+        <div class="nav-item active">计划一览</div>
+        <div class="nav-item">项目管理</div>
+      </aside>
+      <main>
+        <div class="topbar">
+          <div class="crumb">首页 / 计划一览 / 合并时间轴预览</div>
+          <div>张弘</div>
+        </div>
+        <section class="content">
+          <div class="hero">
+            <div>
+              <h1>计划一览合并时间轴</h1>
+              <p class="subtitle">默认一条计划一行，右侧用同一条时间轴表达计划周期和实际执行。</p>
+            </div>
+            <div class="switcher">
+              <span>原两行视图</span>
+              <span class="active">合并视图</span>
+            </div>
+          </div>
+
+          <section class="timeline-card">
+            <div class="card-head">
+              <div class="card-title">2026年 计划时间轴</div>
+              <div class="legend">
+                <span><i class="plan"></i>计划周期</span>
+                <span><i class="actual"></i>实际执行</span>
+              </div>
+            </div>
+            <div class="timeline">
+              <div class="label-head">计划</div>
+              <div class="months">
+                <div class="month">1月</div>
+                <div class="month">2月</div>
+                <div class="month">3月</div>
+                <div class="month">4月</div>
+                <div class="month">5月</div>
+                <div class="month">6月</div>
+                <div class="month">7月</div>
+                <div class="month">8月</div>
+                <div class="month">9月</div>
+                <div class="month">10月</div>
+                <div class="month">11月</div>
+                <div class="month">12月</div>
+              </div>
+
+              <div class="plan-row label-cell">
+                <div class="label-top">
+                  <div class="plan-name">2026年信息部计划</div>
+                  <div class="toggle">展开 3</div>
+                </div>
+                <div class="meta">
+                  <span class="tag green">进行中</span>
+                  <span class="tag amber">年度</span>
+                </div>
+              </div>
+              <div class="plan-row bar-cell">
+                <div class="today"></div>
+                <div class="track">
+                  <div class="bar plan-base" style="left: 0%; width: 100%">全年</div>
+                  <div class="bar actual" style="left: 0%; width: 36%"></div>
+                </div>
+              </div>
+
+              <div class="plan-row label-cell detail-label">
+                <div class="label-top">
+                  <div class="plan-name">1月计划</div>
+                </div>
+                <div class="meta">
+                  <span class="tag green">进行中</span>
+                  <span class="tag blue">子计划</span>
+                </div>
+              </div>
+              <div class="plan-row bar-cell">
+                <div class="today"></div>
+                <div class="track">
+                  <div class="bar plan-base" style="left: 0%; width: 8.33%">M1</div>
+                  <div class="bar actual" style="left: 0%; width: 6%"></div>
+                </div>
+              </div>
+
+              <div class="plan-row label-cell detail-label">
+                <div class="label-top">
+                  <div class="plan-name">2月计划</div>
+                </div>
+                <div class="meta">
+                  <span class="tag gray">已归档</span>
+                  <span class="tag blue">子计划</span>
+                </div>
+              </div>
+              <div class="plan-row bar-cell">
+                <div class="today"></div>
+                <div class="track">
+                  <div class="bar archived" style="left: 8.33%; width: 8.33%">M2</div>
+                </div>
+              </div>
+
+              <div class="plan-row label-cell">
+                <div class="label-top">
+                  <div class="plan-name">2026年财务内控核查计划112</div>
+                </div>
+                <div class="meta">
+                  <span class="tag blue">待启动</span>
+                  <span class="tag amber">年度</span>
+                </div>
+              </div>
+              <div class="plan-row bar-cell">
+                <div class="today"></div>
+                <div class="track">
+                  <div class="bar plan-base" style="left: 0%; width: 100%">全年</div>
+                </div>
+              </div>
+
+              <div class="plan-row label-cell">
+                <div class="label-top">
+                  <div class="plan-name">2026年2月专项复核计划</div>
+                </div>
+                <div class="meta">
+                  <span class="tag gray">已归档</span>
+                  <span class="tag blue">子计划</span>
+                </div>
+              </div>
+              <div class="plan-row bar-cell">
+                <div class="today"></div>
+                <div class="track">
+                  <div class="bar archived" style="left: 8.33%; width: 8.33%">M2</div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <p class="note">
+            这个版本只展示主计划和子计划，不展示检查范围。计划周期和实际执行放在同一行，避免同一条计划上下重复。
+          </p>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

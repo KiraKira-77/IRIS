@@ -320,7 +320,7 @@
           <div class="form-section-heading">
             <span>03</span>
             <div>
-              <h4>附件</h4>
+              <h4 class="required-section-title">附件</h4>
             </div>
           </div>
           <div class="attachment-editor">
@@ -1431,7 +1431,10 @@ const validateForm = () => {
   const validationSource = editingRow.value
     ? [...versionHistory.value, ...allStandards.value]
     : allStandards.value
-  const errors = validateStandardEditorForm(form, validationSource, editingRow.value)
+  const errors = validateStandardEditorForm(form, validationSource, editingRow.value, {
+    existingAttachmentCount: editingAttachments.value.length,
+    pendingAttachmentCount: pendingAttachmentFiles.value.length,
+  })
 
   if (errors.length > 0) {
     ElMessage.warning(errors[0])
@@ -1819,6 +1822,12 @@ function validateAttachmentFile(file: File) {
     font-weight: 720;
     color: oklch(26% 0.035 248);
   }
+}
+
+.required-section-title::before {
+  content: '*';
+  margin-right: 4px;
+  color: var(--el-color-danger);
 }
 
 .form-grid {
