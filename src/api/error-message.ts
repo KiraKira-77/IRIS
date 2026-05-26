@@ -8,6 +8,7 @@ const BUSINESS_ERROR_MESSAGES: Record<string, string> = {
   PROJECT_COMPLETE_STATUS_INVALID: '当前项目状态不允许完成',
   PROJECT_TASKS_NOT_HANDLED: '仍有检查项未处理，不能完成项目',
   PROJECT_ARCHIVE_STATUS_INVALID: '当前项目状态不允许归档',
+  PROJECT_ARCHIVE_UNFINISHED_RECTIFICATIONS: '还有未完成的整改单，项目无法归档。',
   PROJECT_ARCHIVED_EDIT_FORBIDDEN: '已归档项目不允许编辑',
   PROJECT_DELETE_STATUS_INVALID: '当前项目状态不允许删除',
   PROJECT_PLAN_ALREADY_GENERATED: '该计划已生成项目，不能重复生成',

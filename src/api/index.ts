@@ -66,8 +66,10 @@ type RectificationCreatePayload = {
   projectName?: string
   taskId?: string
   assigneeId: string
+  assigneeEmployeeNo: string
   assigneeName: string
   reviewerId?: string
+  reviewerEmployeeNo?: string
   reviewerName?: string
   deadline?: string
 }
@@ -154,7 +156,10 @@ export const projectApi = {
     request.put<Project>(`/v1/projects/${id}`, data),
   start: (id: string) => request.post<Project>(`/v1/projects/${id}/start`),
   complete: (id: string) => request.post<Project>(`/v1/projects/${id}/complete`),
-  archive: (id: string) => request.post<Project>(`/v1/projects/${id}/archive`),
+  archive: (id: string) =>
+    request.post<Project>(`/v1/projects/${id}/archive`, undefined, {
+      silentErrorCodes: ['PROJECT_ARCHIVE_UNFINISHED_RECTIFICATIONS'],
+    }),
   assignTasks: (
     id: string,
     data: {

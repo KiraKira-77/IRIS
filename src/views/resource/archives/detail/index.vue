@@ -161,6 +161,13 @@
             <el-table-column prop="completedAt" label="完成时间" width="170" />
             <el-table-column prop="reviewResult" label="审核结果" width="120" />
             <el-table-column prop="status" label="状态" width="110" />
+            <el-table-column label="操作" width="90" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openRectificationDetail(row)">
+                  查看
+                </el-button>
+              </template>
+            </el-table-column>
           </el-table>
         </el-tab-pane>
 
@@ -298,6 +305,13 @@
             <el-table-column prop="deadline" label="整改期限" width="170" />
             <el-table-column prop="reviewResult" label="审核结果" width="120" />
             <el-table-column prop="status" label="状态" width="110" />
+            <el-table-column label="操作" width="90" fixed="right">
+              <template #default="{ row }">
+                <el-button link type="primary" size="small" @click="openRectificationDetail(row)">
+                  查看
+                </el-button>
+              </template>
+            </el-table-column>
           </el-table>
           <el-empty v-else description="暂无关联整改单" :image-size="72" />
         </section>
@@ -381,6 +395,188 @@
       </div>
     </el-drawer>
 
+    <el-drawer
+      v-model="rectificationDetailVisible"
+      title="归档整改单详情"
+      size="860px"
+      destroy-on-close
+      append-to-body
+    >
+      <div v-if="selectedRectification" class="task-detail rectification-archive-detail">
+        <div class="task-detail-header">
+          <div>
+            <h3>{{ selectedRectification.title || selectedRectification.taskName || '整改单详情' }}</h3>
+            <p>{{ selectedRectification.description || '暂无整改描述' }}</p>
+          </div>
+          <div class="drawer-header-tags">
+            <el-tag type="info" size="small" effect="light">归档快照只读</el-tag>
+            <el-tag size="small" effect="dark" round>
+              {{ rectificationStatusLabel(selectedRectification.status) }}
+            </el-tag>
+          </div>
+        </div>
+
+        <section class="task-detail-section">
+          <div class="section-title">
+            <h4>基本信息</h4>
+            <span>{{ selectedRectification.rectificationCode || selectedRectification.id }}</span>
+          </div>
+          <div class="summary-content archive-rectification-summary">
+            <div class="summary-row">
+              <label>任务名称</label>
+              <p>{{ selectedRectification.taskName || selectedRectification.title || '暂无' }}</p>
+            </div>
+            <div class="summary-row">
+              <label>整改描述</label>
+              <p>{{ selectedRectification.description || '暂无' }}</p>
+            </div>
+            <div class="summary-row">
+              <label>所属检查项</label>
+              <p>{{ selectedRectification.checkContent || selectedRectification.taskDescription || '暂无' }}</p>
+            </div>
+          </div>
+          <div class="detail-grid">
+            <div v-for="item in rectificationDetailRows(selectedRectification)" :key="item.label" class="detail-item">
+              <label>{{ item.label }}</label>
+              <span>{{ item.value }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="task-detail-section">
+          <div class="section-title">
+            <h4>来源 OMS 工单</h4>
+          </div>
+          <div class="detail-grid">
+            <div v-for="item in rectificationSourceRows(selectedRectification)" :key="item.label" class="detail-item">
+              <label>{{ item.label }}</label>
+              <span>{{ item.value }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="task-detail-section">
+          <div class="section-title">
+            <h4>整改 OMS 工单</h4>
+            <span>{{ rectificationOmsStatusLabel(selectedRectification) }}</span>
+          </div>
+          <el-empty
+            v-if="!selectedRectification.rectificationOmsWorkOrderId"
+            description="归档时未创建整改 OMS 工单"
+            :image-size="72"
+          />
+          <template v-else>
+            <div class="work-order-card">
+              <div class="work-order-card-toolbar">
+                <div>
+                  <strong>整改处理工单</strong>
+                  <span>{{ selectedRectification.rectificationOmsWorkOrderId }}</span>
+                </div>
+                <el-tag size="small" effect="light" round>
+                  {{ rectificationOmsStatusLabel(selectedRectification) }}
+                </el-tag>
+              </div>
+              <div class="work-order-card-summary">
+                <div v-for="item in rectificationOmsSummaryRows(selectedRectification)" :key="item.label">
+                  <label>{{ item.label }}</label>
+                  <span>{{ item.value }}</span>
+                </div>
+              </div>
+            </div>
+
+            <el-tabs class="oms-tabs">
+              <el-tab-pane label="详情" name="detail">
+                <div v-if="rectificationOmsDetailRows(selectedRectification).length" class="payload-grid">
+                  <div
+                    v-for="item in rectificationOmsDetailRows(selectedRectification)"
+                    :key="item.label"
+                    class="payload-item"
+                  >
+                    <label>{{ item.label }}</label>
+                    <span>{{ item.value }}</span>
+                  </div>
+                </div>
+                <el-empty v-else description="暂无整改 OMS 详情" :image-size="72" />
+              </el-tab-pane>
+              <el-tab-pane label="日志" name="logs">
+                <el-empty
+                  v-if="rectificationOmsLogRows(selectedRectification).length === 0"
+                  description="暂无整改 OMS 日志"
+                  :image-size="72"
+                />
+                <div v-else class="work-order-log-list">
+                  <div
+                    v-for="log in rectificationOmsLogRows(selectedRectification)"
+                    :key="log.id"
+                    class="work-order-log-item"
+                  >
+                    <div class="log-meta">
+                      <strong>{{ log.action }}</strong>
+                      <span>{{ log.occurredAt || '暂无' }}</span>
+                    </div>
+                    <p>{{ log.content }}</p>
+                    <div v-if="log.isWorkLog" class="log-extra">
+                      <span v-if="log.recordDate">日志时间：{{ log.recordDate }}</span>
+                      <span v-if="log.duration">处理时长：{{ log.duration }}</span>
+                    </div>
+                    <div v-if="log.attachments.length" class="log-attachments">
+                      <span>附件：</span>
+                      <el-link
+                        v-for="attachment in log.attachments"
+                        :key="attachment.id"
+                        :href="attachment.url || undefined"
+                        :underline="false"
+                        :disabled="!attachment.url"
+                        target="_blank"
+                        type="primary"
+                      >
+                        {{ attachment.name }}
+                      </el-link>
+                    </div>
+                    <div class="log-footer">
+                      <span>{{ log.operator }}</span>
+                    </div>
+                  </div>
+                </div>
+              </el-tab-pane>
+              <el-tab-pane label="附件" name="attachments">
+                <el-empty
+                  v-if="rectificationOmsAttachmentRows(selectedRectification).length === 0"
+                  description="暂无整改 OMS 附件"
+                  :image-size="72"
+                />
+                <div v-else class="attachment-list">
+                  <el-link
+                    v-for="attachment in rectificationOmsAttachmentRows(selectedRectification)"
+                    :key="attachment.id"
+                    :href="attachment.url || undefined"
+                    :underline="false"
+                    :disabled="!attachment.url"
+                    target="_blank"
+                    type="primary"
+                  >
+                    {{ attachment.name }}
+                  </el-link>
+                </div>
+              </el-tab-pane>
+            </el-tabs>
+          </template>
+        </section>
+
+        <section class="task-detail-section">
+          <div class="section-title">
+            <h4>整改流程</h4>
+          </div>
+          <div class="flow-list archive-flow-list">
+            <div v-for="item in rectificationFlowRows(selectedRectification)" :key="item.label" class="flow-item">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
+        </section>
+      </div>
+    </el-drawer>
+
     <el-empty v-if="!archive && !loading" description="未找到该项目档案" :image-size="120" />
   </div>
 </template>
@@ -438,6 +634,16 @@ type ArchiveSnapshotRectification = Record<string, string | undefined> & {
   id?: string
   taskId?: string
   sourceWorkOrderRecordId?: string
+  rectificationCode?: string
+  title?: string
+  description?: string
+  rectificationOmsWorkOrderId?: string
+  rectificationOmsStatus?: string
+  rectificationOmsStatusName?: string
+  rectificationOmsDetailPayload?: string
+  rectificationOmsLogPayload?: string
+  rectificationOmsAttachmentPayload?: string
+  status?: string
 }
 
 type ProjectArchiveSnapshot = {
@@ -472,6 +678,8 @@ const taskDetailVisible = ref(false)
 const selectedTask = ref<ArchiveSnapshotTask>()
 const workOrderDetailVisible = ref(false)
 const selectedWorkOrder = ref<ArchiveSnapshotWorkOrder>()
+const rectificationDetailVisible = ref(false)
+const selectedRectification = ref<ArchiveSnapshotRectification>()
 const avatarColors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6']
 
 onMounted(() => {
@@ -540,6 +748,11 @@ const openWorkOrderDetail = (order: ArchiveSnapshotWorkOrder) => {
   workOrderDetailVisible.value = true
 }
 
+const openRectificationDetail = (rectification: ArchiveSnapshotRectification) => {
+  selectedRectification.value = rectification
+  rectificationDetailVisible.value = true
+}
+
 const taskWorkOrders = (task: ArchiveSnapshotTask) => {
   const taskId = normalizeId(task.id)
   if (!taskId) return []
@@ -579,6 +792,104 @@ const workOrderDetailRows = (order: ArchiveSnapshotWorkOrder) => [
   { label: '审核意见', value: order.irisReviewOpinion || '暂无' },
   { label: '风险承担', value: order.riskAcceptanceReason || '暂无' },
 ]
+
+const rectificationDetailRows = (rectification: ArchiveSnapshotRectification) => [
+  { label: '整改单号', value: rectification.rectificationCode || rectification.id || '暂无' },
+  { label: '负责人', value: rectification.assigneeName || '暂无' },
+  { label: '对接人', value: rectification.contactName || '暂无' },
+  { label: '下发时间', value: rectification.issuedAt || '暂无' },
+  { label: '整改期限', value: rectification.deadline || '暂无' },
+  { label: '完成时间', value: rectification.completedAt || '暂无' },
+  { label: '审核结果', value: rectificationReviewResultLabel(rectification.reviewResult) },
+  { label: '状态', value: rectificationStatusLabel(rectification.status) },
+]
+
+const rectificationSourceRows = (rectification: ArchiveSnapshotRectification) => [
+  { label: '来源检查项', value: rectification.checkContent || rectification.taskDescription || '暂无' },
+  { label: '来源任务', value: rectification.taskName || '暂无' },
+  { label: '来源 OMS 工单', value: rectification.omsWorkOrderId || rectification.sourceOmsWorkOrderId || '暂无' },
+  { label: '来源工单记录', value: rectification.sourceWorkOrderRecordId || '暂无' },
+]
+
+const rectificationOmsStatusLabel = (rectification: ArchiveSnapshotRectification) =>
+  rectification.rectificationOmsStatusName ||
+  omsStatusName(rectification.rectificationOmsStatus) ||
+  '暂无'
+
+const rectificationOmsSummaryRows = (rectification: ArchiveSnapshotRectification) => [
+  { label: '整改 OMS 工单号', value: rectification.rectificationOmsWorkOrderId || '暂无' },
+  { label: 'OMS 状态', value: rectificationOmsStatusLabel(rectification) },
+  { label: '创建时间', value: rectification.rectificationWorkOrderCreatedAt || '暂无' },
+  { label: '完成时间', value: rectification.rectificationWorkOrderCompletedAt || '暂无' },
+]
+
+const rectificationOmsDetailRows = (rectification: ArchiveSnapshotRectification) =>
+  payloadRows(rectification.rectificationOmsDetailPayload)
+
+const rectificationOmsLogRows = (rectification: ArchiveSnapshotRectification) =>
+  workOrderLogRows({
+    id: rectification.id,
+    omsWorkOrderId: rectification.rectificationOmsWorkOrderId,
+    omsLogPayload: rectification.rectificationOmsLogPayload,
+  })
+
+const rectificationOmsAttachmentRows = (rectification: ArchiveSnapshotRectification) =>
+  parseWorkOrderLogAttachments(rectification.rectificationOmsAttachmentPayload || '')
+
+const rectificationFlowRows = (rectification: ArchiveSnapshotRectification) => [
+  { label: '整改单生成', value: rectification.issuedAt || '暂无' },
+  { label: '整改 OMS 创建', value: rectification.rectificationWorkOrderCreatedAt || '暂无' },
+  { label: '整改完成', value: rectification.completedAt || rectification.rectificationWorkOrderCompletedAt || '暂无' },
+  { label: '内控审核', value: rectificationReviewResultLabel(rectification.reviewResult) },
+  { label: '备注', value: rectification.remark || '暂无' },
+]
+
+const rectificationStatusLabel = (status?: string) => {
+  const map: Record<string, string> = {
+    pending: '待处理',
+    in_progress: '处理中',
+    approved: '已完成',
+  }
+  return map[status || ''] || status || '暂无'
+}
+
+const rectificationReviewResultLabel = (result?: string) => {
+  const map: Record<string, string> = {
+    approve: '通过',
+    reject: '不通过',
+  }
+  return map[result || ''] || result || '暂无'
+}
+
+const payloadRows = (payload?: string) => {
+  const parsed = parseJsonValue(payload)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return []
+  return Object.entries(parsed as Record<string, unknown>)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+    .map(([label, value], index) => ({
+      label: payloadFieldLabel(label, index),
+      value: payloadFieldValue(value),
+    }))
+}
+
+const payloadFieldLabel = (label: string, index: number) => {
+  const map: Record<string, string> = {
+    expectedCompletedTime: '期望完成时间',
+    startedTime: '开始时间',
+    ownerCode: '工单负责人',
+    checkOwnerCode: '申请人/需求来源人',
+  }
+  return map[label] || label || `字段${index + 1}`
+}
+
+const payloadFieldValue = (value: unknown): string => {
+  if (Array.isArray(value)) return value.map(payloadFieldValue).filter(Boolean).join('、') || '暂无'
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    return firstText(record.name, record.userName, record.label, record.value, JSON.stringify(record))
+  }
+  return String(value || '暂无')
+}
 
 const omsStatusName = (status?: string) => {
   const map: Record<string, string> = {
@@ -912,10 +1223,47 @@ const roleLabel = (role?: string) => {
   }
 }
 
+.drawer-header-tags {
+  display: inline-flex;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .task-detail-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.summary-content {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.summary-row {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+
+  label {
+    font-size: 13px;
+    font-weight: 600;
+    color: $iris-text-muted;
+  }
+
+  p {
+    margin: 0;
+    color: $iris-text-primary;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+  }
 }
 
 .section-title {
@@ -1093,6 +1441,69 @@ const roleLabel = (role?: string) => {
     line-height: 1.6;
     word-break: break-word;
   }
+}
+
+.payload-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.payload-item {
+  min-width: 0;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  label,
+  span {
+    display: block;
+  }
+
+  label {
+    margin-bottom: 4px;
+    font-size: 12px;
+    color: $iris-text-muted;
+  }
+
+  span {
+    color: $iris-text-primary;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+}
+
+.flow-list {
+  display: grid;
+  gap: 10px;
+}
+
+.flow-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+
+  span {
+    color: $iris-text-muted;
+  }
+
+  strong {
+    color: $iris-text-primary;
+    text-align: right;
+    overflow-wrap: anywhere;
+  }
+}
+
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .team-grid {

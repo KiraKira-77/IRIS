@@ -12,6 +12,10 @@ import { resolveApiErrorMessage } from './error-message'
 
 const TOKEN_STORAGE_KEY = 'iris_token'
 
+type IrisRequestConfig = AxiosRequestConfig & {
+  silentErrorCodes?: string[]
+}
+
 const service: AxiosInstance = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
   timeout: 30000,
@@ -38,7 +42,9 @@ service.interceptors.response.use(
         code: result.code,
         response: response.data,
       })
-      ElMessage.error(message)
+      if (shouldShowErrorMessage(response.config, result.code)) {
+        ElMessage.error(message)
+      }
       if (result.unauthorized) {
         handleUnauthorized()
       }
@@ -63,7 +69,9 @@ service.interceptors.response.use(
       response: error.response?.data,
       error,
     })
-    ElMessage.error(message)
+    if (shouldShowErrorMessage(error.config, result.code)) {
+      ElMessage.error(message)
+    }
     return Promise.reject(new Error(message))
   },
 )
@@ -72,17 +80,17 @@ const request = {
   get<T = unknown>(
     url: string,
     params?: Record<string, unknown>,
-    config?: AxiosRequestConfig,
+    config?: IrisRequestConfig,
   ): Promise<T> {
     return service.get(url, { params, ...config }) as Promise<T>
   },
-  post<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  post<T = unknown>(url: string, data?: unknown, config?: IrisRequestConfig): Promise<T> {
     return service.post(url, data, config) as Promise<T>
   },
-  put<T = unknown>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T> {
+  put<T = unknown>(url: string, data?: unknown, config?: IrisRequestConfig): Promise<T> {
     return service.put(url, data, config) as Promise<T>
   },
-  delete<T = unknown>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  delete<T = unknown>(url: string, config?: IrisRequestConfig): Promise<T> {
     return service.delete(url, config) as Promise<T>
   },
   upload<T = unknown>(url: string, file: File, fieldName = 'file'): Promise<T> {
@@ -106,6 +114,11 @@ function handleUnauthorized() {
 
 function logApiError(message: string, context: Record<string, unknown>) {
   console.error('[IRIS API ERROR]', message, context)
+}
+
+function shouldShowErrorMessage(config: AxiosRequestConfig | undefined, code?: string) {
+  const silentErrorCodes = (config as IrisRequestConfig | undefined)?.silentErrorCodes || []
+  return !silentErrorCodes.includes(code || '')
 }
 
 function requestContext(config?: AxiosRequestConfig) {

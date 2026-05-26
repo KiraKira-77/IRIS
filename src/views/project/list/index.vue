@@ -214,6 +214,7 @@ import type { Project } from '@/types'
 
 const router = useRouter()
 const userStore = useUserStore()
+const unfinishedRectificationArchiveMessage = '还有未完成的整改单，项目无法归档。'
 const loading = ref(false)
 const tableData = ref<Project[]>([])
 const searchForm = reactive({
@@ -347,8 +348,23 @@ const handleArchiveProject = async (row: Project) => {
     await projectApi.archive(row.id)
     ElMessage.success('项目已归档')
     loadProjects()
-  } catch {
+  } catch (error) {
+    await handleArchiveError(error, row.id)
     // cancelled or request failed
+  }
+}
+
+const handleArchiveError = async (error: unknown, projectId: string) => {
+  if (!(error instanceof Error) || error.message !== unfinishedRectificationArchiveMessage) return
+  try {
+    await ElMessageBox.confirm(unfinishedRectificationArchiveMessage, '无法归档', {
+      type: 'warning',
+      confirmButtonText: '查看整改单',
+      cancelButtonText: '关闭',
+    })
+    await router.push({ path: '/rectification/list', query: { projectId } })
+  } catch {
+    // dialog closed
   }
 }
 

@@ -98,7 +98,6 @@
                   <div class="work-order-title-block">
                     <div>
                       <strong>{{ workOrderDisplayTitle(order) }}</strong>
-                      <span class="work-order-code">{{ workOrderDisplayCode(order) }}</span>
                     </div>
                     <span>{{ personText(order.handlerName, order.handlerEmployeeNo) }}</span>
                   </div>
@@ -225,7 +224,6 @@
                       type="primary"
                       plain
                       class="submit-btn"
-                      :disabled="!workOrderReviewForm.result"
                       @click="handleConfirmWorkOrderReview"
                     >
                       确认工单审核
@@ -520,7 +518,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Back, Connection, Delete as DeleteIcon, View } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { checklistApi, omsApi, projectApi, rectificationApi, taskApi } from '@/api'
 import {
   CONTROL_FREQUENCY_OPTIONS,
@@ -529,7 +527,6 @@ import {
   optionLabel,
 } from '@/features/checklists/checklist-data'
 import {
-  getAssignableProjectMembers,
   getProjectMembers,
   normalizeProject,
   normalizeProjectPage,
@@ -630,11 +627,6 @@ const activeWorkOrderModeDescription = computed(
     '',
 )
 const members = computed(() => (project.value ? getProjectMembers(project.value) : []))
-const assignableMembers = computed(() =>
-  getAssignableProjectMembers(members.value).filter(
-    (member) => !!normalizeIdentityValue(member.employeeNo),
-  ),
-)
 const currentUserIdentityValues = computed(() => {
   const user = userStore.userInfo
   return new Set([user?.id, user?.username, user?.name].map(normalizeIdentityValue).filter(Boolean))
@@ -655,7 +647,8 @@ const canManageProject = computed(() => {
     currentProjectMember.value?.role === 'leader'
   )
 })
-const finishedTaskStatuses = ['passed', 'nonconforming', 'approved']
+const completedTaskStatuses = ['passed', 'nonconforming', 'approved']
+const unhandleableTaskStatuses = completedTaskStatuses.filter((status) => status !== 'nonconforming')
 const hasInspectionItemAssignee = computed(() => {
   return !!normalizeIdentityValue(task.value?.assigneeId || task.value?.assigneeName)
 })
@@ -677,7 +670,7 @@ const canHandleInspectionItem = computed(() => {
     !!task.value &&
     project.value.status === 'in_progress' &&
     hasInspectionItemAssignee.value &&
-    !finishedTaskStatuses.includes(task.value.status) &&
+    !unhandleableTaskStatuses.includes(task.value.status) &&
     (canManageProject.value || isCurrentInspectionItemAssignee.value)
   )
 })
@@ -693,7 +686,7 @@ const inspectionItemHandleTip = computed(() => {
   if (project.value.status === 'not_started') return '项目启动后才能办理'
   if (project.value.status === 'completed') return '项目已完成，不能办理'
   if (project.value.status === 'archived') return '项目已归档，不能办理'
-  if (finishedTaskStatuses.includes(task.value.status)) return '检查项已完成，不能重复办理'
+  if (unhandleableTaskStatuses.includes(task.value.status)) return '检查项已完成，不能重复办理'
   if (!canManageProject.value && !isCurrentInspectionItemAssignee.value)
     return '只有项目负责人或检查项负责人可以办理'
   return '当前状态不能办理'
@@ -1018,7 +1011,10 @@ const handleConfirmWorkOrderReview = async () => {
   const order = workOrders.value.find((item) => item.id === workOrderReviewForm.value.workOrderId)
   if (!order || !workOrderReviewable(order)) return
   const reviewStatus = workOrderReviewForm.value.result
-  if (reviewStatus !== 'passed' && reviewStatus !== 'rectification_required') return
+  if (reviewStatus !== 'passed' && reviewStatus !== 'rectification_required') {
+    ElMessage.warning('请选择审核结果')
+    return
+  }
   const reviewed = await taskApi.reviewWorkOrder(
     projectId.value,
     task.value.id,
@@ -1064,6 +1060,19 @@ const handleReturnWorkOrder = async (order: ProjectTaskWorkOrder) => {
 
 const handleCreateWorkOrderRectification = async (order: ProjectTaskWorkOrder) => {
   if (!task.value || !projectId.value || !workOrderRectificationCreatable(order)) return
+  try {
+    await ElMessageBox.confirm(
+      '确认基于该 OMS 工单生成整改单，并同步创建整改 OMS 工单吗？',
+      '生成整改单',
+      {
+        type: 'warning',
+        confirmButtonText: '确认生成',
+        cancelButtonText: '取消',
+      },
+    )
+  } catch {
+    return
+  }
   workOrderRectificationCreatingIds.value = new Set([
     ...workOrderRectificationCreatingIds.value,
     order.id,
@@ -1089,6 +1098,15 @@ const handleAcceptWorkOrderRisk = async (order: ProjectTaskWorkOrder) => {
   if (!workOrderRiskAcceptable(order)) return
   const reason = workOrderRiskForm.value.reason.trim()
   if (!reason) return
+  try {
+    await ElMessageBox.confirm('确认该 OMS 工单不生成整改单，并记录为承担风险吗？', '承担风险', {
+      type: 'warning',
+      confirmButtonText: '确认承担',
+      cancelButtonText: '取消',
+    })
+  } catch {
+    return
+  }
   workOrderRiskAcceptingIds.value = new Set([...workOrderRiskAcceptingIds.value, order.id])
   try {
     const disposed = await taskApi.acceptWorkOrderRisk(projectId.value, task.value.id, order.id, {
@@ -1179,17 +1197,6 @@ const backToProject = () => {
 
 const normalizeIdentityValue = (value?: string | number | null) => String(value || '').trim()
 
-const roleLabel = (role: string) => {
-  const map: Record<string, string> = {
-    leader: '项目负责人',
-    auditor: '项目审计人员',
-    observer: '观察员',
-    reviewer: '观察员',
-    member: '观察员',
-  }
-  return map[role] || role
-}
-
 const auditResultLabel = (result: string) => {
   return auditResultOptions.find((item) => item.value === result)?.label || '待审核'
 }
@@ -1253,9 +1260,10 @@ const workOrderStatusLabel = (order: ProjectTaskWorkOrder) => {
   return omsStatusLabelMap[raw] || omsStatusLabelMap[raw.toLowerCase()] || raw || '未知'
 }
 
-const workOrderReviewableStatusLabels = ['已完成', '已归档']
+const workOrderReviewableStatusLabels = ['已完成', '已归档', '已终止']
 const workOrderReturnableStatusLabels = ['已完成']
 const lockedReviewResults = ['passed', 'rectification_required']
+const pendingNonconformityDispositionValues = new Set(['pending', '待处理', '待处置'])
 
 const workOrderReviewLocked = (order: ProjectTaskWorkOrder) =>
   Boolean(order.reviewLocked) || lockedReviewResults.includes(workOrderReviewResultOf(order))
@@ -1276,7 +1284,7 @@ const workOrderDeletable = (order: ProjectTaskWorkOrder) =>
 
 const workOrderNonconformityPending = (order: ProjectTaskWorkOrder) =>
   workOrderReviewResultOf(order) === 'rectification_required' &&
-  !order.nonconformityDisposition
+  isPendingNonconformityDisposition(order.nonconformityDisposition)
 
 const sourceWorkOrderHasRectification = (order: ProjectTaskWorkOrder) =>
   taskRectifications.value.some((item) => item.sourceWorkOrderRecordId === order.id)
@@ -1290,11 +1298,19 @@ const workOrderRiskAcceptable = (order: ProjectTaskWorkOrder) =>
 
 const nonconformityDispositionLabel = (order: ProjectTaskWorkOrder) => {
   const map: Record<string, string> = {
+    pending: '待处理',
+    待处理: '待处理',
+    待处置: '待处理',
     rectification_created: '已生成整改单',
     risk_accepted: '承担风险',
   }
   if (sourceWorkOrderHasRectification(order)) return '已生成整改单'
   return map[String(order.nonconformityDisposition || '')] || '待处置'
+}
+
+const isPendingNonconformityDisposition = (value?: string | null) => {
+  const normalized = String(value || '').trim()
+  return !normalized || pendingNonconformityDispositionValues.has(normalized)
 }
 
 const workOrderStatusStyle = (order: ProjectTaskWorkOrder) => {
@@ -1745,13 +1761,6 @@ const workOrderStatusType = (order: ProjectTaskWorkOrder) =>
 
   strong {
     color: $iris-text-primary;
-  }
-
-  .work-order-code {
-    display: block;
-    margin-top: 2px;
-    font-size: 12px;
-    color: $iris-text-muted;
   }
 }
 

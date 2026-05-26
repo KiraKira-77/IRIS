@@ -243,6 +243,7 @@ import type { CheckTask, Project } from '@/types'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const unfinishedRectificationArchiveMessage = '还有未完成的整改单，项目无法归档。'
 const loading = ref(false)
 const project = ref<Project>()
 const activeTab = ref('tasks')
@@ -311,10 +312,11 @@ const allTasksDone = computed(() => {
   const tasks = project.value?.tasks || []
   return (
     tasks.length > 0 &&
-    tasks.every((task) => ['passed', 'nonconforming', 'approved'].includes(task.status))
+    tasks.every((task) => completedTaskStatuses.includes(task.status))
   )
 })
-const finishedTaskStatuses = ['passed', 'nonconforming', 'approved']
+const completedTaskStatuses = ['passed', 'nonconforming', 'approved']
+const unhandleableTaskStatuses = ['passed', 'approved']
 
 const filteredTasks = computed(() => {
   if (!project.value) return []
@@ -364,6 +366,7 @@ const handleCompleteProject = async () => {
 
 const handleArchiveProject = async () => {
   if (!project.value) return
+  const projectId = project.value.id
   try {
     await ElMessageBox.confirm(
       '归档后会生成一条项目档案，包含项目、检查项、OMS 工单、整改单和附件快照，项目将不可再编辑或办理。确认归档吗？',
@@ -374,10 +377,25 @@ const handleArchiveProject = async () => {
         cancelButtonText: '取消',
       },
     )
-    project.value = normalizeProject(await projectApi.archive(project.value.id))
+    project.value = normalizeProject(await projectApi.archive(projectId))
     ElMessage.success('项目已归档')
-  } catch {
+  } catch (error) {
+    await handleArchiveError(error, projectId)
     // cancelled or request failed
+  }
+}
+
+const handleArchiveError = async (error: unknown, projectId: string) => {
+  if (!(error instanceof Error) || error.message !== unfinishedRectificationArchiveMessage) return
+  try {
+    await ElMessageBox.confirm(unfinishedRectificationArchiveMessage, '无法归档', {
+      type: 'warning',
+      confirmButtonText: '查看整改单',
+      cancelButtonText: '关闭',
+    })
+    await router.push({ path: '/rectification/list', query: { projectId } })
+  } catch {
+    // dialog closed
   }
 }
 
@@ -426,7 +444,7 @@ const canHandleInspectionItem = (task: CheckTask) => {
     !!project.value &&
     project.value.status === 'in_progress' &&
     hasInspectionItemAssignee(task) &&
-    !finishedTaskStatuses.includes(task.status) &&
+    !unhandleableTaskStatuses.includes(task.status) &&
     (canManageProject.value || isCurrentInspectionItemAssignee(task))
   )
 }
@@ -440,7 +458,7 @@ const inspectionItemHandleTip = (task: CheckTask) => {
   if (project.value.status === 'not_started') return '项目启动后才能办理'
   if (project.value.status === 'completed') return '项目已完成，不能办理'
   if (project.value.status === 'archived') return '项目已归档，不能办理'
-  if (finishedTaskStatuses.includes(task.status)) return '检查项已完成，不能重复办理'
+  if (unhandleableTaskStatuses.includes(task.status)) return '检查项已完成，不能重复办理'
   return '当前状态不能办理'
 }
 

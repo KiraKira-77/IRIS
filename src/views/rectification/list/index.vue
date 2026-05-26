@@ -83,12 +83,13 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { rectificationApi } from '@/api'
 import { useUserStore } from '@/stores'
 import type { PageResult, RectificationOrder, RectStatus } from '@/types'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const searchForm = reactive({ keyword: '', status: '' })
 const tableData = ref<RectificationOrder[]>([])
@@ -100,6 +101,10 @@ type BackendPage<T> = PageResult<T> & {
 }
 
 const pageRecords = <T,>(page: BackendPage<T>) => page.records || page.list || []
+const routeProjectId = computed(() => {
+  const projectId = route.query.projectId
+  return Array.isArray(projectId) ? projectId[0] : projectId
+})
 
 onMounted(async () => {
   await userStore.ensureUserInfoLoaded()
@@ -113,6 +118,7 @@ const loadRectifications = async () => {
       page: 1,
       pageSize: 100,
       keyword: searchForm.keyword || undefined,
+      projectId: routeProjectId.value || undefined,
       status: searchForm.status || undefined,
     })) as BackendPage<RectificationOrder>
     tableData.value = pageRecords(page)

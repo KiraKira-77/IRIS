@@ -399,7 +399,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { Back, Refresh } from '@element-plus/icons-vue'
 import { omsApi, projectApi, rectificationApi } from '@/api'
 import {
-  getAssignableProjectMembers,
   getProjectMembers,
   normalizeProject,
 } from '@/features/projects/project-data'
@@ -515,12 +514,14 @@ const payloadFieldLabelMap: Record<string, string> = {
   assigneeId: '负责人ID',
   assigneeName: '负责人',
   assigneeEmployeeNo: '负责人工号',
-  checkOwnerId: '负责人ID',
-  checkOwnerName: '负责人',
-  checkOwnerEmployeeNo: '负责人工号',
-  ownerId: '负责人ID',
-  ownerName: '负责人',
-  ownerEmployeeNo: '负责人工号',
+  checkOwnerId: '申请人/需求来源人ID',
+  checkOwnerCode: '申请人/需求来源人',
+  checkOwnerName: '申请人/需求来源人',
+  checkOwnerEmployeeNo: '申请人/需求来源人工号',
+  ownerId: '工单负责人ID',
+  ownerCode: '工单负责人',
+  ownerName: '工单负责人',
+  ownerEmployeeNo: '工单负责人工号',
   creator: '创建人',
   creatorName: '创建人',
   createdBy: '创建人',
@@ -536,6 +537,9 @@ const payloadFieldLabelMap: Record<string, string> = {
   completeTime: '完成时间',
   completedAt: '完成时间',
   completedTime: '完成时间',
+  expectedCompletedTime: '期望完成时间',
+  startedTime: '开始时间',
+  startTime: '开始时间',
   issuedAt: '下达时间',
   issuedTime: '下达时间',
   issueTime: '下达时间',
@@ -585,7 +589,13 @@ const payloadFieldLabelMap: Record<string, string> = {
   OMS_STATUS_NAME: 'OMS 状态',
   ISSUED_TIME: '下达时间',
   COMPLETED_TIME: '完成时间',
-  CHECK_OWNER_NAME: '负责人',
+  EXPECTED_COMPLETED_TIME: '期望完成时间',
+  STARTED_TIME: '开始时间',
+  START_TIME: '开始时间',
+  OWNER_CODE: '工单负责人',
+  OWNER_NAME: '工单负责人',
+  CHECK_OWNER_CODE: '申请人/需求来源人',
+  CHECK_OWNER_NAME: '申请人/需求来源人',
   RESULT_SUMMARY: '处理结果',
   SY_CREATEUSER: '创建人',
   RECORD_CZXQ: '操作详情',
@@ -660,14 +670,6 @@ const rectificationOmsLogRows = computed<WorkOrderLogRow[]>(() =>
 
 const rectificationOmsAttachmentRows = computed(() =>
   parseWorkOrderLogAttachments(rectification.value?.rectificationOmsAttachmentPayload),
-)
-
-const assignableMembers = computed(() =>
-  project.value
-    ? getAssignableProjectMembers(getProjectMembers(project.value)).filter(
-        (member) => !!normalizeIdentityValue(member.employeeNo),
-      )
-    : [],
 )
 
 const selectedWorkOrderHandler = computed(() =>
@@ -930,14 +932,38 @@ const payloadToRows = (payload?: string) => {
       ? ((parsed as { data?: unknown }).data ?? parsed)
       : parsed
   if (!source || typeof source !== 'object' || Array.isArray(source)) return []
-  return Object.entries(source as Record<string, unknown>)
-    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== '')
+  const sourceRecord = source as Record<string, unknown>
+  return Object.entries(sourceRecord)
+    .filter(
+      ([label, value]) =>
+        value !== null &&
+        value !== undefined &&
+        String(value).trim() !== '' &&
+        !shouldHidePayloadField(label, sourceRecord),
+    )
     .slice(0, 16)
     .map(([label, value], index) => ({
       label: payloadFieldLabel(label, index),
-      value: formatPayloadValue(value, label),
+      value: formatPayloadValue(value, label, sourceRecord),
     }))
 }
+
+const shouldHidePayloadField = (field: string, source: Record<string, unknown>) => {
+  const normalized = String(field || '').trim()
+  if (['ownerName', 'OWNER_NAME'].includes(normalized)) {
+    return hasPayloadValue(source, 'ownerCode', 'OWNER_CODE')
+  }
+  if (['checkOwnerName', 'CHECK_OWNER_NAME'].includes(normalized)) {
+    return hasPayloadValue(source, 'checkOwnerCode', 'CHECK_OWNER_CODE')
+  }
+  return false
+}
+
+const hasPayloadValue = (source: Record<string, unknown>, ...fields: string[]) =>
+  fields.some((field) => {
+    const value = source[field]
+    return value !== null && value !== undefined && String(value).trim() !== ''
+  })
 
 const payloadUnknownFieldLabel = (field: string) => {
   const normalized = String(field || '').trim()
@@ -1071,14 +1097,54 @@ const parseJsonValue = (payload: unknown): unknown => {
   }
 }
 
-const formatPayloadValue = (value: unknown, field?: string) => {
+const formatPayloadValue = (
+  value: unknown,
+  field?: string,
+  source?: Record<string, unknown>,
+) => {
   if (field && ['status', 'statusName', 'omsStatus', 'omsStatusName'].includes(field)) {
     return formatOmsStatusLabel(String(value || ''))
   }
+  const personValue = formatPayloadPersonValue(value, field, source)
+  if (personValue) return personValue
   if (Array.isArray(value)) return value.length ? formatPayloadArray(value) : '—'
   if (value && typeof value === 'object')
     return formatPayloadObject(value as Record<string, unknown>)
   return String(value)
+}
+
+const formatPayloadPersonValue = (
+  value: unknown,
+  field?: string,
+  source?: Record<string, unknown>,
+) => {
+  if (!field || !source) return ''
+  const normalized = String(field).trim()
+  const code = String(value || '').trim()
+  if (['ownerCode', 'OWNER_CODE'].includes(normalized)) {
+    return personValueWithCode(payloadFirstText(source, 'ownerName', 'OWNER_NAME'), code)
+  }
+  if (['checkOwnerCode', 'CHECK_OWNER_CODE'].includes(normalized)) {
+    return personValueWithCode(
+      payloadFirstText(source, 'checkOwnerName', 'CHECK_OWNER_NAME'),
+      code,
+    )
+  }
+  return ''
+}
+
+const payloadFirstText = (source: Record<string, unknown>, ...fields: string[]) => {
+  for (const field of fields) {
+    const value = source[field]
+    const normalized = String(value || '').trim()
+    if (normalized) return normalized
+  }
+  return ''
+}
+
+const personValueWithCode = (name: string, code: string) => {
+  if (name && code) return `${name}（${code}）`
+  return name || code || '—'
 }
 
 const formatPayloadArray = (value: unknown[]): string => {

@@ -100,24 +100,42 @@
             <el-row :gutter="16">
               <el-col :span="8">
                 <el-form-item label="整改责任人" prop="assigneeId">
-                  <el-select v-model="form.assigneeId" filterable placeholder="选择责任人">
+                  <el-select
+                    v-model="form.assigneeId"
+                    filterable
+                    remote
+                    reserve-keyword
+                    clearable
+                    placeholder="选择责任人"
+                    :remote-method="searchAssigneeOmsUsers"
+                    :loading="assigneeOmsUserLoading"
+                  >
                     <el-option
-                      v-for="person in personnelOptions"
-                      :key="person.id"
-                      :label="`${person.username} · ${person.account}`"
-                      :value="person.id"
+                      v-for="person in assigneeOmsUserOptions"
+                      :key="person.userId"
+                      :label="omsUserLabel(person)"
+                      :value="person.userId"
                     />
                   </el-select>
                 </el-form-item>
               </el-col>
               <el-col :span="8">
                 <el-form-item label="审核人" prop="reviewerId">
-                  <el-select v-model="form.reviewerId" filterable placeholder="选择审核人">
+                  <el-select
+                    v-model="form.reviewerId"
+                    filterable
+                    remote
+                    reserve-keyword
+                    clearable
+                    placeholder="选择审核人"
+                    :remote-method="searchReviewerOmsUsers"
+                    :loading="reviewerOmsUserLoading"
+                  >
                     <el-option
-                      v-for="person in reviewerOptions"
-                      :key="person.id"
-                      :label="`${person.username} · ${person.account}`"
-                      :value="person.id"
+                      v-for="person in reviewerOmsUserOptions"
+                      :key="person.userId"
+                      :label="omsUserLabel(person)"
+                      :value="person.userId"
                     />
                   </el-select>
                 </el-form-item>
@@ -215,9 +233,9 @@ import { useRouter } from 'vue-router'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Back, DataAnalysis, Document, EditPen, WarningFilled } from '@element-plus/icons-vue'
-import { projectApi, rectificationApi, systemUserApi } from '@/api'
-import { normalizeProjectPage } from '@/features/projects/project-data'
-import type { CheckTask, Project, RectificationOrder, SystemUser } from '@/types'
+import { omsApi, projectApi, rectificationApi } from '@/api'
+import { getProjectMembers, normalizeProjectPage } from '@/features/projects/project-data'
+import type { CheckTask, OmsUser, Project, RectificationOrder } from '@/types'
 
 const router = useRouter()
 const formRef = ref<FormInstance>()
@@ -240,9 +258,14 @@ const defaultForm = () => ({
 })
 
 const form = reactive(defaultForm())
-const users = ref<SystemUser[]>([])
 const projects = ref<Project[]>([])
 const activeRectificationCount = ref(0)
+const assigneeOmsUserOptions = ref<OmsUser[]>([])
+const reviewerOmsUserOptions = ref<OmsUser[]>([])
+const assigneeOmsUserLoading = ref(false)
+const reviewerOmsUserLoading = ref(false)
+const assigneeOmsUserSearchSeq = ref(0)
+const reviewerOmsUserSearchSeq = ref(0)
 
 type BackendPage<T> = {
   records?: T[]
@@ -261,16 +284,9 @@ const rules: FormRules = {
 }
 
 const projectOptions = computed(() => projects.value.filter((project) => project.tasks.length > 0))
-const personnelOptions = computed(() => users.value.filter((person) => person.status === 1))
-const reviewerOptions = computed(() => personnelOptions.value)
-
 onMounted(async () => {
-  await Promise.all([loadUsers(), loadProjects(), loadActiveRectificationCount()])
+  await Promise.all([loadProjects(), loadActiveRectificationCount()])
 })
-
-const loadUsers = async () => {
-  users.value = await systemUserApi.list()
-}
 
 const loadProjects = async () => {
   const page = normalizeProjectPage(await projectApi.list({ page: 1, pageSize: 100 }))
@@ -309,6 +325,12 @@ const taskOptions = computed(() => {
 const selectedTask = computed<CheckTask | undefined>(() =>
   taskOptions.value.find((task) => task.id === form.taskId),
 )
+const selectedAssigneeOmsUser = computed(() =>
+  assigneeOmsUserOptions.value.find((user) => user.userId === form.assigneeId),
+)
+const selectedReviewerOmsUser = computed(() =>
+  reviewerOmsUserOptions.value.find((user) => user.userId === form.reviewerId),
+)
 
 const selectedProjectPendingCount = computed(() => {
   if (!selectedProject.value) return 0
@@ -323,6 +345,10 @@ const resetForm = () => {
 
 const handleProjectChange = () => {
   form.taskId = ''
+  form.assigneeId = ''
+  form.reviewerId = ''
+  assigneeOmsUserOptions.value = []
+  reviewerOmsUserOptions.value = []
   if (selectedProject.value && form.source === 'manual' && !form.title) {
     form.title = `${selectedProject.value.name} 整改事项`
   }
@@ -332,20 +358,70 @@ const handleTaskChange = () => {
   if (!selectedTask.value) return
   form.title = `关于${selectedTask.value.checkContent}的整改`
   form.description = `${selectedTask.value.checkContent}。整改标准：${selectedTask.value.checkCriterion}。请补充整改措施并提交证明材料。`
-  form.assigneeId = personnelOptions.value.some(
-    (person) => person.id === selectedTask.value?.assigneeId,
-  )
-    ? selectedTask.value.assigneeId || ''
-    : ''
-  form.reviewerId = reviewerOptions.value.some(
-    (person) => person.id === selectedTask.value?.reviewerId,
-  )
-    ? selectedTask.value.reviewerId || ''
-    : ''
+  form.assigneeId = ''
+  assigneeOmsUserOptions.value = []
+  const reviewer = taskAssigneeOmsUser(selectedTask.value)
+  form.reviewerId = reviewer?.userId || ''
+  reviewerOmsUserOptions.value = reviewer ? [reviewer] : []
   form.deadline = plusDays(5)
 }
 
-const getPerson = (id: string) => personnelOptions.value.find((person) => person.id === id)
+const normalizeIdentityValue = (value?: string | number | null) => String(value || '').trim()
+
+const omsUserLabel = (user: OmsUser) => `${user.userName} (${user.userCode})`
+
+const taskAssigneeOmsUser = (task: CheckTask): OmsUser | undefined => {
+  const member = getProjectMembers(selectedProject.value || { members: [], team: [] }).find(
+    (item) => item.personnelId === task.assigneeId && normalizeIdentityValue(item.employeeNo),
+  )
+  if (!member) return undefined
+  return {
+    userId: member.personnelId,
+    userCode: normalizeIdentityValue(member.employeeNo),
+    userName: member.personnelName,
+  }
+}
+
+const searchOmsUsers = async (
+  keyword: string,
+  seq: typeof assigneeOmsUserSearchSeq,
+  loading: typeof assigneeOmsUserLoading,
+  options: typeof assigneeOmsUserOptions,
+) => {
+  const normalizedKeyword = keyword.trim()
+  if (!normalizedKeyword) {
+    options.value = []
+    return
+  }
+  const nextSeq = seq.value + 1
+  seq.value = nextSeq
+  loading.value = true
+  try {
+    const users = await omsApi.searchUsers({
+      keyword: normalizedKeyword,
+      page: 1,
+      pageSize: 20,
+    })
+    if (seq.value === nextSeq) {
+      options.value = users
+    }
+  } finally {
+    if (seq.value === nextSeq) {
+      loading.value = false
+    }
+  }
+}
+
+const searchAssigneeOmsUsers = (keyword: string) =>
+  searchOmsUsers(
+    keyword,
+    assigneeOmsUserSearchSeq,
+    assigneeOmsUserLoading,
+    assigneeOmsUserOptions,
+  )
+
+const searchReviewerOmsUsers = (keyword: string) =>
+  searchOmsUsers(keyword, reviewerOmsUserSearchSeq, reviewerOmsUserLoading, reviewerOmsUserOptions)
 
 const handleSubmit = async () => {
   if (form.source === 'task' && (!form.projectId || !form.taskId)) {
@@ -356,8 +432,8 @@ const handleSubmit = async () => {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
 
-  const assignee = getPerson(form.assigneeId)
-  const reviewer = getPerson(form.reviewerId)
+  const assignee = selectedAssigneeOmsUser.value
+  const reviewer = selectedReviewerOmsUser.value
 
   if (!assignee || !reviewer) {
     ElMessage.error('整改责任人或审核人不存在')
@@ -372,15 +448,17 @@ const handleSubmit = async () => {
     projectId: form.source === 'task' ? project?.id : undefined,
     projectName: form.source === 'task' ? project?.name : undefined,
     taskId: form.source === 'task' ? form.taskId : undefined,
-    assigneeId: assignee.id,
-    assigneeName: assignee.username,
-    reviewerId: reviewer.id,
-    reviewerName: reviewer.username,
+    assigneeId: assignee.userId,
+    assigneeEmployeeNo: assignee.userCode,
+    assigneeName: assignee.userName,
+    reviewerId: reviewer.userId,
+    reviewerEmployeeNo: reviewer.userCode,
+    reviewerName: reviewer.userName,
     deadline: form.deadline,
   })
 
-  ElMessage.success(`整改单 ${created.code} 已创建`)
-  router.push('/rectification/list')
+  ElMessage.success(`整改单 ${created.code} 已创建并生成 OMS 工单`)
+  router.push(`/rectification/detail/${created.id}`)
 }
 
 const taskStatusType = (status: string) => {
