@@ -247,4 +247,14 @@ describe('checklists page actions', () => {
     expect(confirmSource).toContain('ElMessage.error')
     expect(confirmSource).toContain('批量导入失败')
   })
+  it('generates checklist codes from existing codes instead of current counts', () => {
+    const source = readFileSync(sourcePath, 'utf8')
+
+    expect(source).toContain('const getNextChecklistCode = () => {')
+    expect(source).toContain('checklist.code')
+    expect(source).toContain('form.code = getNextChecklistCode()')
+    expect(source).toContain('code: getNextChecklistCode()')
+    expect(source).not.toContain('tableData.value.length + 1')
+    expect(source).not.toContain('pagination.total + 1')
+  })
 })

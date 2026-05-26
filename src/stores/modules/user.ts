@@ -7,6 +7,7 @@ import { buildMenuCodesFromRoles } from '@/features/permissions/menu-access'
 import { resolveCurrentUserAccessContext } from './user-access-context'
 
 const TOKEN_STORAGE_KEY = 'iris_token'
+const JE_BASE_URL = import.meta.env.VITE_JE_BASE_URL || '/je'
 
 export const useUserStore = defineStore('user', () => {
   const token = ref<string>(localStorage.getItem(TOKEN_STORAGE_KEY) || '')
@@ -21,7 +22,7 @@ export const useUserStore = defineStore('user', () => {
       const avatarArr = JSON.parse(userInfo.value.avatar)
       if (Array.isArray(avatarArr) && avatarArr.length > 0) {
         const fileKey = avatarArr[0].fileKey
-        if (fileKey) return `http://10.8.25.218:8002/je/document/preview/${fileKey}`
+        if (fileKey) return `${JE_BASE_URL}/document/preview/${fileKey}`
       }
     } catch {
       return userInfo.value.avatar

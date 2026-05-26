@@ -15,6 +15,9 @@ describe('api error messages', () => {
     expect(resolveApiErrorMessage('PROJECT_PLAN_ALREADY_GENERATED', 'PROJECT_PLAN_ALREADY_GENERATED')).toBe(
       '该计划已生成项目，不能重复生成',
     )
+    expect(resolveApiErrorMessage('CHECKLIST_CODE_DUPLICATED', 'CHECKLIST_CODE_DUPLICATED')).toBe(
+      '清单编号已存在，请更换后再保存',
+    )
   })
 
   it('keeps readable Chinese backend messages and hides raw error codes', () => {

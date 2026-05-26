@@ -6,9 +6,13 @@
   "scripts": {
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
+    "build:qas": "run-p type-check build-only:qas",
+    "build:pro": "run-p type-check build-only:pro",
     "preview": "vite preview",
     "test:unit": "vitest run",
     "build-only": "vite build",
+    "build-only:qas": "vite build --mode qas",
+    "build-only:pro": "vite build --mode production",
     "type-check": "vue-tsc --build",
     "lint": "run-s lint:*",
     "lint:oxlint": "oxlint . --fix",

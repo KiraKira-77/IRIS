@@ -717,6 +717,17 @@ const checklistStats = computed(() => ({
   items: tableData.value.reduce((total, item) => total + countChecklistItems(item), 0),
 }))
 
+const getNextChecklistCode = () => {
+  const prefix = `CL-${new Date().getFullYear()}-`
+  const maxSerial = tableData.value
+    .map((checklist) => checklist.code)
+    .filter((code) => code.startsWith(prefix))
+    .map((code) => Number(code.slice(prefix.length)))
+    .filter(Number.isFinite)
+    .reduce((max, serial) => Math.max(max, serial), 0)
+  return `${prefix}${String(maxSerial + 1).padStart(3, '0')}`
+}
+
 onMounted(() => {
   void Promise.all([loadScopeOptions(), loadChecklists()])
 })
@@ -860,7 +871,7 @@ const openDialog = (row?: ControlChecklist) => {
       return
     }
     editingRow.value = null
-    form.code = `CL-2026-${String(tableData.value.length + 1).padStart(3, '0')}`
+    form.code = getNextChecklistCode()
     form.name = ''
     form.description = ''
     form.version = 'V1.0'
@@ -1207,7 +1218,7 @@ const copyChecklist = async (row: ControlChecklist) => {
   }
   const copy = await checklistApi.create({
     ...toChecklistPayload(row, row.items),
-    code: `CL-2026-${String(pagination.total + 1).padStart(3, '0')}`,
+    code: getNextChecklistCode(),
     name: row.name + ' (副本)',
     items: toItemPayloads(row.items).map(withoutItemId),
     status: 'draft',
