@@ -717,15 +717,8 @@ const checklistStats = computed(() => ({
   items: tableData.value.reduce((total, item) => total + countChecklistItems(item), 0),
 }))
 
-const getNextChecklistCode = () => {
-  const prefix = `CL-${new Date().getFullYear()}-`
-  const maxSerial = tableData.value
-    .map((checklist) => checklist.code)
-    .filter((code) => code.startsWith(prefix))
-    .map((code) => Number(code.slice(prefix.length)))
-    .filter(Number.isFinite)
-    .reduce((max, serial) => Math.max(max, serial), 0)
-  return `${prefix}${String(maxSerial + 1).padStart(3, '0')}`
+const loadNextChecklistCode = async () => {
+  return checklistApi.nextCode()
 }
 
 onMounted(() => {
@@ -851,7 +844,7 @@ const ownerScopeOptions = computed(() => {
   return options
 })
 
-const openDialog = (row?: ControlChecklist) => {
+const openDialog = async (row?: ControlChecklist) => {
   if (row) {
     if (!getRowAccessState(row).canEdit) {
       ElMessage.warning('当前用户无权编辑该清单')
@@ -871,7 +864,12 @@ const openDialog = (row?: ControlChecklist) => {
       return
     }
     editingRow.value = null
-    form.code = getNextChecklistCode()
+    try {
+      form.code = await loadNextChecklistCode()
+    } catch (error) {
+      ElMessage.error('获取清单编号失败')
+      return
+    }
     form.name = ''
     form.description = ''
     form.version = 'V1.0'
@@ -1216,14 +1214,7 @@ const copyChecklist = async (row: ControlChecklist) => {
     ElMessage.warning('当前用户无权复制该清单')
     return
   }
-  const copy = await checklistApi.create({
-    ...toChecklistPayload(row, row.items),
-    code: getNextChecklistCode(),
-    name: row.name + ' (副本)',
-    items: toItemPayloads(row.items).map(withoutItemId),
-    status: 'draft',
-    uploadDate: new Date().toISOString().slice(0, 10),
-  })
+  const copy = await checklistApi.copy(row.id)
   tableData.value.unshift(normalizeChecklistFromApi(copy))
   pagination.total += 1
   ElMessage.success('清单已复制')

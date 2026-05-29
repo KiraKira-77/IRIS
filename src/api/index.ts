@@ -113,7 +113,9 @@ export const standardApi = {
 export const checklistApi = {
   list: (params: PageQuery) => request.get<PageResult<ControlChecklist>>('/v1/checklists', params),
   detail: (id: string) => request.get<ControlChecklist>(`/v1/checklists/${id}`),
+  nextCode: () => request.get<string>('/v1/checklists/next-code'),
   create: (data: ChecklistUpsertPayload) => request.post<ControlChecklist>('/v1/checklists', data),
+  copy: (id: string) => request.post<ControlChecklist>(`/v1/checklists/${id}/copy`),
   update: (id: string, data: ChecklistUpsertPayload) =>
     request.put<ControlChecklist>(`/v1/checklists/${id}`, data),
   delete: (id: string) => request.delete(`/v1/checklists/${id}`),
