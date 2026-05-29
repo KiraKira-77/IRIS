@@ -31,6 +31,10 @@ const projectTaskSource = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../../views/project/task/index.vue'),
   'utf8',
 )
+const projectDetailSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '../../views/project/detail/index.vue'),
+  'utf8',
+)
 const rectificationCreateSource = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '../../views/rectification/create/index.vue'),
   'utf8',
@@ -52,8 +56,9 @@ describe('plan related pages data sources', () => {
     expect(projectCreateSource).toContain('systemUserApi')
     expect(planCreateSource).toContain('systemUserApi')
     expect(planDetailSource).toContain('systemUserApi')
-    expect(projectTaskSource).toContain('assignableMembers')
-    expect(rectificationCreateSource).toContain('systemUserApi')
+    expect(projectTaskSource).toContain('const members = computed')
+    expect(projectDetailSource).toContain('assignableMembers')
+    expect(rectificationCreateSource).toContain('omsApi.searchUsers')
     expect(projectCreateSource).not.toContain('mockPersonnel')
     expect(planCreateSource).not.toContain('mockPersonnel')
     expect(planDetailSource).not.toContain('mockPersonnel')

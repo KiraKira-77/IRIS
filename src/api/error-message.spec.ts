@@ -26,6 +26,7 @@ describe('api error messages', () => {
   })
 
   it('uses a Chinese fallback for network and unknown errors', () => {
+    expect(resolveApiErrorMessage(undefined, 'timeout of 120000ms exceeded')).toBe('请求超时，请稍后重试')
     expect(resolveApiErrorMessage(undefined, 'Network Error')).toBe('网络异常，请稍后重试')
     expect(resolveApiErrorMessage(undefined, '')).toBe('操作失败，请稍后重试')
   })

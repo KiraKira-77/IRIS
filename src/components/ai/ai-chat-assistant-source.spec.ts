@@ -23,6 +23,7 @@ describe('AI chat assistant source', () => {
     expect(apiSource).toContain('aiChatApi')
     expect(apiSource).toContain("request.post<AiChatSession>('/v1/ai/chat/sessions'")
     expect(apiSource).toContain("request.post<AiChatMessage>('/v1/ai/chat/messages'")
+    expect(apiSource).toContain('timeout: 120000')
     expect(typeSource).toContain('export interface AiChatMessagePayload')
   })
 

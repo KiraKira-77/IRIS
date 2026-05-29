@@ -103,7 +103,8 @@ const BUSINESS_ERROR_MESSAGES: Record<string, string> = {
 }
 
 const RAW_CODE_PATTERN = /^[A-Z][A-Z0-9_]+$/
-const NETWORK_ERROR_MESSAGES = new Set(['Network Error', 'timeout of 30000ms exceeded'])
+const NETWORK_ERROR_MESSAGES = new Set(['Network Error'])
+const TIMEOUT_ERROR_PATTERN = /^timeout of \d+ms exceeded$/
 
 export function resolveApiErrorMessage(code?: string, message?: string): string {
   const normalizedCode = normalizeText(code)
@@ -118,6 +119,9 @@ export function resolveApiErrorMessage(code?: string, message?: string): string 
 
   if (!normalizedMessage) {
     return '操作失败，请稍后重试'
+  }
+  if (TIMEOUT_ERROR_PATTERN.test(normalizedMessage)) {
+    return '请求超时，请稍后重试'
   }
   if (NETWORK_ERROR_MESSAGES.has(normalizedMessage)) {
     return '网络异常，请稍后重试'

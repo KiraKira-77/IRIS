@@ -23,6 +23,7 @@ import type {
   DashboardStats,
   AlertEvent,
   LogEntry,
+  ExternalApiLog,
   Rule,
   AIModel,
   AIModelTestResult,
@@ -269,12 +270,15 @@ export const logApi = {
   list: (params: PageQuery) => request.get<PageResult<LogEntry>>('/v1/logs', params),
 }
 
+export const externalApiLogApi = {
+  list: (params: PageQuery) =>
+    request.get<PageResult<ExternalApiLog>>('/v1/external-api-logs', params),
+}
+
 export const ruleApi = {
   list: (params: PageQuery) => request.get<PageResult<Rule>>('/v1/rules', params),
   detail: (id: string) => request.get<Rule>(`/v1/rules/${id}`),
-  create: (data: Partial<Rule>) => request.post<Rule>('/v1/rules', data),
-  update: (id: string, data: Partial<Rule>) => request.put<Rule>(`/v1/rules/${id}`, data),
-  execute: (id: string) => request.post(`/v1/rules/${id}/execute`),
+  execute: (id: string) => request.post<Rule>(`/v1/rules/${id}/execute`),
 }
 
 export const modelApi = {
@@ -288,7 +292,7 @@ export const modelApi = {
 export const aiChatApi = {
   createSession: () => request.post<AiChatSession>('/v1/ai/chat/sessions'),
   sendMessage: (data: AiChatMessagePayload) =>
-    request.post<AiChatMessage>('/v1/ai/chat/messages', data),
+    request.post<AiChatMessage>('/v1/ai/chat/messages', data, { timeout: 120000 }),
 }
 
 export const aiChatTraceApi = {

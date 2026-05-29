@@ -153,7 +153,7 @@ describe('checklists page actions', () => {
 
   it('gates checklist action buttons and handlers by row permissions', () => {
     const source = readFileSync(sourcePath, 'utf8')
-    const openDialogStart = source.indexOf('const openDialog = (row?: ControlChecklist)')
+    const openDialogStart = source.indexOf('const openDialog = async (row?: ControlChecklist)')
     const openDialogEnd = source.indexOf('const handleSaveChecklist', openDialogStart)
     const saveStart = source.indexOf('const handleSaveChecklist = async')
     const saveEnd = source.indexOf('// Item Dialog', saveStart)
@@ -247,13 +247,14 @@ describe('checklists page actions', () => {
     expect(confirmSource).toContain('ElMessage.error')
     expect(confirmSource).toContain('批量导入失败')
   })
-  it('generates checklist codes from existing codes instead of current counts', () => {
+  it('loads checklist codes from the backend instead of deriving them from the current page', () => {
     const source = readFileSync(sourcePath, 'utf8')
 
-    expect(source).toContain('const getNextChecklistCode = () => {')
-    expect(source).toContain('checklist.code')
-    expect(source).toContain('form.code = getNextChecklistCode()')
-    expect(source).toContain('code: getNextChecklistCode()')
+    expect(source).toContain('const loadNextChecklistCode = async () => {')
+    expect(source).toContain('form.code = await loadNextChecklistCode()')
+    expect(source).toContain('checklistApi.copy(row.id)')
+    expect(source).not.toContain('const getNextChecklistCode = () => {')
+    expect(source).not.toContain('code: getNextChecklistCode()')
     expect(source).not.toContain('tableData.value.length + 1')
     expect(source).not.toContain('pagination.total + 1')
   })

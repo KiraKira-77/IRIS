@@ -5,7 +5,7 @@
         <h2 class="page-title">规则库管理</h2>
         <p class="page-subtitle">统一管理异常识别规则、调度策略和最近执行结果</p>
       </div>
-      <el-button type="primary" :icon="Plus" @click="handleCreate">新建规则</el-button>
+      <el-button type="primary" :icon="Refresh" :loading="loading" @click="loadRules">刷新规则</el-button>
     </div>
 
     <div class="overview-grid">
@@ -30,10 +30,21 @@
     <div class="search-bar">
       <el-form :inline="true" :model="filters">
         <el-form-item label="关键字">
-          <el-input v-model="filters.keyword" clearable placeholder="规则名 / 分类 / 表达式" />
+          <el-input
+            v-model="filters.keyword"
+            clearable
+            placeholder="规则名 / 分类 / 表达式"
+            @keyup.enter="loadRules"
+          />
         </el-form-item>
         <el-form-item label="状态">
-          <el-select v-model="filters.status" clearable placeholder="全部状态" style="width: 140px">
+          <el-select
+            v-model="filters.status"
+            clearable
+            placeholder="全部状态"
+            style="width: 140px"
+            @change="loadRules"
+          >
             <el-option label="启用" value="active" />
             <el-option label="停用" value="disabled" />
           </el-select>
@@ -44,17 +55,21 @@
             clearable
             placeholder="全部方式"
             style="width: 140px"
+            @change="loadRules"
           >
             <el-option label="定时" value="scheduled" />
             <el-option label="手工" value="manual" />
             <el-option label="事件" value="event" />
           </el-select>
         </el-form-item>
+        <el-form-item>
+          <el-button :icon="Refresh" @click="loadRules">查询</el-button>
+        </el-form-item>
       </el-form>
     </div>
 
     <div class="iris-card">
-      <el-table :data="filteredRules" size="large">
+      <el-table v-loading="loading" :data="rules" size="large" row-key="id">
         <el-table-column label="规则信息" min-width="260">
           <template #default="{ row }">
             <div class="rule-meta">
@@ -89,14 +104,16 @@
               inline-prompt
               active-text="开"
               inactive-text="关"
-              @change="toggleRule(row.id)"
+              disabled
             />
           </template>
         </el-table-column>
         <el-table-column label="操作" width="180" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openExecutionDrawer(row.id)">执行日志</el-button>
-            <el-button link type="success" @click="runRule(row.id)">立即运行</el-button>
+            <el-button link type="success" :loading="runningRuleId === row.id" @click="runRule(row.id)">
+              立即运行
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -135,18 +152,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
-import { mockRules } from '@/mock/advanced'
+import { Refresh } from '@element-plus/icons-vue'
+import { ruleApi } from '@/api'
 import type { Rule } from '@/types'
 
-const rules = ref(
-  mockRules.map((rule) => ({
-    ...rule,
-    executionLogs: [...rule.executionLogs],
-  })),
-)
+type RulePage = {
+  records?: Rule[]
+  list?: Rule[]
+  total?: number
+  pageNo?: number
+  page?: number
+  pageSize?: number
+}
+
+const rules = ref<Rule[]>([])
+const loading = ref(false)
+const runningRuleId = ref('')
 
 const filters = reactive({
   keyword: '',
@@ -157,25 +180,8 @@ const filters = reactive({
 const drawerVisible = ref(false)
 const selectedRuleId = ref('')
 
-const filteredRules = computed(() =>
-  rules.value.filter((rule) => {
-    const keyword = filters.keyword.trim()
-    if (
-      keyword &&
-      ![rule.name, rule.description, rule.category, rule.expression].some((field) =>
-        field.toLowerCase().includes(keyword.toLowerCase()),
-      )
-    ) {
-      return false
-    }
-    if (filters.status && rule.status !== filters.status) return false
-    if (filters.triggerType && rule.triggerType !== filters.triggerType) return false
-    return true
-  }),
-)
-
 const selectedRule = computed(() =>
-  rules.value.find((rule) => rule.id === selectedRuleId.value) || filteredRules.value[0],
+  rules.value.find((rule) => rule.id === selectedRuleId.value) || rules.value[0],
 )
 
 const activeCount = computed(() => rules.value.filter((rule) => rule.status === 'active').length)
@@ -192,8 +198,27 @@ const successRate = computed(() => {
   return Math.round((successExecutions.value / allExecutions.value.length) * 100)
 })
 
-const handleCreate = () => {
-  ElMessage.info('当前先补齐规则查看与运维能力，新建规则表单可在下一步接入')
+onMounted(() => {
+  loadRules()
+})
+
+const loadRules = async () => {
+  loading.value = true
+  try {
+    const page = (await ruleApi.list({
+      page: 1,
+      pageSize: 50,
+      keyword: filters.keyword.trim() || undefined,
+      status: filters.status || undefined,
+      triggerType: filters.triggerType || undefined,
+    })) as RulePage
+    rules.value = page.records || page.list || []
+    if (selectedRuleId.value && !rules.value.some((rule) => rule.id === selectedRuleId.value)) {
+      selectedRuleId.value = ''
+    }
+  } finally {
+    loading.value = false
+  }
 }
 
 const openExecutionDrawer = (ruleId: string) => {
@@ -201,27 +226,16 @@ const openExecutionDrawer = (ruleId: string) => {
   drawerVisible.value = true
 }
 
-const toggleRule = (ruleId: string) => {
-  const rule = rules.value.find((item) => item.id === ruleId)
-  if (!rule) return
-  rule.status = rule.status === 'active' ? 'disabled' : 'active'
-  ElMessage.success(`${rule.name} 已${rule.status === 'active' ? '启用' : '停用'}`)
-}
-
-const runRule = (ruleId: string) => {
-  const rule = rules.value.find((item) => item.id === ruleId)
-  if (!rule) return
-  const executedAt = '2026-04-10 16:30'
-  rule.lastRunAt = executedAt
-  rule.executionLogs.unshift({
-    id: `rule-log-${Date.now()}`,
-    ruleId: rule.id,
-    status: 'success',
-    result: `手工触发完成，命中 ${Math.max(1, rule.executionLogs.length)} 条可疑记录`,
-    executedAt,
-    duration: 8,
-  })
-  ElMessage.success(`${rule.name} 已加入执行队列`)
+const runRule = async (ruleId: string) => {
+  runningRuleId.value = ruleId
+  try {
+    const updatedRule = await ruleApi.execute(ruleId)
+    rules.value = rules.value.map((rule) => (rule.id === updatedRule.id ? updatedRule : rule))
+    selectedRuleId.value = updatedRule.id
+    ElMessage.success(`${updatedRule.name} 已完成实时计算`)
+  } finally {
+    runningRuleId.value = ''
+  }
 }
 
 const triggerLabel = (type: string) => {

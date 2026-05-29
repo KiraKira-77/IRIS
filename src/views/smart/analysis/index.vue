@@ -67,16 +67,25 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts'
-import { mockModels, mockRules, mockTools } from '@/mock/advanced'
+import { ruleApi } from '@/api'
+import { mockModels, mockTools } from '@/mock/advanced'
 import { mockRectifications } from '@/mock'
+import type { Rule } from '@/types'
+
+type RulePage = {
+  records?: Rule[]
+  list?: Rule[]
+  total?: number
+}
 
 const selectedYear = ref('2026')
 const categoryChartRef = ref<HTMLDivElement>()
 const trendChartRef = ref<HTMLDivElement>()
 const capabilityChartRef = ref<HTMLDivElement>()
 const charts: echarts.ECharts[] = []
+const rules = ref<Rule[]>([])
 
-const ruleCount = computed(() => mockRules.length)
+const ruleCount = computed(() => rules.value.length)
 const modelOnlineRate = computed(() =>
   Math.round((mockModels.filter((item) => item.status === 'online').length / mockModels.length) * 100),
 )
@@ -96,10 +105,18 @@ const rectificationRate = computed(() => {
 
 const categoryData = computed(() => {
   const categoryMap = new Map<string, number>()
-  mockRules.forEach((rule) => {
+  rules.value.forEach((rule) => {
     categoryMap.set(rule.category, (categoryMap.get(rule.category) || 0) + 1)
   })
   return Array.from(categoryMap.entries()).map(([name, value]) => ({ name, value }))
+})
+
+const ruleSuccessRate = computed(() => {
+  const executions = rules.value.flatMap((rule) => rule.executionLogs)
+  if (executions.length === 0) return 0
+  return Math.round(
+    (executions.filter((log) => log.status === 'success').length / executions.length) * 100,
+  )
 })
 
 const completionTrend = [
@@ -115,17 +132,7 @@ const capabilitySeries = computed(() => [
   {
     name: '规则执行成功率',
     type: 'bar',
-    data: [
-      Math.round(
-        (mockRules
-          .flatMap((rule) => rule.executionLogs)
-          .filter((log) => log.status === 'success').length /
-          mockRules.flatMap((rule) => rule.executionLogs).length) *
-          100,
-      ) || 0,
-      modelOnlineRate.value,
-      toolAvailableRate.value,
-    ],
+    data: [ruleSuccessRate.value, modelOnlineRate.value, toolAvailableRate.value],
   },
   {
     name: '目标线',
@@ -225,7 +232,13 @@ const initCharts = () => {
   })
 }
 
-onMounted(() => {
+const loadRules = async () => {
+  const page = (await ruleApi.list({ page: 1, pageSize: 50 })) as RulePage
+  rules.value = page.records || page.list || []
+}
+
+onMounted(async () => {
+  await loadRules().catch(() => undefined)
   initCharts()
   window.addEventListener('resize', resizeCharts)
 })

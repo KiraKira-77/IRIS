@@ -67,14 +67,17 @@ describe('archives detail navigation', () => {
 
   it('uses polished work-order cards and a timeline for archived OMS logs', () => {
     const source = readFileSync(archiveDetailSourcePath, 'utf8')
+    const workOrderLogStart = source.indexOf('<span>{{ selectedWorkOrderLogRows.length }}')
+    const rectificationLogStart = source.indexOf('rectificationOmsLogRows', workOrderLogStart)
+    const workOrderLogSource = source.slice(workOrderLogStart, rectificationLogStart)
 
     expect(source).toContain('class="work-order-card"')
     expect(source).toContain('class="work-order-card-toolbar"')
     expect(source).toContain('class="work-order-card-summary"')
     expect(source).toContain('class="work-order-card-note"')
-    expect(source).toContain('<el-timeline class="work-order-timeline">')
-    expect(source).toContain('<el-timeline-item')
-    expect(source).toContain(':timestamp="log.occurredAt || undefined"')
-    expect(source).not.toContain('<div v-else class="work-order-log-list">')
+    expect(workOrderLogSource).toContain('<el-timeline class="work-order-timeline">')
+    expect(workOrderLogSource).toContain('<el-timeline-item')
+    expect(workOrderLogSource).toContain(':timestamp="log.occurredAt || undefined"')
+    expect(workOrderLogSource).not.toContain('<div v-else class="work-order-log-list">')
   })
 })

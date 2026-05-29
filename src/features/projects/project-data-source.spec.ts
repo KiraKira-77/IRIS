@@ -48,6 +48,9 @@ const apiErrorSource = readFileSync(join(here, '../../api/error-message.ts'), 'u
 const logCenterSource = readFileSync(join(here, '../../views/workbench/logs/index.vue'), 'utf8')
 const alertCenterSource = readFileSync(join(here, '../../views/workbench/alerts/index.vue'), 'utf8')
 const modelLibrarySource = readFileSync(join(here, '../../views/smart/models/index.vue'), 'utf8')
+const ruleLibrarySource = readFileSync(join(here, '../../views/smart/rules/index.vue'), 'utf8')
+const toolLibrarySource = readFileSync(join(here, '../../views/smart/tools/index.vue'), 'utf8')
+const smartAnalysisSource = readFileSync(join(here, '../../views/smart/analysis/index.vue'), 'utf8')
 const apiSource = readFileSync(join(here, '../../api/index.ts'), 'utf8')
 const requestSource = readFileSync(join(here, '../../api/request.ts'), 'utf8')
 const routerSource = readFileSync(join(here, '../../router/index.ts'), 'utf8')
@@ -552,6 +555,16 @@ describe('project management data sources', () => {
     expect(logCenterSource).not.toContain('mockLogs')
   })
 
+  it('shows external API call logs in the log center page', () => {
+    expect(apiSource).toContain('externalApiLogApi')
+    expect(apiSource).toContain('/v1/external-api-logs')
+    expect(typeSource).toContain('export interface ExternalApiLog')
+    expect(logCenterSource).toContain('externalApiLogApi.list')
+    expect(logCenterSource).toContain("name=\"external\"")
+    expect(logCenterSource).toContain('selectedExternalLog.requestBody')
+    expect(logCenterSource).toContain('selectedExternalLog.responseBody')
+  })
+
   it('shows the operator name returned by the real log API on the log center page', () => {
     expect(typeSource).toContain('operatorName?: string')
     expect(logCenterSource).toContain('prop="operatorName"')
@@ -590,6 +603,21 @@ describe('project management data sources', () => {
     expect(modelLibrarySource).toContain('密钥状态')
     expect(modelLibrarySource).toContain('默认模型')
     expect(modelLibrarySource).not.toContain('扩展字段')
+  })
+
+  it('uses real rule APIs instead of mock rules on smart pages', () => {
+    expect(ruleLibrarySource).toContain('ruleApi.list')
+    expect(ruleLibrarySource).toContain('loadRules')
+    expect(ruleLibrarySource).not.toContain('mockRules')
+    expect(smartAnalysisSource).toContain('ruleApi.list')
+    expect(smartAnalysisSource).not.toContain('mockRules')
+  })
+
+  it('uses real tool APIs instead of mock tools on the tool library page', () => {
+    expect(toolLibrarySource).toContain('toolApi.list')
+    expect(toolLibrarySource).toContain('loadTools')
+    expect(toolLibrarySource).not.toContain('mockTools')
+    expect(apiSource).toContain('/v1/tools')
   })
 
   it('shows a project start action on the project list for not started projects', () => {

@@ -1,8 +1,8 @@
 <template>
   <el-aside :width="isCollapsed ? '64px' : '240px'" class="app-sidebar">
     <div class="sidebar-header">
-      <div class="logo-icon">
-        <el-icon :size="24" color="#fff"><Monitor /></el-icon>
+      <div class="logo-icon" aria-hidden="true">
+        <img class="logo-mark" src="/favicon.ico" alt="" />
       </div>
       <transition name="fade">
         <h1 v-show="!isCollapsed" class="app-title">IRIS Platform</h1>
@@ -49,7 +49,6 @@ import { useRoute } from 'vue-router'
 import { useAppStore, useUserStore } from '@/stores'
 import { APP_MENU_GROUPS, filterMenuGroupsByCodes } from '@/features/permissions/menu-access'
 import {
-  Monitor,
   Odometer,
   Folder,
   Calendar,
@@ -100,14 +99,20 @@ const groupIconMap: Record<string, Component> = {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 
   .logo-icon {
-    width: 32px;
-    height: 32px;
-    background: linear-gradient(135deg, $iris-primary 0%, $iris-primary-dark 100%);
+    width: 36px;
+    height: 36px;
     border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .logo-mark {
+    width: 36px;
+    height: 36px;
+    display: block;
   }
 
   .app-title {

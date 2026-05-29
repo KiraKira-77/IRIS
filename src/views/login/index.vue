@@ -8,8 +8,8 @@
 
     <div class="login-card">
       <div class="login-header">
-        <div class="login-logo">
-          <el-icon :size="40" color="#2563eb"><Monitor /></el-icon>
+        <div class="login-logo" aria-hidden="true">
+          <img class="login-logo-mark" src="/favicon.ico" alt="" />
         </div>
         <h1 class="login-title">IRIS</h1>
         <p class="login-subtitle">IT风险及内控管理平台</p>
@@ -61,7 +61,7 @@
 import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Monitor, User, Lock } from '@element-plus/icons-vue'
+import { User, Lock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores'
 
 const router = useRouter()
@@ -186,7 +186,15 @@ const handleLogin = async () => {
   margin-bottom: 36px;
 
   .login-logo {
+    display: flex;
+    justify-content: center;
     margin-bottom: 12px;
+  }
+
+  .login-logo-mark {
+    width: 48px;
+    height: 48px;
+    display: block;
   }
 
   .login-title {

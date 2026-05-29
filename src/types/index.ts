@@ -709,6 +709,26 @@ export interface LogEntry {
   timestamp: string
   operatorName?: string
 }
+export interface ExternalApiLog {
+  id: string
+  externalSystem: string
+  action: string
+  endpoint: string
+  httpMethod: string
+  httpStatus?: number
+  result: 'success' | 'failed' | string
+  errorCode?: string
+  errorMessage?: string
+  requestBody?: string
+  responseBody?: string
+  durationMs?: number
+  projectId?: string
+  taskId?: string
+  workOrderId?: string
+  externalBizId?: string
+  operatorName?: string
+  timestamp: string
+}
 
 // ===========================
 // 智能内控
